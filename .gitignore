@@ -1,2 +1,10 @@
 .DS_Store
 *.o
+.ipynb_checkpoints
+__pycache__
+
+# TEMP FOR INITIAL PIPELINE
+pipeline/results
+pipeline/xml_index
+pipeline/temp.h5
+pipeline/py_func/linux
