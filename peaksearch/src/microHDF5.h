@@ -10,13 +10,8 @@
 #ifndef _MICRO_HDF5_READ_
 #define _MICRO_HDF5_READ_
 
-#ifdef __linux__
-#include "/clhome/aps_tools/hdf5-1.8.2/hdf5/include/hdf5.h"
-#include "/clhome/aps_tools/hdf5-1.8.2/hdf5/include/hdf5_hl.h"		/* hdf lite, I can probably get rid of this with a little effort */
-#else
 #include "hdf5.h"
 #include "hdf5_hl.h"					/* hdf lite, I can probably get rid of this with a little effort */
-#endif
 
 /* #define MAX_DETECTOR_ID_LEN 255		/* max length of string with detector ID */
 #define MAX_micro_STRING_LEN 1023		/* max length of a string easily read from a data */
