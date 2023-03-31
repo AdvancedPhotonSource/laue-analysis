@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
-import sys
 import os
 import glob
 import argparse
@@ -11,6 +9,7 @@ import yaml
 import subprocess as sub
 from datetime import datetime
 from mpi4py import MPI
+
 from xmlWriter import XMLWriter
 
 
@@ -28,38 +27,43 @@ class PyLaueGo:
     def run(self, rank, size):
         #global args shared for all samples e.g. title
         globalArgs = self.parseArgs(description='Runs Laue Indexing.') #TODO better description
-        scanPoint = np.arange(int(globalArgs.scanPointStart), int(globalArgs.scanPointEnd))
-        depthRange = np.arange(int(globalArgs.depthRangeStart), int(globalArgs.depthRangeEnd))
-        xmlWriter = XMLWriter()
-        xmlSteps = []
+        try:
+            scanPoint = np.arange(int(globalArgs.scanPointStart), int(globalArgs.scanPointEnd))
+            depthRange = np.arange(int(globalArgs.depthRangeStart), int(globalArgs.depthRangeEnd))
+            xmlWriter = XMLWriter()
+            xmlSteps = []
 
-        if rank == 0:
-            filenames = self.getInputFileNamesList(depthRange, scanPoint, globalArgs.filename)
-        else:
-            filenames = None
-        filenames = comm.bcast(filenames, root = 0)
-        nFiles = int(np.ceil(len(filenames) / size))
-        start = rank * nFiles
-        end = min(start + nFiles, len(filenames))
-        processFiles = filenames[start:end]
+            if rank == 0:
+                filenames = self.getInputFileNamesList(depthRange, scanPoint, globalArgs)
+            else:
+                filenames = None
+            filenames = comm.bcast(filenames, root = 0)
+            nFiles = int(np.ceil(len(filenames) / size))
+            start = rank * nFiles
+            end = min(start + nFiles, len(filenames))
+            processFiles = filenames[start:end]
 
-        for filename in processFiles:
-            sampleArgs = self.parseInputFile(filename, globalArgs)
-            peakSearchOut = self.peakSearch(filename, sampleArgs)
-            sampleArgs = self.parsePeaksFile(peakSearchOut, sampleArgs)
-            p2qOut = self.p2q(filename, peakSearchOut, sampleArgs)
-            sampleArgs = self.parseP2QFile(p2qOut, sampleArgs)
-            indexOut = self.index(filename, p2qOut, sampleArgs)
-            sampleArgs = self.parseIndexFile(indexOut, sampleArgs)
-            xmlSteps.append(xmlWriter.getStepElement(sampleArgs))
+            for filename in processFiles:
+                sampleArgs = self.parseInputFile(filename, globalArgs)
+                peakSearchOut = self.peakSearch(filename, sampleArgs)
+                sampleArgs = self.parsePeaksFile(peakSearchOut, sampleArgs)
+                p2qOut = self.p2q(filename, peakSearchOut, sampleArgs)
+                sampleArgs = self.parseP2QFile(p2qOut, sampleArgs)
+                indexOut = self.index(filename, p2qOut, sampleArgs)
+                sampleArgs = self.parseIndexFile(indexOut, sampleArgs)
+                xmlSteps.append(xmlWriter.getStepElement(sampleArgs))
 
-        comm.Barrier()
-        if rank != 0:
-            comm.send(xmlSteps, dest=0)
-        else:
-            for recv_rank in range(1, size):
-                xmlSteps.append(comm.recv(source=recv_rank))
-            xmlWriter.write(xmlSteps, globalArgs.xmlOutFile)
+            comm.Barrier()
+            if rank != 0:
+                comm.send(xmlSteps, dest=0)
+            else:
+                for recv_rank in range(1, size):
+                    xmlSteps += comm.recv(source=recv_rank)
+                xmlWriter.write(xmlSteps, globalArgs.xmlOutFile)
+        except Exception as e:
+            with open(globalArgs.errorLog, 'w') as f:
+                f.write(e)
+            comm.Abort(1)
 
     def parseArgs(self, description):
         ''' get user inputs and if user didn't input a value, get default value '''
@@ -73,17 +77,21 @@ class PyLaueGo:
                 setattr(args, defaultArg, defaults.get(defaultArg))
         return args
 
-    def getInputFileNamesList(self, depthRange, scanPoint, filename):
+    def getInputFileNamesList(self, depthRange, scanPoint, args):
         ''' generate the list of files name for analysis '''
         fnames = []
         if np.isnan(depthRange).any():
             for ii in range(len(scanPoint)):
                 # if the depthRange exist
-                fnames.append(f'{filename}{scanPoint[ii]}')
+                fname = f'{args.filename}{scanPoint[ii]}'
+                if os.path.isfile(f"{args.filefolder}{fname}.h5"):
+                    fnames.append(fname)
         else:
             for ii in range(len(scanPoint)):
                 for jj in range (len(depthRange)):
-                    fnames.append(f'{filename}{scanPoint[ii]}_{depthRange[jj]}')
+                    fname = f'{args.filename}{scanPoint[ii]}_{depthRange[jj]}'
+                    if os.path.isfile(f"{args.filefolder}{fname}.h5"):
+                        fnames.append(fname)
         return fnames
 
     def clearSaveFolder(self, savefolder):
@@ -314,4 +322,5 @@ if __name__ == '__main__':
     start = datetime.now()
     pyLaueGo = PyLaueGo()
     pyLaueGo.run(rank, size)
-    print(f'runtime is {datetime.now() - start}')
+    if rank == 0:
+        print(f'runtime is {datetime.now() - start}')
