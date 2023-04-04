@@ -79,19 +79,29 @@ class PyLaueGo:
 
     def getInputFileNamesList(self, depthRange, scanPoint, args):
         ''' generate the list of files name for analysis '''
+        allFiles = []
+        for root, dirs, files in os.walk(path):
+            for name in files:
+                if name.endswith('h5'):
+                    allFiles.append(name)
+                    print(name)
+        exit()
         fnames = []
-        if np.isnan(depthRange).any():
+        if depthRange and scanPoint:
             for ii in range(len(scanPoint)):
                 # if the depthRange exist
-                fname = f'{args.filename}{scanPoint[ii]}'
+                fname = f'{args.filenamePrefix}{scanPoint[ii]}'
                 if os.path.isfile(f"{args.filefolder}{fname}.h5"):
                     fnames.append(fname)
-        else:
+        elif scanPoint:
             for ii in range(len(scanPoint)):
                 for jj in range (len(depthRange)):
-                    fname = f'{args.filename}{scanPoint[ii]}_{depthRange[jj]}'
+                    fname = f'{args.filenamePrefix}{scanPoint[ii]}_{depthRange[jj]}'
                     if os.path.isfile(f"{args.filefolder}{fname}.h5"):
                         fnames.append(fname)
+        else:
+            #process them all
+            fnames = allFiles
         return fnames
 
     def clearSaveFolder(self, savefolder):
