@@ -12,10 +12,10 @@ filefolder: /data/laue34/repacks_10mn/consgeo/
 filename: out_
 geoFile: /data/laue34/LaueIndex_XML_python/Example/jupyter_files/xml_index/geoN_2023-02-07_19-19-10.xml
 crystFile: /data/laue34/LaueIndex_XML_python/Example/jupyter_files/xml_index/Ni.xml
-scanPointStart: 1
-scanPointEnd: 3
-depthRangeStart: 100
-depthRangeEnd: 102
+scanPointStart: 0
+scanPointEnd: 150
+depthRangeStart: 0
+depthRangeEnd: 201
 detectorCropX1: 0 #min 0 max 2047
 detectorCropX2: 2047
 detectorCropY1: 0
@@ -39,3 +39,4 @@ num: 1 #TODO pattern number should be parsed out
 recipLatticeUnit: 1/nm
 latticeParametersUnit: nm
 xmlOutFile: testXML.xml
+errorLog: error.log
