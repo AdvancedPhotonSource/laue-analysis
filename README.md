@@ -2,18 +2,21 @@
 
 Programs to index laue outputs at beamline 34IDE.
 
-Status: Ported underlying programs and control software to Polaris software stack.
+**Status:** Ported underlying programs and control software to Polaris software stack.
 
 ## To Run
 
 ### Set Up Environment
 
 **Processing environment should include:**
+
+```
 h5py
 numpy
 yaml (pyyaml)
 mpi4py
 module load gsl
+```
 
 ### Compile C Programs
 
@@ -21,10 +24,10 @@ If running on a new machine, compile the 3 C sub programs in the euler, peaksear
 
 ### Modify Config File
 
-An example config file is included in `config/defaults.yml`
+An example config file is included in `config/defaults.yml`.
 Config values will be different based on experiment so **these should be reviewed** before processing each data set.
 
-To process a partial data set, include values scanPointStart, scanPointEnd, depthRangeStart, depthRangeEnd in the config file
+To process a partial data set, include values scanPointStart, scanPointEnd, depthRangeStart, depthRangeEnd in the config file.
 If these values are not included, all files in the input directory will be processed.
 
 Set the value for **outputFolder** as the full path where the processed output files will be written.
