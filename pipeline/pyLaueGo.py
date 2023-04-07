@@ -23,6 +23,7 @@ class PyLaueGo:
         globalArgs = self.parseArgs(description='Runs Laue Indexing.') #TODO better description
         now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
         self.errorLog = f"{globalArgs.outputFolder}/error_{now}.log"
+        print(globalArgs.outputFolder)
         try:
             xmlWriter = XMLWriter()
             xmlSteps = []
@@ -50,7 +51,9 @@ class PyLaueGo:
     def parseArgs(self, description):
         ''' get user inputs and if user didn't input a value, get default value '''
         self.parser.add_argument(f'--configFile', dest='configFile', required=True)
-        args = self.parser.parse_args()
+        args = self.parser.parse_known_args()[0]
+        print(args)
+        print(args.configFile)
         with open(args.configFile) as f:
             defaults = yaml.safe_load(f)
         for arg in defaults:
