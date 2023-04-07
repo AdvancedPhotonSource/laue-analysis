@@ -1,13 +1,13 @@
 SRC = $(wildcard src/*.c)
 OBJ = ${SRC:.c=.o}
-OUT = pix2qs
+OUT = peaksearch
 
 CFLAGS = -O2 -std=gnu99	-lhdf5_hl -lhdf5 -lgsl -lgslcblas -msse2 -lm
 CC = gcc
 
 
 polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include \
-				  -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib 
+				  -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib
 
 polaris: $(OUT)
 
@@ -26,7 +26,7 @@ $(OUT): $(OBJ)
 
 %.o: %.c
 	@$(CC) -c $< -o $@ $(CFLAGS)
-	@printf "\e[36mCompile\e[90m %s\e[0m\n" $@ 
+	@printf "\e[36mCompile\e[90m %s\e[0m\n" $@
 
 clean:
 	@rm -f $(OUT) $(OBJ)
