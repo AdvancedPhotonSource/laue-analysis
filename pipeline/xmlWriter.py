@@ -57,21 +57,48 @@ class XMLWriter:
         exposure = SubElement(detector, 'exposure', unit=args.exposureUnit)
         exposure.set('text', str(args.exposure))
         detector.append(self._getElement('ROI', args, self.roiAttrs))
-        detector.append(self._getElement('peaksXY', args, self.peaksXYAttrs, self.peaksXYTexts))
+        if int(args.Npeaks) > 0:
+            detector.append(self._getElement('peaksXY', args, self.peaksXYAttrs, self.peaksXYTexts))
+        else:
+            detector.append(self._getElement('peaksXY', args, self.peaksXYAttrs, []))
         return detector
 
     def _getIndexingElement(self, args):
-        indexing = self._getElement('indexing', self.indexingAttrs)
-        indexing.append(self._getPatternElement(args))
-        indexing.append(self._getXTLElement(args))
+        if int(args.Nindexed) > 0:
+            indexing = self._getElement('indexing', args, self.indexingAttrs)
+            for i in range(int(args.Npatterns)):
+                indexing.append(self._getPatternElement(i, args))
+            indexing.append(self._getXTLElement(args))
+        else:
+            indexing = self._getElement('indexing', args, ['Nindexed'])
         return indexing
 
-    def _getPatternElement(self, args):
-        pattern = self._getElement('pattern', args, self.patternAttrs)
-        recipLattice = self._getElement('recip_lattice', args, texts=self.recipLatticeTexts)
+    def _getPatternElement(self, num, args):
+        '''
+        N pattern elements have attrs with pattern number at the end of name
+        output as
+        <pattern num=0></pattern>
+        <pattern num=1></pattern>
+        ...
+        '''
+        pattern = Element('pattern')
+        pattern.set('num', str(num))
+        pattern.set('rms_error', getattr(args, f'rms_error{num}'))
+        pattern.set('goodness', getattr(args, f'goodness{num}'))
+        pattern.set('Nindexed', getattr(args, f'Nindexed'))
+        recipLattice = Element('recip_lattice')
         recipLattice.set('unit', args.recipLatticeUnit)
+        for text in self.recipLatticeTexts:
+            elem = Element(text)
+            elem.text = getattr(args, f'{text}{num}')
+            recipLattice.append(elem)
         pattern.append(recipLattice)
-        pattern.append(self._getElement('hkl_s', args, texts=self.hklsTexts))
+        hkls = Element('hkl_s')
+        for text in self.hklsTexts:
+            elem = Element(text)
+            elem.text = getattr(args, f'{text}{num}')
+            hkls.append(elem)
+        pattern.append(hkls)
         return pattern
 
     def _getXTLElement(self, args):

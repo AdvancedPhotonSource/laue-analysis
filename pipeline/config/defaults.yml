@@ -6,20 +6,14 @@ boxsize: 10
 max_number: 300
 min_separation: 10
 peakShape: Lorentzian
-saveFolder: /eagle/APSDataAnalysis/hparraga/laue-indexing/output/txts/
-filefolder: /eagle/APSDataAnalysis/LAUE/repacks_manual/repacks_100mn_thresh_10
-filenamePrefix: out_
-geoFile: /data/laue34/LaueIndex_XML_python/Example/jupyter_files/xml_index/geoN_2023-02-07_19-19-10.xml
-crystFile: /data/laue34/LaueIndex_XML_python/Example/jupyter_files/xml_index/Ni.xml
-scanPointStart: 0
-scanPointEnd: 150
-depthRangeStart: 0
-depthRangeEnd: 201
+#scanPointStart: 285
+#scanPointEnd: 286
+#depthRangeStart: 35
+#depthRangeEnd: 36
 detectorCropX1: 0 #min 0 max 2047
 detectorCropX2: 2047
 detectorCropY1: 0
 detectorCropY2: 2047
-pathbins: /eagle/APSDataAnalysis/hparraga/laue-indexing/
 min_size: 1.13
 max_peaks: 300
 smooth: 0
@@ -34,8 +28,13 @@ indexCone: 72.0
 energyUnit: keV
 exposureUnit: sec
 cosmicFilter: True
-num: 1 #TODO pattern number should be parsed out
 recipLatticeUnit: 1/nm
 latticeParametersUnit: nm
-xmlOutFile: /eagle/APSDataAnalysis/hparraga/laue-indexing/output/repacks_100mn_thresh_10.xml
-errorLog: /eagle/APSDataAnalysis/hparraga/laue-indexing/output/error.log
+indexProgram: euler
+pathbins: /eagle/APSDataAnalysis/hparraga/laue-indexing
+outputFolder: /eagle/APSDataAnalysis/hparraga/laue-indexing/output
+filefolder: /eagle/APSDataAnalysis/LAUE/repacks_manual/repacks_100mn_thresh_10/consgeo_Ni2_100mN_285
+#filefolder: /eagle/APSDataAnalysis/hparraga/test/consgeo_Ni2_100mN_285
+filenamePrefix: out_
+geoFile: /eagle/APSDataAnalysis/hparraga/laue-indexing/pipeline/config/geoN_2023-02-07_19-19-10.xml
+crystFile: /eagle/APSDataAnalysis/hparraga/laue-indexing/pipeline/config/Ni.xml

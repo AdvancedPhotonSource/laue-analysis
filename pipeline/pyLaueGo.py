@@ -9,110 +9,126 @@ import yaml
 import subprocess as sub
 from datetime import datetime
 from mpi4py import MPI
+import traceback
 
 from xmlWriter import XMLWriter
 
 
 class PyLaueGo:
-
-    DEFAULT_ARGS_FILE = 'defaults.yml'
-
     def __init__(self):
         self.parser = argparse.ArgumentParser()
-        with open(self.DEFAULT_ARGS_FILE) as f:
-            defaults = yaml.safe_load(f)
-        for arg in defaults:
-            self.parser.add_argument(f'--{arg}', dest=arg, type=str, default=defaults.get(arg))
 
     def run(self, rank, size):
         #global args shared for all samples e.g. title
         globalArgs = self.parseArgs(description='Runs Laue Indexing.') #TODO better description
+        now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        self.errorLog = f"{globalArgs.outputFolder}/error_{now}.log"
         try:
-            scanPoint = np.arange(int(globalArgs.scanPointStart), int(globalArgs.scanPointEnd))
-            depthRange = np.arange(int(globalArgs.depthRangeStart), int(globalArgs.depthRangeEnd))
             xmlWriter = XMLWriter()
             xmlSteps = []
-
-            if rank == 0:
-                filenames = self.getInputFileNamesList(depthRange, scanPoint, globalArgs)
-            else:
-                filenames = None
-            filenames = comm.bcast(filenames, root = 0)
-            nFiles = int(np.ceil(len(filenames) / size))
-            start = rank * nFiles
-            end = min(start + nFiles, len(filenames))
-            processFiles = filenames[start:end]
-
+            processFiles = self.getFilesByRank(rank, size, globalArgs)
             for filename in processFiles:
-                sampleArgs = self.parseInputFile(filename, globalArgs)
-                peakSearchOut = self.peakSearch(filename, sampleArgs)
-                sampleArgs = self.parsePeaksFile(peakSearchOut, sampleArgs)
-                p2qOut = self.p2q(filename, peakSearchOut, sampleArgs)
-                sampleArgs = self.parseP2QFile(p2qOut, sampleArgs)
-                indexOut = self.index(filename, p2qOut, sampleArgs)
-                sampleArgs = self.parseIndexFile(indexOut, sampleArgs)
-                xmlSteps.append(xmlWriter.getStepElement(sampleArgs))
+                processedArgs = self.processFile(filename, globalArgs)
+                if processedArgs:
+                    xmlStep = xmlWriter.getStepElement(processedArgs)
+                    xmlSteps.append(xmlStep)
 
             comm.Barrier()
             if rank != 0:
                 comm.send(xmlSteps, dest=0)
             else:
+                #recieve all collected steps from manager node and combine
                 for recv_rank in range(1, size):
                     xmlSteps += comm.recv(source=recv_rank)
-                xmlWriter.write(xmlSteps, globalArgs.xmlOutFile)
-        except Exception as e:
-            with open(globalArgs.errorLog, 'w') as f:
-                f.write(e)
+                xmlOut = f'{globalArgs.outputFolder}/{os.path.basename(globalArgs.filefolder)}.xml'
+                xmlWriter.write(xmlSteps, xmlOut)
+        except:
+            with open(self.errorLog, 'a') as f:
+                f.write(traceback.format_exc())
             comm.Abort(1)
 
     def parseArgs(self, description):
         ''' get user inputs and if user didn't input a value, get default value '''
-        with open(self.DEFAULT_ARGS_FILE) as f:
-            defaults = yaml.safe_load(f)
-        self.parser.description = description
+        self.parser.add_argument(f'--configFile', dest='configFile', required=True)
         args = self.parser.parse_args()
-
+        with open(args.configFile) as f:
+            defaults = yaml.safe_load(f)
+        for arg in defaults:
+            self.parser.add_argument(f'--{arg}', dest=arg, type=str, default=defaults.get(arg))
+        args = self.parser.parse_args()
         for defaultArg in defaults:
             if not args.__dict__.get(defaultArg):
                 setattr(args, defaultArg, defaults.get(defaultArg))
         return args
 
+    def getFilesByRank(self, rank, size, globalArgs):
+        ''' divide files to process into batches among nodes '''
+        if rank == 0:
+            scanPoint = None
+            depthRange = None
+            if hasattr(globalArgs, 'scanPointStart') and hasattr(globalArgs, 'scanPointEnd'):
+                scanPoint = np.arange(int(globalArgs.scanPointStart), int(globalArgs.scanPointEnd))
+            if hasattr(globalArgs, 'depthRangeStart') and hasattr(globalArgs, 'depthRangeEnd'):
+                depthRange = np.arange(int(globalArgs.depthRangeStart), int(globalArgs.depthRangeEnd))
+            filenames = self.getInputFileNamesList(depthRange, scanPoint, globalArgs)
+        else:
+            filenames = None
+        filenames = comm.bcast(filenames, root = 0)
+        nFiles = int(np.ceil(len(filenames) / size))
+        start = rank * nFiles
+        end = min(start + nFiles, len(filenames))
+        processFiles = filenames[start:end]
+        return processFiles
+
     def getInputFileNamesList(self, depthRange, scanPoint, args):
         ''' generate the list of files name for analysis '''
         allFiles = []
-        for root, dirs, files in os.walk(path):
+        for root, dirs, files in os.walk(args.filefolder):
             for name in files:
                 if name.endswith('h5'):
                     allFiles.append(name)
-                    print(name)
-        exit()
         fnames = []
-        if depthRange and scanPoint:
-            for ii in range(len(scanPoint)):
-                # if the depthRange exist
-                fname = f'{args.filenamePrefix}{scanPoint[ii]}'
-                if os.path.isfile(f"{args.filefolder}{fname}.h5"):
-                    fnames.append(fname)
-        elif scanPoint:
+        if depthRange is not None and scanPoint is not None:
             for ii in range(len(scanPoint)):
                 for jj in range (len(depthRange)):
-                    fname = f'{args.filenamePrefix}{scanPoint[ii]}_{depthRange[jj]}'
-                    if os.path.isfile(f"{args.filefolder}{fname}.h5"):
+                    fname = f'{args.filenamePrefix}{scanPoint[ii]}_{depthRange[jj]}.h5'
+                    if os.path.isfile(f"{args.filefolder}/{fname}"):
                         fnames.append(fname)
+        elif scanPoint is not None:
+            for ii in range(len(scanPoint)):
+                # if the depthRange exist
+                fname = f'{args.filenamePrefix}{scanPoint[ii]}.h5'
+                if os.path.isfile(f"{args.filefolder}/{fname}"):
+                    fnames.append(fname)
         else:
             #process them all
             fnames = allFiles
         return fnames
 
-    def clearSaveFolder(self, savefolder):
-        ''' just for testing clean the folder before running the next cell,
-            as it will not show up what is wrong '''
-        files = glob.glob(savefolder + '*')
-        for f in files:
-            os.remove(f)
+    def processFile(self, filename, globalArgs):
+        '''
+        Each processing step is run as a C program which
+        outputs results to a file that becomes the input to
+        the next processing step
+        '''
+        sampleArgs = self.parseInputFile(filename, globalArgs)
+        peakSearchOut = self.peakSearch(filename, sampleArgs)
+        sampleArgs = self.parsePeaksFile(peakSearchOut, sampleArgs)
+        # p2q will fail if there are no peaks
+        if int(sampleArgs.Npeaks) > 0:
+            p2qOut = self.p2q(filename, peakSearchOut, sampleArgs)
+            sampleArgs = self.parseP2QFile(p2qOut, sampleArgs)
+        # must have at least 2 peaks to index
+        if int(sampleArgs.Npeaks) > 1:
+            indexOut = self.index(filename, p2qOut, sampleArgs)
+            sampleArgs = self.parseIndexFile(indexOut, sampleArgs)
+        else:
+            setattr(sampleArgs, 'Nindexed', 0)
+        return sampleArgs
 
     def parseInputFile(self, filename, args):
-        filename = args.filefolder + filename + '.h5'
+        ''' parse input h5 file '''
+        filename = f"{args.filefolder}/{filename}"
         attrsNameMap = {
             'title': 'entry1/title',
             'sampleName': 'entry1/sample/name',
@@ -147,9 +163,9 @@ class PyLaueGo:
         	-K mask_file_name (use pixels with mask==0)
         	-D distortion map file name
         '''
-        peakSearchPath = args.pathbins + 'peaksearch'
-        peakSearchOut = f'{args.saveFolder}peaks_{filename}.txt'
-        fullPath = args.filefolder + filename + '.h5'
+        peakSearchPath = args.pathbins + '/peaksearch/peaksearch'
+        peakSearchOut = f'{args.outputFolder}/peaks/peaks_{filename[:-3]}.txt'
+        fullPath = f'{args.filefolder}/{filename}'
         cmd = [peakSearchPath, '-b', str(args.boxsize), '-R', str(args.maxRfactor),
             '-m', str(args.min_size), '-s', str(args.min_separation), '-t', str(args.threshold),
             '-p', args.peakShape, '-M', str(args.max_peaks)]
@@ -158,12 +174,17 @@ class PyLaueGo:
         if args.smooth:
             cmd += ['-S', '']
         cmd += [fullPath, peakSearchOut]
-        sub.run(cmd)
-
+        self.runCmdAndCheckOutput(cmd)
         return peakSearchOut
 
     def parsePeaksFile(self, peaksFile, args):
-        ''' read the file made by peak search command '''
+        '''
+        Peak search command outputs a txt file in the form
+        $attr1 val1
+        $attr2 val2
+        ...
+        followed by a matrix with the values listed here as peakListAttrsNames
+        '''
         peakListAttrsNames = ['fitX', 'fitY', 'intens', 'integral', 'hwhmX', 'hwhmY', 'tilt', 'chisq']
         peakListAttrs = [[] for _ in peakListAttrsNames]
 
@@ -199,14 +220,18 @@ class PyLaueGo:
         		-x crystal description file
         !/data34/JZT/server336/bin/pixels2qs -g './KaySong/geoN_2021-10-26_18-28-16.xml' -x './KaySong/Fe.xml' 'temp.txt' 'temp_Peaks2G.txt'
         '''
-        p2qPath =  args.pathbins + 'pixels2qs'
-        p2qOut = f'{args.saveFolder}p2q_{filename}.txt'
+        p2qOut = f'{args.outputFolder}/p2q/p2q_{filename[:-3]}.txt'
+        p2qPath =  args.pathbins + '/pixels2qs/pix2qs'
         cmd = [p2qPath, '-g', args.geoFile, '-x', args.crystFile, peakSearchOut, p2qOut]
-        sub.run(cmd)
+        self.runCmdAndCheckOutput(cmd)
         return p2qOut
 
     def parseP2QFile(self, p2qFile, args):
-        # extract the peaks from the xml file
+        '''
+        P2Q outputs a txt file
+        Here we only want to parse out the values qX qY qZ
+        which are listed in a matrix part way through the file
+        '''
         p2qListAttrsNames = ['qX', 'qY', 'qZ']
         p2qListAttrs = [[] for _ in p2qListAttrsNames]
 
@@ -257,66 +282,84 @@ class PyLaueGo:
         #		$defaultFolder	default folder to prepend to file names
         #!/data34/JZT/server336/bin/euler -q -k 30.0 -t 35.0 -a 0.12 -h 0 0 1 -c 72.0 -f 'temp_Peaks2G.txt' -o 'temp_4Index.txt'
         '''
-        indexPath = args.pathbins + 'euler'
-        indexOut = f'{args.saveFolder}index_{filename}.txt'
+        indexPath = args.pathbins + '/euler/euler'
+        indexOut = f'{args.outputFolder}/index/index_{filename[:-3]}.txt'
         cmd = [indexPath, '-q', '-k', str(args.indexKeVmaxCalc), '-t', str(args.indexKeVmaxTest),
             '-a', str(args.indexAngleTolerance), '-c', str(args.indexCone), '-f', p2qOut, '-h',
             str(args.indexH), str(args.indexK), str(args.indexL), '-o', indexOut]
-        sub.run(cmd)
-
-        return indexOut
+        if not self.runCmdAndCheckOutput(cmd):
+            return indexOut
 
     def parseIndexFile(self, indexFile, args):
-        ''' parse the index file which has some vals as $abc 123 and
-            some as a table with extra punctuation to remove '''
+        '''
+        Index command outputs a txt file in the form
+        $attr1 val1
+        $attr2 val2
+        ...
+        followed by a matrix with the values listed here as indexListAttrsNames
+        '''
         indexListAttrsNames = ['h', 'k', 'l', 'PkIndex']
-        indexListAttrs = [[] for _ in indexListAttrsNames]
-
+        indexListAttrs = []
+        currentPattern = 0
         with open(indexFile, encoding='windows-1252', errors='ignore') as f:
             lines = f.readlines()
             for line in lines:
                 line = line.split('\t')
                 vals = []
+                #need to find unknown number of patterns which are indicated by $array
+                #then following lines are array
                 for val in line:
                     if val and not val.startswith('//'):
                         val = val.strip()
+
                         if val.startswith('$'):
-                            val = val.replace('$', '').replace('0', '')
+                            val = val.replace('$', '')
+                            if val.startswith('array'):
+                                currentPattern = int(val[5:])
+                                indexListAttrs.append([[] for _ in indexListAttrsNames])
                         vals.append(val)
                 if len(vals) == 2:
                     setattr(args, vals[0], vals[1])
                 elif vals and vals[0].startswith('['):
                     vals = vals[0]
-                    for c in '[]()':
+                    for c in '[]()': #remove extra punctuation
                         vals = vals.replace(c, '')
                     vals = vals.split()
                     #$array0 10  14  G^ h k l intens E(keV) err(deg) PkIndex
-                    for i in range(len(indexListAttrs) - 1):
-                        indexListAttrs[i].append(vals[i + 4])
-                    indexListAttrs[-1].append(vals[-1])
+                    for i in range(len(indexListAttrs[currentPattern]) - 1):
+                        indexListAttrs[currentPattern][i].append(vals[i + 4])
+                    indexListAttrs[currentPattern][-1].append(vals[-1])
 
         for i in range(len(indexListAttrs)):
-            setattr(args, indexListAttrsNames[i], ' '.join(indexListAttrs[i]))
+            for j in range(len(indexListAttrsNames)):
+                setattr(args, f"{indexListAttrsNames[j]}{i}", ' '.join(indexListAttrs[i][j]))
+        #rename these attrs to match expected name in output xml
         setattr(args, 'xtlFile', args.xtalFileName)
+        setattr(args, 'Npatterns', args.NpatternsFound)
         args.latticeParameters = args.latticeParameters.replace('}', '').replace('{', '').strip()
         args = self.getRecipLatticeStar(args)
         args = self.getAtom(args)
         return args
 
     def getRecipLatticeStar(self, args):
-        rl = args.recip_lattice
-        rl = rl.replace('{', '').replace('}', ' ') #leave a space
-        rl = rl.split()
-        for i in range(len(rl)):
-            rl[i] = rl[i].replace(',', ' ')
-        setattr(args, 'astar', rl[0])
-        setattr(args, 'bstar', rl[1])
-        setattr(args, 'cstar', rl[2])
+        ''' parse out values for reciprocal lattice '''
+        for i in range(int(args.NpatternsFound)):
+            rl = getattr(args, f'recip_lattice{i}')
+            rl = rl.replace('{', '').replace('}', ' ') #leave a space
+            rl = rl.split()
+            for j in range(len(rl)):
+                rl[j] = rl[j].replace(',', ' ')
+            setattr(args, f'astar{i}', rl[0])
+            setattr(args, f'bstar{i}', rl[1])
+            setattr(args, f'cstar{i}', rl[2])
         return args
 
     def getAtom(self, args):
-        #from AtomDesctiption1='{Ni001  0 0 0 1} to
+        '''
+        parse out values of atom description
+        from AtomDesctiption1='{Ni001  0 0 0 1} to
         #<atom Ni=\'30\' label=\'Ni001\' n=\'1\' symbol=\'Ni\'>0 0 0</atom>\n
+        '''
         setattr(args, 'Ni', args.NiData)
         atom = args.AtomDesctiption1.replace('}', '').replace('{', '').split()
         setattr(args, 'n', atom[-1])
@@ -324,6 +367,21 @@ class PyLaueGo:
         setattr(args, 'atom', ' '.join(atom[1:3]))
         setattr(args, 'symbol', args.label[:2])
         return args
+
+    def runCmdAndCheckOutput(self, cmd):
+        '''
+        Handle errors for subprocesses
+        Some errors from subprocesses should not be fatal
+        e.g. peak search throws error if no peaks found
+        Continue processing and output whichever information
+        was found for that step
+        '''
+        try:
+            output = sub.check_output(cmd, stderr=sub.STDOUT)
+        except sub.CalledProcessError as e:
+            with open(self.errorLog, 'a') as f:
+                f.write(e.output.decode())
+            return e.returncode
 
 if __name__ == '__main__':
     comm = MPI.COMM_WORLD
