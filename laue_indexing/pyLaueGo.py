@@ -8,10 +8,10 @@ import argparse
 import yaml
 import subprocess as sub
 from datetime import datetime
-from mpi4py import MPI
+#from mpi4py import MPI
 import traceback
 
-from xmlWriter import XMLWriter
+from laue_indexing.xmlWriter import XMLWriter
 
 
 class PyLaueGo:
@@ -386,6 +386,7 @@ class PyLaueGo:
                 f.write(e.output.decode())
             return e.returncode
 
+"""
 if __name__ == '__main__':
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -395,3 +396,4 @@ if __name__ == '__main__':
     pyLaueGo.run(rank, size)
     if rank == 0:
         print(f'runtime is {datetime.now() - start}')
+"""
