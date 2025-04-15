@@ -11,3 +11,5 @@ pipeline/py_func/linux
 
 
 calibration/*.yml
+laue_indexing.egg-info
+/build
