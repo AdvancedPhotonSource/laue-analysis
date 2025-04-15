@@ -12,8 +12,8 @@ from xml.etree import ElementTree
 from xml.dom import minidom
 import fire
 
-from laueindexing.pipeline.dataclasses.step import Step
-from laueindexing.pipeline.dataclasses.indexing import Indexing
+from laueindexing.dataclasses.step import Step
+from laueindexing.dataclasses.indexing import Indexing
 
 class PyLaueGo:
     def __init__(self,config=None):
