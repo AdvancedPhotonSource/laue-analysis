@@ -1,13 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='laue_indexing',
+    name='laueindexing',
     version='0.1.0',
-    packages=find_packages(include=['laue_indexing', 'laue_indexing.*']),
+    packages=find_packages(include=['laueindexing', 'laueindexing.*']),
     include_package_data=True,
-    install_requires=[
-        # Add dependencies here, e.g., 'numpy', 'pyyaml', etc.
-    ],
     description='A package for Laue indexing.',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
