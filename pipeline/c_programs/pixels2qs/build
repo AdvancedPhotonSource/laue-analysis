@@ -1,0 +1,8 @@
+# gcc -std=gnu99 -Os -o pixels2qs -I/clhome/aps_tools/shared/include main.c microHDF5.c -L/clhome/aps_tools/shared/lib -lhdf5 -lhdf5_hl -lmfhdf -lm -static
+# gcc -std=gnu99 -Os -o pixels2qs -I/clhome/aps_tools/hdf5-1.8.2/hdf5/include -I/clhome/aps_tools/shared/include main.c microHDF5.c -L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib -L/clhome/aps_tools/shared/lib -lhdf5 -lhdf5_hl -lmfhdf -lm -static
+# gcc -std=gnu99 -Os -o pixels2qs -I/clhome/aps_tools/shared/include main.c checkFileType.c readGeoN.c lattice.c xmlUtility.c keyLists.c -L/clhome/aps_tools/shared/lib -lmfhdf -lm -static
+
+# pixels2qs -g geometry.xml -x Si.xml outputTesth5.txt outTestQs5.txt
+
+gcc -std=gnu99 -Os -o pixels2qs  main.c checkFileType.c readGeoN.c lattice.c xmlUtility.c keyLists.c  -lm
+

@@ -1,0 +1,14 @@
+#gcc main.c microHDF5.c -std=gnu99 -Os -msse2 -o hdf5Info \
+#  -I/clhome/aps_tools/hdf5-1.8.2/hdf5/include \
+#  -L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib     \
+#  -static -lhdf5_hl -lhdf5 -lm -lz 
+
+gcc main.c peaksearch.c peak.c microHDF5.c \
+	WinViewHeader.c WinViewImage.c WinViewRead.c calibparam.c ccdTable.c \
+	fitToFunction.c fitToGaussian.c genfileinf.c grid_operations.c grid.c list.c point.c \
+	-std=gnu99 -Os -msse2 -o peaksearch \
+	-I/clhome/aps_tools/hdf5-1.8.2/hdf5/include \
+	-I/clhome/aps_tools/shared/include \
+	-L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib     \
+	-L/clhome/aps_tools/shared/lib				\
+	-static -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz 
