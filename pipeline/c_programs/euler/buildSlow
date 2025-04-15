@@ -1,0 +1,9 @@
+#	-std=gnu99 -Os -msse2 -o euler				\
+
+gcc main.c fast.c optimize.c EulerTestFaster.c checkFileType.c lattice.c mathUtil.c \
+	-DMALLOC_CHECK_=2							\
+	-fgnu89-inline								\
+	-std=gnu99 -Os -o euler						\
+	-I/clhome/aps_tools/shared/include			\
+	-L/clhome/aps_tools/shared/lib				\
+	-static -lgsl -lgslcblas -lm
