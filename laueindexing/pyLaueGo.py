@@ -11,7 +11,7 @@ from datetime import datetime
 #from mpi4py import MPI
 import traceback
 
-from laue_indexing.xmlWriter import XMLWriter
+from laueindexing.xmlWriter import XMLWriter
 
 
 class PyLaueGo:

@@ -6,7 +6,7 @@ import tempfile
 from unittest.mock import patch, MagicMock
 from argparse import Namespace
 import yaml
-from laue_indexing.pyLaueGo import PyLaueGo
+from laueindexing.pyLaueGo import PyLaueGo
 
 
 class TestPyLaueGo(unittest.TestCase):
@@ -54,7 +54,7 @@ class TestPyLaueGo(unittest.TestCase):
             os.unlink(self.config_path)
 
 
-    @patch('laue_indexing.pyLaueGo.os.path.isfile')
+    @patch('laueindexing.pyLaueGo.os.path.isfile')
     def test_get_input_files_names_list(self, mock_isfile):
         """Test getting list of input file names."""
         mock_isfile.return_value = True
@@ -81,7 +81,7 @@ class TestPyLaueGo(unittest.TestCase):
             self.assertIn('test_2.h5', files)
             self.assertIn('test_3.h5', files)
 
-    @patch('laue_indexing.pyLaueGo.sub.check_output')
+    @patch('laueindexing.pyLaueGo.sub.check_output')
     def test_run_cmd_and_check_output(self, mock_check_output):
         """Test running command and checking output."""
         # Setup mock
