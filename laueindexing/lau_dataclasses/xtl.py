@@ -1,7 +1,7 @@
 from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass, field
 
-from laueindexing.dataclasses.atom import Atom
+from laueindexing.lau_dataclasses.atom import Atom
 
 
 @dataclass
