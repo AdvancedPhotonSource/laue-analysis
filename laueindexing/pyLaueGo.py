@@ -6,19 +6,19 @@ import argparse
 import yaml
 import subprocess as sub
 from datetime import datetime
-#from mpi4py import MPI
 import traceback
 from xml.etree import ElementTree
 from xml.dom import minidom
 import fire
 
-from laueindexing.dataclasses.step import Step
-from laueindexing.dataclasses.indexing import Indexing
+from laueindexing.lau_dataclasses.step import Step
+from laueindexing.lau_dataclasses.indexing import Indexing
 
 class PyLaueGo:
-    def __init__(self,config=None):
+    def __init__(self,config=None, comm=None):
         self.parser = argparse.ArgumentParser()
         self.config = config
+        self.comm = comm
 
     def run(self, rank, size):
         #global args shared for all samples e.g. title
@@ -36,19 +36,36 @@ class PyLaueGo:
                     xmlStep = step.getXMLElem()
                     xmlSteps.append(xmlStep)
 
-            comm.Barrier()
-            if rank != 0:
-                comm.send(xmlSteps, dest=0)
+            if self.comm is not None:
+                self.comm.Barrier()
+                if rank != 0:
+                    self.comm.send(xmlSteps, dest=0)
+                else:
+                    #recieve all collected steps from manager node and combine
+                    for recv_rank in range(1, size):
+                        xmlSteps += self.comm.recv(source=recv_rank)
+                    xmlOut = os.path.join(self.args.outputFolder, f'{self.args.filenamePrefix}indexed.xml')
+                    self.writeXML(xmlSteps, xmlOut)
+            
             else:
-                #recieve all collected steps from manager node and combine
-                for recv_rank in range(1, size):
-                    xmlSteps += comm.recv(source=recv_rank)
+                # Single thread implementation
+                self.createOutputDirectories()
+                xmlSteps = []
+                processFiles = self.getAllFiles()
+
+                for filename in processFiles:
+                    step = self.processFile(filename)
+                    if step:
+                        xmlStep = step.getXMLElem()
+                        xmlSteps.append(xmlStep)
                 xmlOut = os.path.join(self.args.outputFolder, f'{self.args.filenamePrefix}indexed.xml')
                 self.writeXML(xmlSteps, xmlOut)
+                
         except:
             with open(self.errorLog, 'a') as f:
                 f.write(traceback.format_exc())
-            comm.Abort(1)
+            if self.comm is not None:
+                self.comm.Abort(1)
 
     def parseArgs(self, description):
         if self.config:
@@ -91,12 +108,22 @@ class PyLaueGo:
             filenames = self.getInputFileNamesList(depthRange, scanPoint, self.args)
         else:
             filenames = None
-        filenames = comm.bcast(filenames, root = 0)
+        if self.comm is not None:
+            filenames = self.comm.bcast(filenames, root = 0)
         nFiles = int(np.ceil(len(filenames) / size))
         start = rank * nFiles
         end = min(start + nFiles, len(filenames))
         processFiles = filenames[start:end]
         return processFiles
+    
+    def getAllFiles(self):
+        if hasattr(self.args, 'scanPointStart') and hasattr(self.args, 'scanPointEnd'):
+            scanPoint = np.arange(int(self.args.scanPointStart), int(self.args.scanPointEnd))
+        if hasattr(self.args, 'depthRangeStart') and hasattr(self.args, 'depthRangeEnd'):
+            depthRange = np.arange(int(self.args.depthRangeStart), int(self.args.depthRangeEnd))
+        return self.getInputFileNamesList(depthRange, scanPoint, self.args)
+
+
 
     def getInputFileNamesList(self, depthRange, scanPoint, args):
         ''' generate the list of files name for analysis '''
@@ -342,17 +369,21 @@ class PyLaueGo:
             f.write(prettyXML)
 
 def run_all(config=None):
-    """"
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    """
     rank = 0
     start = datetime.now()
     pyLaueGo = PyLaueGo(config)
-    pyLaueGo.run(0, 1)
+    pyLaueGo.run(rank, size)
     if rank == 0:
         print(f'runtime is {datetime.now() - start}')
 
+def run_on_process(config_fp):
+    pyLaueGo = PyLaueGo(config_fp)
+    pyLaueGo.run(0, 1) # Equivalent rank & size
+
+
 if __name__ == '__main__':
+    from mpi4py import MPI
     fire.Fire(run_all)

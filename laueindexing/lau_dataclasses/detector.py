@@ -1,8 +1,8 @@
 from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass
 
-from laueindexing.dataclasses.roi import ROI
-from laueindexing.dataclasses.peaksXY import PeaksXY
+from laueindexing.lau_dataclasses.roi import ROI
+from laueindexing.lau_dataclasses.peaksXY import PeaksXY
 
 
 @dataclass

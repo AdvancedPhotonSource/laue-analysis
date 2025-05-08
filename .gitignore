@@ -16,3 +16,8 @@ laueindexing.egg-info
 /build
 
 standard xtals
+
+data
+sandbox.ipynb
+sandbox.py
+.vscode
