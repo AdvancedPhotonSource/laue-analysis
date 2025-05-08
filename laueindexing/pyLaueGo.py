@@ -6,14 +6,14 @@ import argparse
 import yaml
 import subprocess as sub
 from datetime import datetime
-#from mpi4py import MPI
+from mpi4py import MPI
 import traceback
 from xml.etree import ElementTree
 from xml.dom import minidom
 import fire
 
-from laueindexing.dataclasses.step import Step
-from laueindexing.dataclasses.indexing import Indexing
+from laueindexing.lau_dataclasses.step import Step
+from laueindexing.lau_dataclasses.indexing import Indexing
 
 class PyLaueGo:
     def __init__(self,config=None):
@@ -342,11 +342,9 @@ class PyLaueGo:
             f.write(prettyXML)
 
 def run_all(config=None):
-    """"
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    """
     rank = 0
     start = datetime.now()
     pyLaueGo = PyLaueGo(config)

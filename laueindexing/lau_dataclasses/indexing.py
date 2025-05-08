@@ -1,8 +1,8 @@
 from xml.etree.ElementTree import Element, Comment
 from dataclasses import dataclass, field
 
-from laueindexing.dataclasses.pattern import Pattern
-from laueindexing.dataclasses.xtl import Xtl
+from laueindexing.lau_dataclasses.pattern import Pattern
+from laueindexing.lau_dataclasses.xtl import Xtl
 
 
 @dataclass
