@@ -55,7 +55,7 @@ Unless you've moved them, it will be the current directory of this readme.
 
 **Upload the crystal structure file** for this experiment and set the value for **crystFile** to the full path to the crystal structure file.
 
-### Run the Program
+### Run the Program via MPI
 
 Values from the config file can also be modified at runtime from the command line
 
@@ -64,9 +64,26 @@ e.g. `--outputFolder /eagle/APSDataAnalysis/hparraga/output`
 Path to the config file must be included.
 
 ```
-mpirun -np 32 pyLaueGo.py --configFile {path to config file}
+mpirun -np 32 pyLaueGo.py {path to config file}
 ```
 
 For a small number of files, lower the number of mpi processes with the `-np` flag
 
 For more information on what arguments are available, there is also a `--help` flag
+
+### Run the Program programmatically
+
+
+The program can be run on a single process by directly providing the python file: 
+
+```python
+import yaml
+from laueindexing.pyLaueGo import PyLaueGo
+
+config_path = 'path/to/your/config.yml'
+with open(config_path, 'r') as config_file:
+    config = yaml.safe_load(config_file)
+
+py_laue_go = PyLaueGo(config=config)
+py_laue_go.run_on_process()
+```
