@@ -68,12 +68,14 @@ class TestPyLaueGo(unittest.TestCase):
         # Test with scanPoint specified
         scan_point = [1, 2, 3]
         depth_range = None
+
+        self.pylauego._config = args
         
         # Mock os.walk to return test files
         with patch('os.walk') as mock_walk:
             mock_walk.return_value = [(args.filefolder, [], ['test_1.h5', 'test_2.h5', 'test_3.h5'])]
             
-            files = self.pylauego.getInputFileNamesList(depth_range, scan_point, args)
+            files = self.pylauego.getInputFileNamesList(depth_range, scan_point)
             
             # Should return files matching the scanPoint
             self.assertEqual(len(files), 3)

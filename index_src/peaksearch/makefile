@@ -6,6 +6,12 @@ CFLAGS = -O2 -std=gnu99	-lhdf5_hl -lhdf5 -lgsl -lgslcblas -msse2 -lm
 CC = gcc
 
 
+# Linux target: Uses h5cc compiler wrapper to find HDF5 header and library paths
+linux: CFLAGS += $(shell h5cc -show | grep -o -- "-I[^ ]*") \
+				$(shell h5cc -show | grep -o -- "-L[^ ]*") \
+				-lm -lz
+linux: $(OUT)
+
 polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include \
 				  -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib
 
