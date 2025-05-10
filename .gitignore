@@ -17,7 +17,15 @@ laueindexing.egg-info
 
 standard xtals
 
-data
+gdata_backup
 sandbox.ipynb
 sandbox.py
+data/output
 .vscode
+build
+tests/data/output
+
+# Ignore compiled binaries
+index_src/euler/euler
+index_src/peaksearch/peaksearch
+index_src/pixel2qs/pix2qs

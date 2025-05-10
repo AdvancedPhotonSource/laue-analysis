@@ -23,7 +23,7 @@ class XMLWriter:
             'numAboveThreshold', 'cosmicFilter', 'geoFile']
         self.roiAttrs = ['startx', 'endx', 'groupx', 'starty', 'endy', 'groupy']
         self.peaksXYAttrs = ['peakProgram', 'minwidth', 'threshold', 'thresholdRatio', 'maxRfactor',
-            'maxwidth', 'maxCentToFit', 'boxsize', 'max_number', 'min_separation', 'peakShape']
+            'maxwidth', 'maxCentToFit', 'boxsize', 'max_peaks', 'min_separation', 'peakShape']
         self.peaksXYTexts = ['fitX', 'fitY', 'intens', 'integral', 'hwhmX', 'hwhmY', 'tilt', 'chisq', 'qX', 'qY', 'qZ']
         self.indexingAttrs = ['Nindexed', 'Npatterns', 'Npeaks', 'angleTolerance', 'cone', 'executionTime',
             'hklPrefer', 'indexProgram', 'keVmaxCalc', 'keVmaxTest']
