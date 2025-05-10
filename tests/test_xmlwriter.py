@@ -56,7 +56,7 @@ class TestXMLWriter(unittest.TestCase):
             maxwidth="20",
             maxCentToFit="5",
             boxsize="5",
-            max_number="50",
+            max_peaks="50",
             min_separation="10",
             peakShape="G",
             Npeaks="2",

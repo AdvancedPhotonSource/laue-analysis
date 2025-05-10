@@ -10,21 +10,60 @@ import traceback
 from xml.etree import ElementTree
 from xml.dom import minidom
 import fire
+from typing import Dict, Any, Optional, Union
 
 from laueindexing.lau_dataclasses.step import Step
 from laueindexing.lau_dataclasses.indexing import Indexing
+from laueindexing.lau_dataclasses.config import LaueConfig
 
 class PyLaueGo:
-    def __init__(self,config=None, comm=None):
+    def __init__(self, config=None, comm=None, supress_errors=False):
+        """
+        Initialize PyLaueGo with optional config and MPI communicator.
+        
+        Args:
+            config: Configuration object or dictionary with configuration parameters.
+                   If None, configuration will be loaded from command line arguments.
+            comm: MPI communicator object for distributed processing.
+        """
         self.parser = argparse.ArgumentParser()
-        self.config = config
         self.comm = comm
+        self.supress_errors = supress_errors
+        
+        # Initialize config as None
+        self._config = None
+        
+        # Set config if provided
+        if config is not None:
+            if isinstance(config, dict):
+                self._config = LaueConfig.from_dict(config)
+            elif isinstance(config, LaueConfig):
+                self._config = config
+            else:
+                self._config = LaueConfig.from_dict(config)
+                
+        # For backward compatibility
+        self.config = config
+
+    def run_on_process(self):
+        self.run(0, 1)
 
     def run(self, rank, size):
-        #global args shared for all samples e.g. title
-        self.parseArgs(description='Runs Laue Indexing.')
+        """
+        Run the LaueGo indexing process.
+        
+        Args:
+            rank: MPI rank of current process (0 for main process)
+            size: Total number of MPI processes
+        """
+        # Ensure we have a config object
+        if self._config is None:
+            self._config = self.parseArgs(description='Runs Laue Indexing.')
+            
+        # Set up error logging
         now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-        self.errorLog = f"{self.args.outputFolder}/error/error_{now}.log"
+        self.errorLog = f"{self._config.outputFolder}/error/error_{now}.log"
+        
         try:
             if rank == 0:
                 self.createOutputDirectories()
@@ -44,7 +83,7 @@ class PyLaueGo:
                     #recieve all collected steps from manager node and combine
                     for recv_rank in range(1, size):
                         xmlSteps += self.comm.recv(source=recv_rank)
-                    xmlOut = os.path.join(self.args.outputFolder, f'{self.args.filenamePrefix}indexed.xml')
+                    xmlOut = os.path.join(self._config.outputFolder, f'{self._config.filenamePrefix}indexed.xml')
                     self.writeXML(xmlSteps, xmlOut)
             
             else:
@@ -58,41 +97,73 @@ class PyLaueGo:
                     if step:
                         xmlStep = step.getXMLElem()
                         xmlSteps.append(xmlStep)
-                xmlOut = os.path.join(self.args.outputFolder, f'{self.args.filenamePrefix}indexed.xml')
+                xmlOut = os.path.join(self._config.outputFolder, f'{self._config.filenamePrefix}indexed.xml')
                 self.writeXML(xmlSteps, xmlOut)
                 
-        except:
-            with open(self.errorLog, 'a') as f:
-                f.write(traceback.format_exc())
+        except Exception as e:
             if self.comm is not None:
                 self.comm.Abort(1)
 
-    def parseArgs(self, description):
-        if self.config:
-            defaults = self.config
-        else:
-            ''' get user inputs and if user didn't input a value, get default value '''
+            if not self.supress_errors:
+                raise e
+
+            with open(self.errorLog, 'a') as f:
+                f.write(traceback.format_exc())
+
+    def parseArgs(self, description) -> LaueConfig:
+        """
+        Parse command line arguments and create a configuration object.
+        
+        This method is optional if a config was provided during initialization.
+        
+        Args:
+            description: Description string for the argument parser.
+            
+        Returns:
+            LaueConfig object with parsed configuration
+        """
+        # Return existing config if it's already set
+        if self._config is not None:
+            return self._config
+            
+        # Parse from command line if no config was provided
+        if self.config is None:
             self.parser.add_argument(f'--configFile', dest='configFile', required=True)
             self.parser.add_argument(f'--saveTxt', dest='saveTxt', action='store_true')
 
             args = self.parser.parse_known_args()[0]
             with open(args.configFile) as f:
-                defaults = yaml.safe_load(f)
-        for arg in defaults:
-            self.parser.add_argument(f'--{arg}', dest=arg, type=str, default=defaults.get(arg))
+                config_dict = yaml.safe_load(f)
+        else:
+            config_dict = self.config
+            
+        # Add arguments to parser for command-line overrides
+        for arg in config_dict:
+            self.parser.add_argument(f'--{arg}', dest=arg, type=str, default=config_dict.get(arg))
+            
+        # Parse arguments
         args = self.parser.parse_args()
-        for defaultArg in defaults:
-            if not args.__dict__.get(defaultArg):
-                setattr(args, defaultArg, defaults.get(defaultArg))
+        
+        # Update config with command-line arguments
+        for arg_name, arg_value in vars(args).items():
+            if arg_value is not None:
+                config_dict[arg_name] = arg_value
+                
+        # Create and store the config object
+        self._config = LaueConfig.from_dict(config_dict)
+        
+        # For backward compatibility
         self.args = args
+        
+        return self._config
 
     def createOutputDirectories(self):
         ''' set up output directory structure '''
         outputDirectories = ['peaks', 'p2q', 'index', 'error']
-        if not os.path.exists(self.args.outputFolder):
-            os.mkdir(self.args.outputFolder)
+        if not os.path.exists(self._config.outputFolder):
+            os.mkdir(self._config.outputFolder)
         for dir in outputDirectories:
-            fullPath = os.path.join(self.args.outputFolder, dir)
+            fullPath = os.path.join(self._config.outputFolder, dir)
             if not os.path.exists(fullPath):
                 os.mkdir(fullPath)
 
@@ -101,11 +172,11 @@ class PyLaueGo:
         if rank == 0:
             scanPoint = None
             depthRange = None
-            if hasattr(self.args, 'scanPointStart') and hasattr(self.args, 'scanPointEnd'):
-                scanPoint = np.arange(int(self.args.scanPointStart), int(self.args.scanPointEnd))
-            if hasattr(self.args, 'depthRangeStart') and hasattr(self.args, 'depthRangeEnd'):
-                depthRange = np.arange(int(self.args.depthRangeStart), int(self.args.depthRangeEnd))
-            filenames = self.getInputFileNamesList(depthRange, scanPoint, self.args)
+            if self._config.scanPointStart is not None and self._config.scanPointEnd is not None:
+                scanPoint = np.arange(int(self._config.scanPointStart), int(self._config.scanPointEnd))
+            if self._config.depthRangeStart is not None and self._config.depthRangeEnd is not None:
+                depthRange = np.arange(int(self._config.depthRangeStart), int(self._config.depthRangeEnd))
+            filenames = self.getInputFileNamesList(depthRange, scanPoint)
         else:
             filenames = None
         if self.comm is not None:
@@ -117,32 +188,37 @@ class PyLaueGo:
         return processFiles
     
     def getAllFiles(self):
-        if hasattr(self.args, 'scanPointStart') and hasattr(self.args, 'scanPointEnd'):
-            scanPoint = np.arange(int(self.args.scanPointStart), int(self.args.scanPointEnd))
-        if hasattr(self.args, 'depthRangeStart') and hasattr(self.args, 'depthRangeEnd'):
-            depthRange = np.arange(int(self.args.depthRangeStart), int(self.args.depthRangeEnd))
-        return self.getInputFileNamesList(depthRange, scanPoint, self.args)
+        """Get all files for processing based on configuration."""
+        scanPoint = None
+        depthRange = None
+        
+        if self._config.scanPointStart is not None and self._config.scanPointEnd is not None:
+            scanPoint = np.arange(int(self._config.scanPointStart), int(self._config.scanPointEnd))
+        if self._config.depthRangeStart is not None and self._config.depthRangeEnd is not None:
+            depthRange = np.arange(int(self._config.depthRangeStart), int(self._config.depthRangeEnd))
+            
+        return self.getInputFileNamesList(depthRange, scanPoint)
 
 
 
-    def getInputFileNamesList(self, depthRange, scanPoint, args):
+    def getInputFileNamesList(self, depthRange=None, scanPoint=None):
         ''' generate the list of files name for analysis '''
         fnames = []
         if depthRange is not None and scanPoint is not None:
             for ii in range(len(scanPoint)):
-                for jj in range (len(depthRange)):
-                    fname = f'{args.filenamePrefix}{scanPoint[ii]}_{depthRange[jj]}.h5'
-                    if os.path.isfile(os.path.join(args.filefolder, fname)):
+                for jj in range(len(depthRange)):
+                    fname = f'{self._config.filenamePrefix}{scanPoint[ii]}_{depthRange[jj]}.h5'
+                    if os.path.isfile(os.path.join(self._config.filefolder, fname)):
                         fnames.append(fname)
         elif scanPoint is not None:
             for ii in range(len(scanPoint)):
                 # if the depthRange exist
-                fname = f'{args.filenamePrefix}{scanPoint[ii]}.h5'
-                if os.path.isfile(os.path.join(args.filefolder, fname)):
+                fname = f'{self._config.filenamePrefix}{scanPoint[ii]}.h5'
+                if os.path.isfile(os.path.join(self._config.filefolder, fname)):
                     fnames.append(fname)
         else:
             #process them all
-            for root, dirs, files in os.walk(args.filefolder):
+            for root, dirs, files in os.walk(self._config.filefolder):
                 for name in files:
                     if name.endswith('h5'):
                         fnames.append(name)
@@ -160,9 +236,9 @@ class PyLaueGo:
         step = self.parseInputFile(filename)
         peakSearchOut = self.peakSearch(filename)
         self.parsePeaksFile(peakSearchOut, step)
-        step.detector.set('cosmicFilter', self.args.cosmicFilter)
-        step.detector.set('geoFile', self.args.geoFile)
-        step.detector.peaksXY.set('peakProgram', os.path.basename(self.args.peaksearchPath))
+        step.detector.set('cosmicFilter', self._config.cosmicFilter)
+        step.detector.set('geoFile', self._config.geoFile)
+        step.detector.peaksXY.set('peakProgram', os.path.basename(self._config.peaksearchPath))
         # p2q will fail if there are no peaks
         Npeaks = step.detector.peaksXY.Npeaks
         if Npeaks > 0:
@@ -175,13 +251,13 @@ class PyLaueGo:
         else:
             step.indexing = Indexing()
             step.indexing.set('Nindexed', 0)
-        step.indexing.set('indexProgram', os.path.basename(self.args.indexingPath))
+        step.indexing.set('indexProgram', os.path.basename(self._config.indexingPath))
 
         return step
 
     def parseInputFile(self, filename):
         ''' parse input h5 file '''
-        filename = os.path.join(self.args.filefolder, filename)
+        filename = os.path.join(self._config.filefolder, filename)
         step = Step()
         step.fromH5(filename)
         return step
@@ -203,17 +279,17 @@ class PyLaueGo:
         	-K mask_file_name (use pixels with mask==0)
         	-D distortion map file name
         '''
-        peakSearchOutDirectory = os.path.join(self.args.outputFolder, 'peaks')
+        peakSearchOutDirectory = os.path.join(self._config.outputFolder, 'peaks')
         peakSearchOutFile = os.path.join(peakSearchOutDirectory, f'peaks_{filename[:-3]}.txt')
-        fullPath = os.path.join(self.args.filefolder, filename)
-        cmd = [self.args.peaksearchPath, '-b', str(self.args.boxsize), '-R', str(self.args.maxRfactor),
-            '-m', str(self.args.min_size), '-s', str(self.args.min_separation), '-t', str(self.args.threshold),
-            '-p', self.args.peakShape, '-M', str(self.args.max_peaks)]
-        if self.args.maskFile:
-            cmd += ['-K', self.args.maskFile]
-        if self.args.thresholdRatio != -1:
-            cmd += ['-T', self.args.thresholdRatio]
-        if self.args.smooth:
+        fullPath = os.path.join(self._config.filefolder, filename)
+        cmd = [self._config.peaksearchPath, '-b', str(self._config.boxsize), '-R', str(self._config.maxRfactor),
+            '-m', str(self._config.min_size), '-s', str(self._config.min_separation), '-t', str(self._config.threshold),
+            '-p', self._config.peakShape, '-M', str(self._config.max_peaks)]
+        if self._config.maskFile:
+            cmd += ['-K', self._config.maskFile]
+        if self._config.thresholdRatio != -1:
+            cmd += ['-T', self._config.thresholdRatio]
+        if self._config.smooth:
             cmd += ['-S', '']
         cmd += [fullPath, peakSearchOutFile]
         self.runCmdAndCheckOutput(cmd)
@@ -254,9 +330,9 @@ class PyLaueGo:
         		-x crystal description file
         !/data34/JZT/server336/bin/pixels2qs -g './KaySong/geoN_2021-10-26_18-28-16.xml' -x './KaySong/Fe.xml' 'temp.txt' 'temp_Peaks2G.txt'
         '''
-        p2qOutDirectory = os.path.join(self.args.outputFolder, 'p2q')
+        p2qOutDirectory = os.path.join(self._config.outputFolder, 'p2q')
         p2qOutFile = os.path.join(p2qOutDirectory, f'p2q_{filename[:-3]}.txt')
-        cmd = [self.args.p2qPath, '-g', self.args.geoFile, '-x', self.args.crystFile, peakSearchOut, p2qOutFile]
+        cmd = [self._config.p2qPath, '-g', self._config.geoFile, '-x', self._config.crystFile, peakSearchOut, p2qOutFile]
         self.runCmdAndCheckOutput(cmd)
         return p2qOutFile
 
@@ -307,11 +383,11 @@ class PyLaueGo:
         #		$defaultFolder	default folder to prepend to file names
         #!/data34/JZT/server336/bin/euler -q -k 30.0 -t 35.0 -a 0.12 -h 0 0 1 -c 72.0 -f 'temp_Peaks2G.txt' -o 'temp_4Index.txt'
         '''
-        indexOutDirectory = os.path.join(self.args.outputFolder, 'index')
+        indexOutDirectory = os.path.join(self._config.outputFolder, 'index')
         indexOutFile = os.path.join(indexOutDirectory, f'index_{filename[:-3]}.txt')
-        cmd = [self.args.indexingPath, '-q', '-k', str(self.args.indexKeVmaxCalc), '-t', str(self.args.indexKeVmaxTest),
-            '-a', str(self.args.indexAngleTolerance), '-c', str(self.args.indexCone), '-f', p2qOut, '-h',
-            str(self.args.indexH), str(self.args.indexK), str(self.args.indexL), '-o', indexOutFile]
+        cmd = [self._config.indexingPath, '-q', '-k', str(self._config.indexKeVmaxCalc), '-t', str(self._config.indexKeVmaxTest),
+            '-a', str(self._config.indexAngleTolerance), '-c', str(self._config.indexCone), '-f', p2qOut, '-h',
+            str(self._config.indexH), str(self._config.indexK), str(self._config.indexL), '-o', indexOutFile]
         if not self.runCmdAndCheckOutput(cmd):
             return indexOutFile
 
@@ -368,22 +444,33 @@ class PyLaueGo:
         with open(xmlOutFile, 'w') as f:
             f.write(prettyXML)
 
-def run_all(config=None):
+def run_mpi(config=None):
+    """
+    Run PyLaueGo with MPI support.
+    
+    Args:
+        config: Configuration dictionary or path to config file
+    """
+    from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    rank = 0
+    
     start = datetime.now()
-    pyLaueGo = PyLaueGo(config)
+    
+    # Convert config file path to config dict if needed
+    if isinstance(config, str) and os.path.exists(config):
+        with open(config, 'r') as f:
+            config_dict = yaml.safe_load(f)
+    else:
+        config_dict = config
+            
+    pyLaueGo = PyLaueGo(config_dict, comm)
     pyLaueGo.run(rank, size)
+    
     if rank == 0:
         print(f'runtime is {datetime.now() - start}')
 
-def run_on_process(config_fp):
-    pyLaueGo = PyLaueGo(config_fp)
-    pyLaueGo.run(0, 1) # Equivalent rank & size
-
 
 if __name__ == '__main__':
-    from mpi4py import MPI
-    fire.Fire(run_all)
+    fire.Fire(run_mpi)

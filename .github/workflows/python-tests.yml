@@ -26,6 +26,37 @@ jobs:
         # Install packages needed for smoke tests
         pip install -e .
         
+    - name: Install MPI and scientific dependencies
+      run: |
+        # Update package lists
+        sudo apt-get update
+        
+        # Install OpenMPI
+        sudo apt-get install -y openmpi-bin libopenmpi-dev
+        
+        # Install GSL (GNU Scientific Library)
+        sudo apt-get install -y libgsl-dev
+        
+        # Install HDF5
+        sudo apt-get install -y libhdf5-dev hdf5-tools
+        
+        # Install Python packages
+        pip install mpi4py h5py
+    
+    - name: Compile C code in index_src directories
+      run: |
+        # Compile code in euler directory
+        cd index_src/euler
+        make
+        
+        # Compile code in peaksearch directory
+        cd ../peaksearch
+        make
+        
+        # Compile code in pixels2qs directory
+        cd ../pixels2qs
+        make
+        
     - name: Test with unittest
       run: |
         python -m unittest discover -v -s tests

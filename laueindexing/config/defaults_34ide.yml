@@ -2,7 +2,6 @@ threshold: 10.0
 thresholdRatio: -1
 maxRfactor: 0.8
 boxsize: 10
-max_number: 200
 min_separation: 20
 peakShape: Lorentzian
 detectorCropX1: 0
