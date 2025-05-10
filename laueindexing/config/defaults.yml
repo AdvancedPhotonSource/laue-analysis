@@ -3,7 +3,6 @@ threshold: 250
 thresholdRatio: -1 #-1 for no threshold ratio
 maxRfactor: 0.5
 boxsize: 18
-max_number: 300
 min_separation: 40
 peakShape: Lorentzian
 scanPointStart: 1
