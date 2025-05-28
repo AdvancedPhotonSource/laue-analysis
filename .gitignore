@@ -26,7 +26,8 @@ build
 tests/data/output
 
 # Ignore compiled binaries
-index_src/euler/euler
-index_src/peaksearch/peaksearch
-index_src/pixels2qs/pix2qs
+laueindexing/src/euler/euler
+laueindexing/src/peaksearch/peaksearch
+laueindexing/src/pixels2qs/pix2qs
 laueindexing/bin/*
+!laueindexing/bin/__init__.py
