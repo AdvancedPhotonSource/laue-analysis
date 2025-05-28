@@ -21,7 +21,6 @@ indexK: 2
 indexKeVmaxCalc: 17.8
 indexKeVmaxTest: 30.0
 indexL: 0
-indexingPath: index_src/euler/euler
 latticeParametersUnit: nm
 maskFile: ''
 maxRfactor: 0.5
@@ -29,9 +28,11 @@ max_peaks: 300
 min_separation: 10
 min_size: 1.13
 outputFolder: tests/data/output
-p2qPath: index_src/pixels2qs/pix2qs
 peakShape: Gaussian
-peaksearchPath: index_src/peaksearch/peaksearch
+# No longer needed, as packages now in the module
+#peaksearchPath: index_src/peaksearch/peaksearch
+#indexingPath: index_src/euler/euler
+#p2qPath: index_src/pixels2qs/pix2qs
 recipLatticeUnit: 1/nm
 scanPointEnd: 56
 scanPointStart: 55
