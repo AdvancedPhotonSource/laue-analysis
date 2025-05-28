@@ -1,0 +1,12 @@
+# Essential project files
+include README.md
+include requirements.txt
+
+# Configuration files
+recursive-include laueindexing/config *.yml *.yaml *.json *.xml *.npy
+
+# Compiled binaries (built during installation)
+recursive-include laueindexing/bin *
+
+# Exclude build artifacts and cache
+global-exclude *.pyc *.pyo *.pyd __pycache__ .DS_Store *.o *.a

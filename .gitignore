@@ -28,4 +28,5 @@ tests/data/output
 # Ignore compiled binaries
 index_src/euler/euler
 index_src/peaksearch/peaksearch
-index_src/pixel2qs/pix2qs
+index_src/pixels2qs/pix2qs
+laueindexing/bin/*
