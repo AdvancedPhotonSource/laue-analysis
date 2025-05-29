@@ -116,8 +116,6 @@ class LaueConfig:
         extra_fields = {k: v for k, v in config_dict.items() if k not in cls.__annotations__}
 
         instance = cls(**known_fields, extra=extra_fields)
-        # Set default executable paths if not provided in config_dict
-        instance._set_default_executable_paths()
         return instance
 
     def get(self, key, default=None):
