@@ -19,43 +19,26 @@ jobs:
       with:
         python-version: 3.12
         
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        # Install packages needed for smoke tests
-        pip install -e .
-        
     - name: Install MPI and scientific dependencies
       run: |
         # Update package lists
         sudo apt-get update
         
-        # Install OpenMPI
-        sudo apt-get install -y openmpi-bin libopenmpi-dev
-        
-        # Install GSL (GNU Scientific Library)
-        sudo apt-get install -y libgsl-dev
-        
-        # Install HDF5
-        sudo apt-get install -y libhdf5-dev hdf5-tools
+        # Install build essentials and OpenMPI
+        sudo apt-get install -y build-essential openmpi-bin libopenmpi-dev libgsl-dev libhdf5-dev hdf5-tools libhdf5-serial-dev
         
         # Install Python packages
         pip install mpi4py h5py
-    
-    - name: Compile C code in index_src directories
+
+    - name: Install Python dependencies
       run: |
-        # Compile code in euler directory
-        cd index_src/euler
-        make
-        
-        # Compile code in peaksearch directory
-        cd ../peaksearch
-        make
-        
-        # Compile code in pixels2qs directory
-        cd ../pixels2qs
-        make
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install project package
+      run: |
+        # Install the project package in editable mode with verbose output
+        pip install -vv -e .
         
     - name: Test with unittest
       run: |
