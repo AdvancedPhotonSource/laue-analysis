@@ -54,7 +54,7 @@ class TestSmokeRun(unittest.TestCase):
             yaml.dump(self.config, f)
         
         # Run the indexing script using mpiexec through subprocess
-        cmd = ['mpiexec', '-n', '2', '--allow-run-as-root', 'python', '-m', 'laueindexing.pyLaueGo', temp_config_path]
+        cmd = ['mpiexec', '-n', '2', '--allow-run-as-root', 'python', '-m', 'laueindexing.mpi_runner', temp_config_path]
         
         process = subprocess.run(
             cmd,
