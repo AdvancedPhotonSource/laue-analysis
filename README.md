@@ -1,89 +1,100 @@
 # laue-indexing
 
-Programs to index laue outputs at beamline 34IDE.
+A Python package and collection of C binaries for indexing Laue diffraction data at beamline 34IDE.
 
-**Status:** Ported underlying programs and control software to Polaris software stack.
-
-## To Run
-
-### Set Up Environment
-
-**Processing environment should include:**
+## Package Structure
 
 ```
-h5py
-numpy
-yaml (pyyaml)
-mpi4py
-module load gsl
+laueindexing/
+├── pyLaueGo.py         # Main orchestrator for data processing
+├── mpi_runner.py       # MPI-based execution utilities
+├── xmlWriter.py        # XML output writer
+├── lau_dataclasses/    # Data models (atom, detector, HKL, pattern, etc.)
+├── bin/                # Compiled C executables (euler, peaksearch, pix2qs)
+└── src/                # C source trees (euler, peaksearch, pixels2qs)
 ```
 
-### Compile C Programs
+- **C binaries** (`euler`, `peaksearch`, `pix2qs`) live under `laueindexing/bin/` after installation.
+- **Source** under `laueindexing/src/` is included for reference; users do not invoke it directly.
 
-If running on a new machine, compile the 3 C sub programs in the euler, peaksearch, and pixels2qs directories. There is a makefile included for each.
+## Installation
 
-### Modify Config File
+Prerequisites:
 
-An example config file is included in `config/defaults.yml`.
-Config values will be different based on experiment so **these should be reviewed** before processing each data set.
+- Python ≥ 3.12  
+- System libraries and tools: `[make, gcc, h5cc]`, GNU Scientific Library (GSL)  
+- Python dependencies: `numpy`, `pyyaml`, `h5py`, `mpi4py`
 
-To process a partial data set, include values scanPointStart, scanPointEnd, depthRangeStart, depthRangeEnd in the config file.
-If these values are not included, all files in the input directory will be processed.
+Install from source:
 
-Set the value for **outputFolder** as the full path where the processed output files will be written.
-Files will be output to the outputFolder in the structure:
-
-```
-input_dir_name.xml - this is the final processed result
-error_current_timestamp.log - any errors logged here
-index/index_out_0_0.txt - results of the index subprocess for each point
-index/index_out_0_1.txt
-...
-p2q/p2q_out_0_0.txt - results of the p2q subprocess for each point
-p2q/p2q_out_0_1.txt
-...
-peaks/peaks_out_0_0.txt - results of the peak search subprocess for each point
-peaks/peaks_out_0_1.txt
+```bash
+git clone https://github.com/yourusername/laue_indexing.git
+cd laue_indexing
+python3 -m pip install .
 ```
 
-Set the value for **filefolder** to the full path of the directory containing the input h5 files.
+The `setup.py` build step will compile the C binaries into `laueindexing/bin/`.  
 
-Set the value for **pathbins** to the top level directory containing the euler, peaksearch, and pixels2qs programs.
-Unless you've moved them, it will be the current directory of this readme.
+## Configuration
 
-**Upload the geometry file** for this experiment and set the value for **geoFile** to the full path to the geometry file.
+Provide a YAML config file (see `tests/data/test_config.yaml` for an example).  Key entries:
 
-**Upload the crystal structure file** for this experiment and set the value for **crystFile** to the full path to the crystal structure file.
+- `filefolder`: Directory of input HDF5 files
+- `geoFile`: Path to the geometry XML file
+- `crystFile`: Path to the crystal-structure file
+- `outputFolder`: Directory for generated output  
+- Optional range filters: `scanPointStart`, `scanPointEnd`, `depthRangeStart`, `depthRangeEnd`
 
-### Run the Program via MPI
+## Usage
 
-Values from the config file can also be modified at runtime from the command line
+### Command-line / MPI
 
-e.g. `--outputFolder /eagle/APSDataAnalysis/hparraga/output`
+Run with MPI to parallelize:
 
-Path to the config file must be included.
-
+```bash
+mpirun -np 32 python -m laueindexing.pyLaueGo path/to/config.yml
 ```
-mpirun -np 32 pyLaueGo.py {path to config file}
-```
 
-For a small number of files, lower the number of mpi processes with the `-np` flag
-
-For more information on what arguments are available, there is also a `--help` flag
-
-### Run the Program programmatically
-
-
-The program can be run on a single process by directly providing the python file: 
+### Python API
 
 ```python
 import yaml
 from laueindexing.pyLaueGo import PyLaueGo
 
-config_path = 'path/to/your/config.yml'
-with open(config_path, 'r') as config_file:
-    config = yaml.safe_load(config_file)
+with open('path/to/config.yml') as f:
+    config = yaml.safe_load(f)
 
-py_laue_go = PyLaueGo(config=config)
-py_laue_go.run_on_process()
+processor = PyLaueGo(config=config)
+processor.run_on_process()  # single-process execution
+```
+
+## Output Layout
+
+Results are written under `outputFolder` as:
+
+```
+input_basename.xml          # Final processed XML
+error_TIMESTAMP.log         # Error log
+index/index_out_0_0.txt     # Index subprocess outputs
+p2q/p2q_out_0_0.txt         # Pixels→Q space outputs
+peaks/peaks_out_0_0.txt     # Peak-search outputs
+```
+
+## Manual C-Binary Compilation
+
+If you need to recompile manually:
+
+```bash
+cd laueindexing/src/euler && make
+cd ../peaksearch && make linux
+cd ../pixels2qs && make
+cp euler peaksearch pix2qs ../../laueindexing/bin/
+```
+
+## Testing
+
+Run the full test suite:
+
+```bash
+python -m unittest discover -s tests -v
 ```
