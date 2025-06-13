@@ -2,8 +2,8 @@ from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass
 import h5py
 
-from laueindexing.lau_dataclasses.detector import Detector
-from laueindexing.lau_dataclasses.indexing import Indexing
+from laueanalysis.lau_dataclasses.detector import Detector
+from laueanalysis.lau_dataclasses.indexing import Indexing
 
 @dataclass
 class Step:

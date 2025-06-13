@@ -7,7 +7,7 @@ from datetime import datetime
 import fire
 from mpi4py import MPI
 
-from laueindexing.pyLaueGo import PyLaueGo
+from laueanalysis.pyLaueGo import PyLaueGo
 
 
 def run_mpi(config=None):

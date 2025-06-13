@@ -12,7 +12,7 @@ pipeline/py_func/linux
 
 calibration/*.yml
 laue_indexing.egg-info
-laueindexing.egg-info
+laueanalysis.egg-info
 /build
 
 standard xtals
@@ -26,8 +26,8 @@ build
 tests/data/output
 
 # Ignore compiled binaries
-laueindexing/src/euler/euler
-laueindexing/src/peaksearch/peaksearch
-laueindexing/src/pixels2qs/pix2qs
-laueindexing/bin/*
-!laueindexing/bin/__init__.py
+laueanalysis/src/euler/euler
+laueanalysis/src/peaksearch/peaksearch
+laueanalysis/src/pixels2qs/pix2qs
+laueanalysis/bin/*
+!laueanalysis/bin/__init__.py

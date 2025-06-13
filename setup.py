@@ -49,10 +49,10 @@ class CustomBuildExt(build_ext):
         }
         
         base_dir = Path(__file__).parent
-        index_src = base_dir / 'laueindexing' / 'src'
+        index_src = base_dir / 'laueanalysis' / 'src'
         
         # Create bin directory in the package
-        bin_dir = base_dir / 'laueindexing' / 'bin'
+        bin_dir = base_dir / 'laueanalysis' / 'bin'
         bin_dir.mkdir(exist_ok=True)
         
         print(f"Looking for source directories in: {index_src}")
@@ -103,12 +103,12 @@ class CustomBuildExt(build_ext):
 
 
 setup(
-    name='laueindexing',
+    name='laueanalysis',
     version='0.1.0',
-    packages=find_packages(include=['laueindexing', 'laueindexing.*']),
+    packages=find_packages(include=['laueanalysis', 'laueanalysis.*']),
     include_package_data=True,
     package_data={
-        'laueindexing': ['bin/*'],
+        'laueanalysis': ['bin/*'],
     },
     # Add a dummy extension to ensure build_ext always runs
     ext_modules=[Extension('_dummy', sources=[])],
