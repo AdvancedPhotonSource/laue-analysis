@@ -1,11 +1,11 @@
-# laue-indexing
+# laue-analysis
 
 A Python package and collection of C binaries for indexing Laue diffraction data at beamline 34IDE.
 
 ## Package Structure
 
 ```
-laueindexing/
+laueanalysis/
 ├── pyLaueGo.py         # Main orchestrator for data processing
 ├── mpi_runner.py       # MPI-based execution utilities
 ├── xmlWriter.py        # XML output writer
@@ -14,8 +14,8 @@ laueindexing/
 └── src/                # C source trees (euler, peaksearch, pixels2qs)
 ```
 
-- **C binaries** (`euler`, `peaksearch`, `pix2qs`) live under `laueindexing/bin/` after installation.
-- **Source** under `laueindexing/src/` is included for reference; users do not invoke it directly.
+- **C binaries** (`euler`, `peaksearch`, `pix2qs`) live under `laueanalysis/bin/` after installation.
+- **Source** under `laueanalysis/src/` is included for reference; users do not invoke it directly.
 
 ## Installation
 
@@ -33,7 +33,7 @@ cd laue_indexing
 python3 -m pip install .
 ```
 
-The `setup.py` build step will compile the C binaries into `laueindexing/bin/`.  
+The `setup.py` build step will compile the C binaries into `laueanalysis/bin/`.  
 
 ## Configuration
 
@@ -52,14 +52,14 @@ Provide a YAML config file (see `tests/data/test_config.yaml` for an example).  
 Run with MPI to parallelize:
 
 ```bash
-mpirun -np 32 python -m laueindexing.pyLaueGo path/to/config.yml
+mpirun -np 32 python -m laueanalysis.pyLaueGo path/to/config.yml
 ```
 
 ### Python API
 
 ```python
 import yaml
-from laueindexing.pyLaueGo import PyLaueGo
+from laueanalysis.pyLaueGo import PyLaueGo
 
 with open('path/to/config.yml') as f:
     config = yaml.safe_load(f)
@@ -85,10 +85,10 @@ peaks/peaks_out_0_0.txt     # Peak-search outputs
 If you need to recompile manually:
 
 ```bash
-cd laueindexing/src/euler && make
+cd laueanalysis/src/euler && make
 cd ../peaksearch && make linux
 cd ../pixels2qs && make
-cp euler peaksearch pix2qs ../../laueindexing/bin/
+cp euler peaksearch pix2qs ../../laueanalysis/bin/
 ```
 
 ## Testing

@@ -12,9 +12,9 @@ from xml.dom import minidom
 import fire
 from typing import Dict, Any, Optional, Union
 
-from laueindexing.lau_dataclasses.step import Step
-from laueindexing.lau_dataclasses.indexing import Indexing
-from laueindexing.lau_dataclasses.config import LaueConfig
+from laueanalysis.lau_dataclasses.step import Step
+from laueanalysis.lau_dataclasses.indexing import Indexing
+from laueanalysis.lau_dataclasses.config import LaueConfig
 
 class PyLaueGo:
     def __init__(self, config=None, comm=None, supress_errors=False):
