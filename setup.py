@@ -17,7 +17,7 @@ class CustomBuildExt(build_ext):
             super().run()
     
     def compile_c_programs(self):
-        """Compile the C programs using their existing makefiles"""
+        """Compile C programs for each submodule separately"""
         # Check for required build tools
         required_tools = ['make', 'gcc']
         missing_tools = []
@@ -40,75 +40,82 @@ class CustomBuildExt(build_ext):
             print(f"Error: Missing required build tools: {', '.join(missing_tools)}")
             print("Please install the missing tools and try again.")
             return
-        
-        # Map program directories to their executable names
-        programs = {
-            'euler': 'euler',
-            'peaksearch': 'peaksearch', 
-            'pixels2qs': 'pix2qs'  # This program creates 'pix2qs' executable
+
+        # Define submodules and their C programs
+        submodules = {
+            'indexing': {
+                'programs': {
+                    'euler': 'euler',
+                    'peaksearch': 'peaksearch', 
+                    'pixels2qs': 'pix2qs'  # This program creates 'pix2qs' executable
+                },
+                'special_builds': {'peaksearch': ['make', 'linux']}
+            }
+            # Future submodules can be added here
         }
         
         base_dir = Path(__file__).parent
-        index_src = base_dir / 'laueanalysis' / 'src'
         
-        # Create bin directory in the package
-        bin_dir = base_dir / 'laueanalysis' / 'bin'
-        bin_dir.mkdir(exist_ok=True)
-        
-        print(f"Looking for source directories in: {index_src}")
-        
-        for program_dir, exe_name in programs.items():
-            program_path = index_src / program_dir
-            if not program_path.exists():
-                print(f"Warning: Source directory for {program_dir} not found at {program_path}")
-                continue
-                
-            print(f"Compiling {program_dir} in {program_path}...")
+        for submodule, config in submodules.items():
+            print(f"\n=== Compiling {submodule} submodule ===")
+            src_dir = base_dir / 'src' / 'laueanalysis' / submodule / 'src'
+            bin_dir = base_dir / 'src' / 'laueanalysis' / submodule / 'bin'
+            bin_dir.mkdir(exist_ok=True)
             
-            if exe_name == 'peaksearch':
-                # Special handling for peaksearch, which requires a specific make target
-                command = ['make', 'linux']
-            else:
-                command = ['make']
-                
-                
-            result = subprocess.run(command, cwd=program_path, 
-                                    capture_output=True, text=True)
+            print(f"Looking for source directories in: {src_dir}")
             
-            if result.returncode == 0:
-                # Copy the executable to the package bin directory
-                exe_src = program_path / exe_name
-                exe_dst = bin_dir / exe_name
+            for program_dir, exe_name in config['programs'].items():
+                program_path = src_dir / program_dir
+                if not program_path.exists():
+                    print(f"Warning: Source directory for {program_dir} not found at {program_path}")
+                    continue
+                    
+                print(f"Compiling {program_dir} in {program_path}...")
                 
-                if exe_src.exists():
-                    shutil.copy2(exe_src, exe_dst)
-                    exe_dst.chmod(0o755)
-                    print(f"  ✓ {program_dir} compiled successfully")
+                # Check for special build commands
+                if program_dir in config['special_builds']:
+                    command = config['special_builds'][program_dir]
                 else:
-                    print(f"  ✗ {exe_name} executable not found after compilation")
-                    print(f"    Expected at: {exe_src}")
-                    # List files in the directory to help debug
-                    try:
-                        files = list(program_path.iterdir())
-                        print(f"    Files in {program_path}: {[f.name for f in files]}")
-                    except Exception as e:
-                        print(f"    Could not list directory: {e}")
-            else:
-                print(f"  ✗ {program_dir} compilation failed (exit code {result.returncode})")
-                if result.stdout:
-                    print(f"  Standard output:\n{result.stdout}")
-                if result.stderr:
-                    print(f"  Error output:\n{result.stderr}")
-                # Don't fail the entire installation, just warn
+                    command = ['make']
+                    
+                result = subprocess.run(command, cwd=program_path, 
+                                        capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    # Copy the executable to the package bin directory
+                    exe_src = program_path / exe_name
+                    exe_dst = bin_dir / exe_name
+                    
+                    if exe_src.exists():
+                        shutil.copy2(exe_src, exe_dst)
+                        exe_dst.chmod(0o755)
+                        print(f"  ✓ {program_dir} compiled successfully")
+                    else:
+                        print(f"  ✗ {exe_name} executable not found after compilation")
+                        print(f"    Expected at: {exe_src}")
+                        # List files in the directory to help debug
+                        try:
+                            files = list(program_path.iterdir())
+                            print(f"    Files in {program_path}: {[f.name for f in files]}")
+                        except Exception as e:
+                            print(f"    Could not list directory: {e}")
+                else:
+                    print(f"  ✗ {program_dir} compilation failed (exit code {result.returncode})")
+                    if result.stdout:
+                        print(f"  Standard output:\n{result.stdout}")
+                    if result.stderr:
+                        print(f"  Error output:\n{result.stderr}")
+                    # Don't fail the entire installation, just warn
 
 
 setup(
     name='laueanalysis',
     version='0.1.0',
-    packages=find_packages(include=['laueanalysis', 'laueanalysis.*']),
+    package_dir={'': 'src'},
+    packages=find_packages(where='src', include=['laueanalysis', 'laueanalysis.*']),
     include_package_data=True,
     package_data={
-        'laueanalysis': ['bin/*'],
+        'laueanalysis.indexing': ['bin/*'],
     },
     # Add a dummy extension to ensure build_ext always runs
     ext_modules=[Extension('_dummy', sources=[])],

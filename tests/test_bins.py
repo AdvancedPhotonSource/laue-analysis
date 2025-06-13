@@ -2,7 +2,7 @@
 import unittest
 import os
 from pathlib import Path
-from laueanalysis.lau_dataclasses.config import get_packaged_executable_path
+from laueanalysis.indexing.lau_dataclasses.config import get_packaged_executable_path
 
 
 class TestPackagedExecutables(unittest.TestCase):

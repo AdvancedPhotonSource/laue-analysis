@@ -4,7 +4,7 @@ import unittest
 import os
 import tempfile
 from argparse import Namespace
-from laueanalysis.xmlWriter import XMLWriter
+from laueanalysis.indexing.xmlWriter import XMLWriter
 
 
 class TestXMLWriter(unittest.TestCase):

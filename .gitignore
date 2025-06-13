@@ -25,9 +25,9 @@ data/output
 build
 tests/data/output
 
-# Ignore compiled binaries
-laueanalysis/src/euler/euler
-laueanalysis/src/peaksearch/peaksearch
-laueanalysis/src/pixels2qs/pix2qs
-laueanalysis/bin/*
-!laueanalysis/bin/__init__.py
+# Ignore compiled binaries for indexing submodule
+src/laueanalysis/indexing/src/euler/euler
+src/laueanalysis/indexing/src/peaksearch/peaksearch
+src/laueanalysis/indexing/src/pixels2qs/pix2qs
+src/laueanalysis/indexing/bin/*
+!src/laueanalysis/indexing/bin/__init__.py

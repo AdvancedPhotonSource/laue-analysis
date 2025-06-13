@@ -3,10 +3,10 @@ include README.md
 include requirements.txt
 
 # Configuration files
-recursive-include laueanalysis/config *.yml *.yaml *.json *.xml *.npy
+recursive-include src/laueanalysis/config *.yml *.yaml *.json *.xml *.npy
 
-# Compiled binaries (built during installation)
-recursive-include laueanalysis/bin *
+# Compiled binaries for indexing submodule
+recursive-include src/laueanalysis/indexing/bin *
 
 # Exclude build artifacts and cache
 global-exclude *.pyc *.pyo *.pyd __pycache__ .DS_Store *.o *.a

@@ -20,7 +20,7 @@ def get_packaged_executable_path(program_name: str) -> str:
     """
     try:
         # Use importlib.resources to access the bundled executable
-        bin_files = resources.files('laueanalysis.bin')
+        bin_files = resources.files('laueanalysis.indexing.bin')
         exe_file = bin_files / program_name
         
         if not exe_file.is_file():
@@ -30,7 +30,7 @@ def get_packaged_executable_path(program_name: str) -> str:
         return str(exe_file)
         
     except (ModuleNotFoundError, FileNotFoundError):
-        raise FileNotFoundError(f"Could not locate executable '{program_name}' in laueanalysis.bin package")
+        raise FileNotFoundError(f"Could not locate executable '{program_name}' in laueanalysis.indexing.bin package")
 
 
 @dataclass
