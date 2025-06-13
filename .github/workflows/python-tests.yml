@@ -34,12 +34,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pytest
 
     - name: Install project package
       run: |
         # Install the project package in editable mode with verbose output
         pip install -vv -e .
         
-    - name: Test with unittest
+    - name: Test with pytest
       run: |
-        python -m unittest discover -v -s tests
+        pytest tests/ -v
