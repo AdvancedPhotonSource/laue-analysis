@@ -1,8 +1,8 @@
 from xml.etree.ElementTree import Element
 from dataclasses import dataclass, field
 
-from laueanalysis.lau_dataclasses.recipLattice import RecipLattice
-from laueanalysis.lau_dataclasses.hkls import HKLs
+from laueanalysis.indexing.lau_dataclasses.recipLattice import RecipLattice
+from laueanalysis.indexing.lau_dataclasses.hkls import HKLs
 
 
 @dataclass

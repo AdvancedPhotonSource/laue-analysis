@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import laueanalysis.pyLaueGo as pyLaueGo
+import laueanalysis.indexing.pyLaueGo as pyLaueGo
 
 
 class TestSmokeRun(unittest.TestCase):
@@ -54,7 +54,7 @@ class TestSmokeRun(unittest.TestCase):
             yaml.dump(self.config, f)
         
         # Run the indexing script using mpiexec through subprocess
-        cmd = ['mpiexec', '-n', '2', '--allow-run-as-root', 'python', '-m', 'laueanalysis.mpi_runner', temp_config_path]
+        cmd = ['mpiexec', '-n', '2', '--allow-run-as-root', 'python', '-m', 'laueanalysis.indexing.mpi_runner', temp_config_path]
         
         process = subprocess.run(
             cmd,
