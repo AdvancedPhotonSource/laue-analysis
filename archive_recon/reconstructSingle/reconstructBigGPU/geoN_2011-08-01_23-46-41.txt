@@ -1,0 +1,50 @@
+$filetype		geometryFileN
+$dateWritten	Mon, Aug 1, 2011
+$timeWritten	23:46:40.9 (-5)
+$EPOCH			3395087201					// seconds from midnight January 1, 1904
+$fileNote		Si
+
+// Sample
+$SampleOrigin	{8200.00,-4758.83,-4476.00}			// sample origin in raw PM500 units (micron)
+$SampleRot		{-0.00600000,0.00600000,-0.00001800}	// sample positioner rotation vector (length is angle in radians)
+
+// Detectors
+$Ndetectors		3							// number of detectors in use, must be <= MAX_Ndetectors
+
+$d0_Nx			2048						// number of un-binned pixels in full detector
+$d0_Ny			2048
+$d0_sizeX		409.600						// size of CCD (mm)
+$d0_sizeY		409.600
+$d0_R			{-1.20065299,-1.21372134,-1.21937936}	// rotation vector (length is angle in radians)
+$d0_P			{25.570,-2.529,510.898}		// translation vector (mm)
+$d0_timeMeasured	Thu, Jul 28, 2011, 16:17:44 (-5)	// when this geometry was calculated
+$d0_geoNote	Optimized using CalibrationList0
+$d0_detectorID	PE1621 723-3335			// unique detector ID
+
+$d1_Nx			1024						// number of un-binned pixels in full detector
+$d1_Ny			1024
+$d1_sizeX		204.800						// size of CCD (mm)
+$d1_sizeY		204.800
+$d1_R			{-1.76900321,-0.73043892,-1.76374308}	// rotation vector (length is angle in radians)
+$d1_P			{-142.110,-2.951,412.989}		// translation vector (mm)
+$d1_timeMeasured	Wed, Mar 9, 2011, 17:43:36 (-6)	// when this geometry was calculated
+$d1_geoNote	Optimized using CalibrationListYellow1
+$d1_detectorID	PE0820 763-1807			// unique detector ID
+
+$d2_Nx			1024						// number of un-binned pixels in full detector
+$d2_Ny			1024
+$d2_sizeX		204.800						// size of CCD (mm)
+$d2_sizeY		204.800
+$d2_R			{-0.61682949,-1.50266971,-0.62408930}	// rotation vector (length is angle in radians)
+$d2_P			{-142.288,-2.579,416.051}		// translation vector (mm)
+$d2_timeMeasured	Wed, Mar 9, 2011, 17:43:36 (-6)	// when this geometry was calculated
+$d2_geoNote	Optimized using CalibrationListPurple2
+$d2_detectorID	PE0820 763-1850			// unique detector ID
+
+// Wire
+$wireDia		52.00						// diameter of wire (micron)
+$wireKnife		0							// true if wire on a knife edge, false for free-standing wire
+$wireOrigin		{2.50,0.00,0.00}			// wire origin in raw PM500 frame (micron)
+$wireRot		{0.00450000,-0.00684000,-0.00003375}	// wire positioner rotation vector (length is angle in radians)
+$wireAxis		{1.000000,0.000000,0.000000}	// unit vector along wire axis, usually close to (1,0,0)
+$wireF			0.00						// F of wire for a constant F wire scan (raw PM500 units)

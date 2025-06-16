@@ -31,3 +31,18 @@ src/laueanalysis/indexing/src/peaksearch/peaksearch
 src/laueanalysis/indexing/src/pixels2qs/pix2qs
 src/laueanalysis/indexing/bin/*
 !src/laueanalysis/indexing/bin/__init__.py
+
+.svn
+
+# Apple metadata files
+._*
+
+# SVN version control files
+*.svn-base
+*.mine
+*.r[0-9]*
+tmp/
+
+# Backup files
+*.bak
+*.backup
