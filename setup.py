@@ -1,20 +1,19 @@
-from setuptools import setup, find_packages, Extension
-from setuptools.command.build_ext import build_ext
+from setuptools import setup, find_packages
+from setuptools.command.build import build
 import subprocess
 import os
 import shutil
 from pathlib import Path
 
-class CustomBuildExt(build_ext):
+class CustomBuild(build):
     """Custom build command to compile C programs using their makefiles"""
     
     def run(self):
-        # Always compile our C programs, regardless of extensions
+        # Compile our C programs first
         self.compile_c_programs()
         
-        # Then run standard extension building if there are real extensions
-        if any(ext.name != '_dummy' for ext in self.extensions):
-            super().run()
+        # Then run standard build process
+        super().run()
     
     def compile_c_programs(self):
         """Compile C programs for each submodule separately"""
@@ -117,10 +116,8 @@ setup(
     package_data={
         'laueanalysis.indexing': ['bin/*'],
     },
-    # Add a dummy extension to ensure build_ext always runs
-    ext_modules=[Extension('_dummy', sources=[])],
     cmdclass={
-        'build_ext': CustomBuildExt,
+        'build': CustomBuild,
     },
     description='A package for Laue indexing.',
     long_description=open('README.md').read(),
