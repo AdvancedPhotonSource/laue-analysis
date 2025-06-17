@@ -39,7 +39,7 @@ jobs:
     - name: Install project package
       run: |
         # Install the project package in editable mode with verbose output
-        pip install -vv -e .
+        pip install -vv .
         
     - name: Test with pytest
       run: |
