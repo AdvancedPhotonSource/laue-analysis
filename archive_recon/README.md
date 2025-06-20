@@ -13,3 +13,4 @@ Here are the original and current file directory mappings in case files need to 
 * reconstuctSingle/reconstructBigCPU - /clhome/KYUE/reconstructSingle/reconstructBigCPU/reconstructBig
 * reconstructSingle/reconstructBigGPU - /clhome/KYUE/reconstructSingle/reconstructBigGPU
 * reconstructSingle/cpu_optim - /clhome/KYUE/reconstructSingle/cpucode
+* archive_recon/reconstructMultiple/cpu_thread - /data34/Xu/programs/reconstructBP
