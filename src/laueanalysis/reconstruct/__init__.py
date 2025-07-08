@@ -6,13 +6,13 @@ including a simple subprocess interface for the WireScan reconstruction program.
 """
 
 from .wirescan_interface import (
-    WireScanReconstructionInterface,
+    WireScanRecon,
     create_simple_reconstruction_config,
     create_depth_scan_batch
 )
 
 __all__ = [
-    'WireScanReconstructionInterface',
+    'WireScanRecon',
     'create_simple_reconstruction_config', 
     'create_depth_scan_batch'
 ]

@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List, Union
 import shutil
 
 
-class WireScanReconstructionInterface:
+class WireScanRecon:
     """
     Simple interface for running WireScan reconstruction via subprocess.
     
@@ -333,7 +333,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Create interface
-    interface = WireScanReconstructionInterface(args.executable)
+    interface = WireScanRecon(args.executable)
     
     # Run reconstruction
     result = interface.run_reconstruction(

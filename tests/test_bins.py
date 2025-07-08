@@ -4,7 +4,7 @@ import os
 import pytest
 from pathlib import Path
 from laueanalysis.indexing.lau_dataclasses.config import get_packaged_executable_path
-from laueanalysis.reconstruct.wirescan_interface import WireScanReconstructionInterface
+from laueanalysis.reconstruct.wirescan_interface import WireScanRecon
 
 
 @pytest.mark.parametrize("program", ['euler', 'peaksearch', 'pix2qs'])
@@ -24,7 +24,7 @@ def test_get_packaged_executable_path_invalid_program():
 
 def test_wirescan_executable_exists():
     """Test that the WireScan reconstruction executable exists and is accessible."""
-    interface = WireScanReconstructionInterface()
+    interface = WireScanRecon()
     executable_path = interface.wirescan_executable
     
     assert isinstance(executable_path, str)
@@ -33,15 +33,15 @@ def test_wirescan_executable_exists():
 
 
 def test_wirescan_executable_validation():
-    """Test that WireScanReconstructionInterface properly validates the executable."""
+    """Test that WireScanRecon properly validates the executable."""
     # Test with a non-existent executable path
     with pytest.raises(RuntimeError, match="not found|not working"):
-        WireScanReconstructionInterface(wirescan_executable="/nonexistent/path/WireScan")
+        WireScanRecon(wirescan_executable="/nonexistent/path/WireScan")
 
 
 def test_wirescan_find_executable_function():
     """Test the _find_wirescan_executable method directly."""
-    interface = WireScanReconstructionInterface.__new__(WireScanReconstructionInterface)
+    interface = WireScanRecon.__new__(WireScanRecon)
     
     # Test the finding logic
     executable_path = interface._find_wirescan_executable()
