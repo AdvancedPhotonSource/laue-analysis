@@ -24,6 +24,29 @@ const long MiB = (1<<20);					/* 2^20, one mega byte */
 
 #define CHECK_FREE(A)   { if(A) free(A); (A)=NULL; }
 
+/* Global variable definitions (declared as extern in headers) */
+/* Note: positionerType is defined in hardwareSpecific.c */
+
+/* Data structures containing information for the wire scan */
+ws_calibration calibration;
+ws_imaging_parameters imaging_parameters;
+ws_image_set image_set;
+ws_user_preferences user_preferences;
+
+gsl_matrix * intensity_map = NULL;
+
+struct HDF5_Header in_header;
+struct HDF5_Header output_header;
+struct geoStructure geoIn;
+
+int verbose = 0;                          /* default to 0 */
+float percent = 100.0;                    /* default to 100 */
+int cutoff = 0;                           /* default to 0 */
+int AVAILABLE_RAM_MiB = 128;              /* default to 128 */
+int detNum = 0;                           /* detector number, default to 0 */
+char distortionPath[FILENAME_MAX] = {0};  /* full path to the distortion map */
+char depthCorrectStr[FILENAME_MAX] = {0}; /* full path to the depth correction map */
+
 /* control functions */
 int main (int argc, const char **argv);
 int start(char* infile, char* outfile, char* geofile, double depth_start, double depth_end, double resolution, int first_image, int last_image, \
