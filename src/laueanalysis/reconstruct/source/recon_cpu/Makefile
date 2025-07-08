@@ -1,38 +1,43 @@
 # CPU source for big hdf5 input
-HDF5_BASE = "/clhome/KYUE/lib/hdf5"
-GSL_BASE = "/clhome/KYUE/lib/gsl"
+SRC = $(wildcard source/*.c)
+OBJ = ${SRC:.c=.o}
+OUT = reconstructN_cpu
 
 CC = gcc
-
-CFLAGS = -g -fgnu89-inline -std=gnu99 -msse2
-#CFLAGS =-fgnu89-inline -std=gnu99 -msse2 -fassociative-math -O3 -ftree-vectorize -march=native
-
-INCLUDES = -I${HDF5_BASE}/include -I./include -I${GSL_BASE}/include
-
-LFLAGS = -L${HDF5_BASE}/lib -L${GSL_BASE}/lib
-
+CFLAGS = -O2 -std=gnu99 -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
+INCLUDES = -I./include
 DFLAGS = -DRECONSTRUCT_BACKWARDS -DMULTI_IMAGE_FILE
 
-LIBS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
+.PHONY: clean all linux
 
-SRCS = $(wildcard source/*.c)
+# Default target: uses h5cc to find HDF5 paths automatically
+all: linux
 
-OBJS = $(SRCS:.c=.o)
+# Linux target: Uses h5cc compiler wrapper to find HDF5 header and library paths
+linux: CFLAGS += $(shell h5cc -show | grep -o -- "-I[^ ]*" 2>/dev/null || echo "") \
+				$(shell h5cc -show | grep -o -- "-L[^ ]*" 2>/dev/null || echo "")
+linux: $(OUT)
 
-OUT = reconstructN
+polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include \
+				  -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib
+polaris: $(OUT)
 
-.PHONY: depend clean
+hpcs: CFLAGS += -I/clhome/aps_tools/shared/include \
+				-L/clhome/aps_tools/shared/lib \
+				-I/clhome/aps_tools/hdf5-1.8.2/hdf5/include \
+				-L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib
+hpcs: $(OUT)
 
-all: $(OUT)
+$(OUT): $(OBJ)
+	mkdir -p bin
+	@$(CC) $^ -o bin/$@ $(CFLAGS)
+	@printf "\e[33mLinking\e[90m %s\e[0m\n" bin/$@
+	@printf "\e[34mDone!\e[0m\n"
 
-$(OUT): $(OBJS)
-	$(CC) $(DFLAGS) $(CFLAGS) $(INCLUDES) -o bin/$(OUT) $(OBJS) $(LFLAGS) $(LIBS)
-
-.c.o:
-	$(CC) $(DFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
+%.o: %.c
+	@$(CC) $(DFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	@printf "\e[36mCompile\e[90m %s\e[0m\n" $@
 
 clean:
-	$(RM) source/*.o *~ bin/$(OUT)
-
-depend: $(SRCS)
-	makedepend $(INCLUDES) $^
+	@rm -f $(OBJ) *~ bin/$(OUT)
+	@printf "\e[34mAll clear!\e[0m\n"

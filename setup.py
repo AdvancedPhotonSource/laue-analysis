@@ -49,6 +49,12 @@ class CustomBuild(build):
                     'pixels2qs': 'pix2qs'  # This program creates 'pix2qs' executable
                 },
                 'special_builds': {'peaksearch': ['make', 'linux']}
+            },
+            'reconstruct': {
+                'programs': {
+                    'recon_cpu': 'reconstructN_cpu'  # reconstructN_cpu reconstruction program
+                },
+                'special_builds': {}
             }
             # Future submodules can be added here
         }
@@ -57,7 +63,13 @@ class CustomBuild(build):
         
         for submodule, config in submodules.items():
             print(f"\n=== Compiling {submodule} submodule ===")
-            src_dir = base_dir / 'src' / 'laueanalysis' / submodule / 'src'
+            
+            # Handle different source directory structures
+            if submodule == 'reconstruct':
+                src_dir = base_dir / 'src' / 'laueanalysis' / submodule / 'source'
+            else:
+                src_dir = base_dir / 'src' / 'laueanalysis' / submodule / 'src'
+                
             bin_dir = base_dir / 'src' / 'laueanalysis' / submodule / 'bin'
             bin_dir.mkdir(exist_ok=True)
             
@@ -82,7 +94,11 @@ class CustomBuild(build):
                 
                 if result.returncode == 0:
                     # Copy the executable to the package bin directory
-                    exe_src = program_path / exe_name
+                    # For reconstruction, the Makefile puts executables in a bin/ subdirectory
+                    if submodule == 'reconstruct':
+                        exe_src = program_path / 'bin' / exe_name
+                    else:
+                        exe_src = program_path / exe_name
                     exe_dst = bin_dir / exe_name
                     
                     if exe_src.exists():
@@ -115,6 +131,7 @@ setup(
     include_package_data=True,
     package_data={
         'laueanalysis.indexing': ['bin/*'],
+        'laueanalysis.reconstruct': ['bin/*'],
     },
     cmdclass={
         'build': CustomBuild,

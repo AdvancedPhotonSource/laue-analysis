@@ -32,6 +32,9 @@ src/laueanalysis/indexing/src/pixels2qs/pix2qs
 src/laueanalysis/indexing/bin/*
 !src/laueanalysis/indexing/bin/__init__.py
 
+src/laueanalysis/reconstruct/bin/reconstructN_cpu
+src/laueanalysis/reconstruct/source/recon_cpu/bin/*
+
 .svn
 
 # Apple metadata files
