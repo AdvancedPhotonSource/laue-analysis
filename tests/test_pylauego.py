@@ -94,15 +94,24 @@ def test_run_cmd_and_check_output(pylauego):
         # Setup mock
         mock_check_output.return_value = b"Command output"
         
-        # Setup PyLaueGo instance with an error log
+        # Setup PyLaueGo instance with an error log and config
         pylauego.errorLog = tempfile.mktemp()
+        # Create a mock config with peaksearchPath
+        from unittest.mock import MagicMock
+        pylauego._config = MagicMock()
+        pylauego._config.peaksearchPath = '/path/to/peaksearch'
         
         # Run a test command
         cmd = ["echo", "test"]
         result = pylauego.runCmdAndCheckOutput(cmd)
         
         # Check that check_output was called with the right arguments
-        mock_check_output.assert_called_once_with(cmd, stderr=-2)  # -2 is subprocess.STDOUT
+        # The new implementation adds an env parameter
+        mock_check_output.assert_called_once()
+        call_args = mock_check_output.call_args
+        assert call_args[0][0] == cmd
+        assert call_args[1]['stderr'] == -2  # -2 is subprocess.STDOUT
+        assert 'env' in call_args[1]  # env parameter should be present
         
         # Clean up
         if os.path.exists(pylauego.errorLog):
