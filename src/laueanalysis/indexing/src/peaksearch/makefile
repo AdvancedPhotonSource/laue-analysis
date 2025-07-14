@@ -2,31 +2,33 @@ SRC = $(wildcard src/*.c)
 OBJ = ${SRC:.c=.o}
 OUT = peaksearch
 
-CFLAGS = -O2 -std=gnu99	-lhdf5_hl -lhdf5 -lgsl -lgslcblas -msse2 -lm
+# Separate compile flags from link flags
+CFLAGS = -O2 -std=gnu99 -msse2
+LDFLAGS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
 CC = gcc
 
-
 # Linux target: Uses h5cc compiler wrapper to find HDF5 header and library paths
-linux: CFLAGS += $(shell h5cc -show | grep -o -- "-I[^ ]*") \
-				$(shell h5cc -show | grep -o -- "-L[^ ]*") \
-				-lm -lz
+linux: CFLAGS += $(shell h5cc -show | grep -o -- "-I[^ ]*")
+linux: LDFLAGS := $(shell h5cc -show | grep -o -- "-L[^ ]*") \
+				$(LDFLAGS)
 linux: $(OUT)
 
-polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include \
-				  -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib
+polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include
+polaris: LDFLAGS := -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib \
+				  $(LDFLAGS)
 
 polaris: $(OUT)
 
 
 hpcs: CFLAGS += -I/clhome/aps_tools/shared/include \
-				-L/clhome/aps_tools/shared/lib \
-				-I/clhome/aps_tools/hdf5-1.8.2/hdf5/include \
-				-L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib  \
-				-lm -lz
+				-I/clhome/aps_tools/hdf5-1.8.2/hdf5/include
+hpcs: LDFLAGS := -L/clhome/aps_tools/shared/lib \
+				-L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib \
+				$(LDFLAGS)
 hpcs: $(OUT)
 
 $(OUT): $(OBJ)
-	@$(CC) $^ -o $@ $(CFLAGS)
+	@$(CC) $^ -o $@ $(LDFLAGS)
 	@printf "\e[33mLinking\e[90m %s\e[0m\n" $@
 	@printf "\e[34mDone!\e[0m\n"
 
