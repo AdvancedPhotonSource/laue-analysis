@@ -1,9 +1,17 @@
-from setuptools import setup, find_packages
+"""
+Setup script for laueanalysis package.
+
+This setup.py is now simplified since most metadata is in pyproject.toml.
+It only handles the custom C compilation logic.
+"""
+
+from setuptools import setup
 from setuptools.command.build import build
 import subprocess
 import os
 import shutil
 from pathlib import Path
+
 
 class CustomBuild(build):
     """Custom build command to compile C programs using their makefiles"""
@@ -123,32 +131,9 @@ class CustomBuild(build):
                     # Don't fail the entire installation, just warn
 
 
+# Minimal setup() call - most configuration is now in pyproject.toml
 setup(
-    name='laueanalysis',
-    version='0.1.0',
-    package_dir={'': 'src'},
-    packages=find_packages(where='src', include=['laueanalysis', 'laueanalysis.*']),
-    include_package_data=True,
-    package_data={
-        'laueanalysis.indexing': ['bin/*'],
-        'laueanalysis.reconstruct': ['bin/*'],
-    },
     cmdclass={
         'build': CustomBuild,
     },
-    description='A package for Laue indexing.',
-    long_description=open('README.md').read(),
-    long_description_content_type='text/markdown',
-    url='https://github.com/yourusername/laue_indexing',
-    install_requires=[
-        'numpy',
-        'pyyaml',
-    ],
-    python_requires='>=3.12',
-    classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Intended Audience :: Science/Research',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: C',
-    ],
 )
