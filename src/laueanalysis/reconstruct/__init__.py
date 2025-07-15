@@ -1,18 +1,17 @@
-"""
-Reconstruct submodule for laueanalysis package.
+"""Wire scan reconstruction for Laue analysis."""
 
-This module provides interfaces for running reconstruction and analysis tasks,
-including a simple subprocess interface for the WireScan reconstruction program.
-"""
-
-from .wirescan_interface import (
-    WireScanRecon,
-    create_simple_reconstruction_config,
-    create_depth_scan_batch
+from .reconstruct import (
+    reconstruct,
+    batch,
+    depth_scan,
+    find_executable,
+    ReconstructionResult
 )
 
 __all__ = [
-    'WireScanRecon',
-    'create_simple_reconstruction_config', 
-    'create_depth_scan_batch'
+    'reconstruct',
+    'batch',
+    'depth_scan',
+    'find_executable',
+    'ReconstructionResult'
 ]
