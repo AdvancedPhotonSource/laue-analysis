@@ -7,7 +7,7 @@ name = "laueanalysis"
 version = "0.1.0"
 description = "A package for Laue diffraction analysis including indexing and reconstruction"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 authors = [
     {name = "linked-liszt", email = "anoxymoren@gmail.com"},  # Update with actual info
 ]
