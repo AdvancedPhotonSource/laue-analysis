@@ -8,6 +8,7 @@ import shutil
 import functools
 from concurrent.futures import ProcessPoolExecutor
 from importlib import resources
+import re
 
 # Result type for reconstruction operations
 class ReconstructionResult(NamedTuple):
@@ -69,11 +70,29 @@ def _validate_executable(exe_path: str) -> None:
         RuntimeError: If executable doesn't work properly
     """
     try:
+        # Set up environment for HDF5-dependent binary
+        env = os.environ.copy()
+        
+        hdf5_lib_path = _find_hdf5_lib_path()
+        
+        if hdf5_lib_path:
+            # Prepend the HDF5 library path to LD_LIBRARY_PATH
+            ld_library_path = env.get('LD_LIBRARY_PATH', '')
+            if ld_library_path:
+                env['LD_LIBRARY_PATH'] = f"{hdf5_lib_path}:{ld_library_path}"
+            else:
+                env['LD_LIBRARY_PATH'] = hdf5_lib_path
+            
+            # If we're in a conda environment, disable HDF5 version check
+            if os.environ.get('CONDA_PREFIX'):
+                env['HDF5_DISABLE_VERSION_CHECK'] = '1'
+        
         result = subprocess.run(
             [exe_path, '--help'],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            env=env
         )
         # WireScan should output help text
     except (subprocess.CalledProcessError, FileNotFoundError, 
@@ -102,6 +121,64 @@ def _map_wire_edge(edge: str) -> str:
     return edge_map[edge_lower]
 
 
+def _find_hdf5_lib_path() -> Optional[str]:
+    """Find the HDF5 library path from h5cc or conda environment."""
+    # First, check if we're in a conda environment
+    conda_prefix = os.environ.get('CONDA_PREFIX')
+    if conda_prefix:
+        # Check common conda library locations - prioritize main lib directory
+        conda_lib_paths = [
+            Path(conda_prefix) / 'lib',
+            Path(conda_prefix) / 'lib64',
+        ]
+        
+        for lib_path in conda_lib_paths:
+            if lib_path.exists():
+                # Check if HDF5 libraries exist in this path
+                # Look for the main HDF5 library files
+                hdf5_main = list(lib_path.glob('libhdf5.so*'))
+                hdf5_hl = list(lib_path.glob('libhdf5_hl.so*'))
+                if hdf5_main and hdf5_hl:
+                    # Found HDF5 libraries in main lib directory
+                    return str(lib_path)
+        
+        # Also check h5py.libs directory as a fallback
+        import site
+        for site_dir in site.getsitepackages():
+            if conda_prefix in site_dir:
+                h5py_libs = Path(site_dir) / 'h5py.libs'
+                if h5py_libs.exists():
+                    hdf5_libs = list(h5py_libs.glob('libhdf5*.so*'))
+                    if hdf5_libs:
+                        return str(h5py_libs)
+    
+    # Fall back to h5cc - but use the one from conda env if available
+    h5cc_cmd = 'h5cc'
+    if conda_prefix:
+        conda_h5cc = Path(conda_prefix) / 'bin' / 'h5cc'
+        if conda_h5cc.exists():
+            h5cc_cmd = str(conda_h5cc)
+    
+    try:
+        result = subprocess.run([h5cc_cmd, '-show'], capture_output=True, text=True)
+        if result.returncode == 0:
+            output = result.stdout
+            # Extract -L paths
+            lib_paths = re.findall(r'-L([^\s]+)', output)
+            if lib_paths:
+                # If in conda env, prefer paths within the conda env
+                if conda_prefix:
+                    for path in lib_paths:
+                        if conda_prefix in path:
+                            return path
+                # Otherwise return the first path
+                return lib_paths[0]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    
+    return None
+
+
 def _execute_reconstruction(
     cmd: List[str], 
     output_base: str,
@@ -119,13 +196,31 @@ def _execute_reconstruction(
         ReconstructionResult with execution details
     """
     try:
+        # Set up environment for HDF5-dependent binary
+        env = os.environ.copy()
+        
+        hdf5_lib_path = _find_hdf5_lib_path()
+        
+        if hdf5_lib_path:
+            # Prepend the HDF5 library path to LD_LIBRARY_PATH
+            ld_library_path = env.get('LD_LIBRARY_PATH', '')
+            if ld_library_path:
+                env['LD_LIBRARY_PATH'] = f"{hdf5_lib_path}:{ld_library_path}"
+            else:
+                env['LD_LIBRARY_PATH'] = hdf5_lib_path
+            
+            # If we're in a conda environment, disable HDF5 version check
+            if os.environ.get('CONDA_PREFIX'):
+                env['HDF5_DISABLE_VERSION_CHECK'] = '1'
+        
         # Execute the subprocess
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             cwd=os.getcwd(),
-            timeout=timeout
+            timeout=timeout,
+            env=env
         )
         
         success = result.returncode == 0
