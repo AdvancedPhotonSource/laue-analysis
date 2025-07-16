@@ -7,9 +7,16 @@ CFLAGS = -O2 -std=gnu99 -msse2
 LDFLAGS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
 CC = gcc
 
+# Find h5cc - prefer conda environment version
+ifdef CONDA_PREFIX
+    H5CC := $(shell if [ -x "$(CONDA_PREFIX)/bin/h5cc" ]; then echo "$(CONDA_PREFIX)/bin/h5cc"; else echo "h5cc"; fi)
+else
+    H5CC := h5cc
+endif
+
 # Linux target: Uses h5cc compiler wrapper to find HDF5 header and library paths
-linux: CFLAGS += $(shell h5cc -show | grep -o -- "-I[^ ]*")
-linux: LDFLAGS := $(shell h5cc -show | grep -o -- "-L[^ ]*") \
+linux: CFLAGS += $(shell $(H5CC) -show 2>/dev/null | grep -o -- "-I[^ ]*" || echo "")
+linux: LDFLAGS := $(shell $(H5CC) -show 2>/dev/null | grep -o -- "-L[^ ]*" || echo "") \
 				$(LDFLAGS)
 linux: $(OUT)
 
