@@ -29,10 +29,10 @@
 
 
 /* local functions */
-char *startOfxmltag(char* tag, char* buf, int occurance);
-char* TrimFrontBackWhiteSpace(char *str);
-char* TrimTrailingWhiteSpace(char *str);
-char* TrimLeadingWhiteSpace(char *str);
+static char *startOfxmltag(char* tag, char* buf, int occurance);
+static char* TrimWhiteSpace(char *str);
+static char* TrimTrailingWhiteSpace(char *str);
+static char* TrimLeadingWhiteSpace(char *str);
 
 
 
@@ -331,7 +331,7 @@ char	**keyVals)					/* the result, space is allocated here, you must free it */
 	while((c=strchr(work,'\r'))) *c = ' ';
 	while((c=strchr(work,'\n'))) *c = ' ';
 	while((c=strchr(work,';'))) *c = '_';	/* no semi-colons, that is the seperator */
-	TrimFrontBackWhiteSpace(work);
+	TrimWhiteSpace(work);
 
 	/* parse work into key=value pairs */
 	*keyVals = calloc(len+1,sizeof(char));
@@ -345,7 +345,7 @@ char	**keyVals)					/* the result, space is allocated here, you must free it */
 		i1 = strchr(i0,'=');
 		strncpy(key,i0,i=(i1-i0));
 		key[i] = '\0';
-		key = TrimFrontBackWhiteSpace(key);
+		key = TrimWhiteSpace(key);
 
 		i0 = strchr(i1,'\"');		/* first double quote around value */
 		if (!i0) break;
@@ -430,7 +430,7 @@ char*	buf)
 
 
 /* returns a pointer into buf pointing to the start of '<tag', this allocates no space for user to free */
-char *startOfxmltag(
+static char *startOfxmltag(
 char*	tag,						/* name of tag */
 char*	buf,
 int		occurance)					/* use 0 for first occurance, 1 for second, ... */
@@ -469,7 +469,7 @@ int		occurance)					/* use 0 for first occurance, 1 for second, ... */
 
 
 /* trim both leading & trailing space, white space is space or less */
-char *TrimFrontBackWhiteSpace(
+static char *TrimWhiteSpace(
 char *str)
 {
 	TrimLeadingWhiteSpace(str);
@@ -479,7 +479,7 @@ char *str)
 
 
 /* trim leading white space, white space is space or less */
-char *TrimLeadingWhiteSpace(
+static char *TrimLeadingWhiteSpace(
 char *str)
 {
 	size_t	len;
@@ -495,7 +495,7 @@ char *str)
 
 
 /* trim trailing space, white space is space or less */
-char* TrimTrailingWhiteSpace(
+static char* TrimTrailingWhiteSpace(
 char *str)
 {
 	size_t	len;
