@@ -91,6 +91,33 @@ void print_help_text(void);
 
 omp_lock_t hdf_io;					// a lock is needed between threads such that only one R/W is performed on HDF5 files at a time.
 
+/* Global variable definitions (declared as extern in WireScan.h) */
+ws_calibration calibration;
+ws_imaging_parameters imaging_parameters;
+ws_image_set image_set;
+ws_user_preferences user_preferences;
+gsl_matrix * intensity_map;
+gsl_matrix * intensity_norm;
+vvector p_read_buffer[2];
+vvector p_write_buffer[2];
+int p_ibuff;
+int rows_default;
+int NUM_THREADS;
+struct HDF5_Header in_header;
+struct HDF5_Header output_header;
+struct geoStructure geoIn;
+int verbose;
+float percent;
+int cutoff;
+int AVAILABLE_RAM_MiB;
+int cosmic;
+int detNum;
+char distortionPath[FILENAME_MAX];
+float norm_exponent;
+float norm_threshold;
+float norm_rescale;
+/* Note: positionerType is defined in hardwareSpecific.c */
+
 #ifdef DEBUG_ALL					/* temp debug variable for JZT */
 int slowWay=0;						/* true if found reading stripes the slow way */
 int verbosePixel=0;
@@ -1897,7 +1924,11 @@ int makeTemplateFile(
 	fid_dst = H5Fcreate(filenameTemplate,H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
 	// traverse & copy desired objects by calling cp_h5obj
-	H5Ovisit(fid_src, H5_INDEX_CRT_ORDER,H5_ITER_NATIVE, cp_h5obj, &fid_dst);
+	#if H5_VERSION_GE(1,12,0)
+	H5Ovisit3(fid_src, H5_INDEX_CRT_ORDER, H5_ITER_NATIVE, cp_h5obj, &fid_dst, H5O_INFO_ALL);
+	#else
+	H5Ovisit(fid_src, H5_INDEX_CRT_ORDER, H5_ITER_NATIVE, cp_h5obj, &fid_dst);
+	#endif
 
 	// re-create "data" in new file
 	createNewData(fid_dst,"entry1/data/data",2,dims,getHDFtype(output_header.itype));
