@@ -5,6 +5,7 @@ OUT = peaksearch
 # Separate compile flags from link flags
 CFLAGS = -O2 -std=gnu99 -msse2
 LDFLAGS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
+RPATH_FLAGS = -Wl,-rpath,'$$ORIGIN/../../../lib' -Wl,-rpath,'$(CONDA_PREFIX)/lib'
 CC = gcc
 
 # Find h5cc - prefer conda environment version
@@ -35,7 +36,7 @@ hpcs: LDFLAGS := -L/clhome/aps_tools/shared/lib \
 hpcs: $(OUT)
 
 $(OUT): $(OBJ)
-	@$(CC) $^ -o $@ $(LDFLAGS)
+	@$(CC) $^ -o $@ $(LDFLAGS) $(RPATH_FLAGS)
 	@printf "\e[33mLinking\e[90m %s\e[0m\n" $@
 	@printf "\e[34mDone!\e[0m\n"
 

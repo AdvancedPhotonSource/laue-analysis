@@ -5,7 +5,9 @@ OUT = reconstructN_cpu
 
 # Separate compile flags from link flags
 CFLAGS = -O2 -std=gnu99
+# Use RPATH to embed library search path in binary
 LDFLAGS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
+RPATH_FLAGS = -Wl,-rpath,'$$ORIGIN/../../../lib' -Wl,-rpath,'$(CONDA_PREFIX)/lib'
 CC = gcc
 INCLUDES = -I./include
 DFLAGS = -DRECONSTRUCT_BACKWARDS -DMULTI_IMAGE_FILE
@@ -42,7 +44,7 @@ hpcs: $(OUT)
 
 $(OUT): $(OBJ)
 	mkdir -p bin
-	@$(CC) $^ -o bin/$@ $(LDFLAGS)
+	@$(CC) $^ -o bin/$@ $(LDFLAGS) $(RPATH_FLAGS)
 	@printf "\e[33mLinking\e[90m %s\e[0m\n" bin/$@
 	@printf "\e[34mDone!\e[0m\n"
 
