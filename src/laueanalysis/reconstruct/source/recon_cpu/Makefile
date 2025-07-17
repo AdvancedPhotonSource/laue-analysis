@@ -1,12 +1,11 @@
-# CPU source for big hdf5 input
+# CPU source for big hdf5 input - THREADED VERSION
 SRC = $(wildcard source/*.c)
 OBJ = ${SRC:.c=.o}
 OUT = reconstructN_cpu
 
-# Separate compile flags from link flags
-CFLAGS = -O2 -std=gnu99
-# Use RPATH to embed library search path in binary
-LDFLAGS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz
+# Add OpenMP support
+CFLAGS = -O2 -std=gnu99 -fopenmp
+LDFLAGS = -lhdf5_hl -lhdf5 -lgsl -lgslcblas -lm -lz -fopenmp
 RPATH_FLAGS = -Wl,-rpath,'$$ORIGIN/../../../lib' -Wl,-rpath,'$(CONDA_PREFIX)/lib'
 CC = gcc
 INCLUDES = -I./include
@@ -21,25 +20,26 @@ endif
 
 .PHONY: clean all linux
 
-# Default target: uses h5cc to find HDF5 paths automatically
+# Default target
 all: linux
 
-# Linux target: Uses h5cc compiler wrapper to find HDF5 header and library paths
+# Linux target with OpenMP
 linux: CFLAGS += $(shell $(H5CC) -show 2>/dev/null | grep -o -- "-I[^ ]*" || echo "")
 linux: LDFLAGS := $(shell $(H5CC) -show 2>/dev/null | grep -o -- "-L[^ ]*" || echo "") \
-				$(LDFLAGS)
+                  $(LDFLAGS)
 linux: $(OUT)
 
-polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include
+# Polaris target (update for OpenMP)
+polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include -fopenmp
 polaris: LDFLAGS := -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib \
-				  $(LDFLAGS)
+                    $(LDFLAGS)
 polaris: $(OUT)
 
 hpcs: CFLAGS += -I/clhome/aps_tools/shared/include \
-				-I/clhome/aps_tools/hdf5-1.8.2/hdf5/include
+                -I/clhome/aps_tools/hdf5-1.8.2/hdf5/include
 hpcs: LDFLAGS := -L/clhome/aps_tools/shared/lib \
-				-L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib \
-				$(LDFLAGS)
+                -L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib \
+                $(LDFLAGS)
 hpcs: $(OUT)
 
 $(OUT): $(OBJ)
