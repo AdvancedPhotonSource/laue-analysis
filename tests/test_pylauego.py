@@ -106,12 +106,13 @@ def test_run_cmd_and_check_output(pylauego):
         result = pylauego.runCmdAndCheckOutput(cmd)
         
         # Check that check_output was called with the right arguments
-        # The new implementation adds an env parameter
+        # The new implementation no longer adds an env parameter (RPATH handles library paths)
         mock_check_output.assert_called_once()
         call_args = mock_check_output.call_args
         assert call_args[0][0] == cmd
         assert call_args[1]['stderr'] == -2  # -2 is subprocess.STDOUT
-        assert 'env' in call_args[1]  # env parameter should be present
+        # env parameter should NOT be present anymore
+        assert 'env' not in call_args[1]
         
         # Clean up
         if os.path.exists(pylauego.errorLog):

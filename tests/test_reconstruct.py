@@ -26,12 +26,28 @@ class TestReconstruct:
     def mock_subprocess(self):
         """Mock subprocess.run for unit tests."""
         with patch('subprocess.run') as mock:
-            mock.return_value = MagicMock(
+            # Default return value for validation calls (--help)
+            help_response = MagicMock(
+                returncode=1,  # WireScan returns 1 for help
+                stdout="Usage: WireScan -i <file> -o <file> -g <file>",
+                stderr="",
+                timeout=None
+            )
+            # Default return value for actual reconstruction calls
+            run_response = MagicMock(
                 returncode=0,
                 stdout="Reconstruction complete",
                 stderr="",
                 timeout=None
             )
+            
+            # Return help response for validation, run response for actual execution
+            def side_effect(*args, **kwargs):
+                if '--help' in args[0]:
+                    return help_response
+                return run_response
+            
+            mock.side_effect = side_effect
             yield mock
     
     @pytest.fixture
@@ -214,14 +230,28 @@ class TestReconstruct:
     
     def test_batch_stop_on_error(self, mock_subprocess, mock_executable):
         """Test batch processing stops on error when requested."""
-        # Make second reconstruction fail
-        mock_subprocess.side_effect = [
-            MagicMock(returncode=0, stdout="OK", stderr=""),  # First validation
-            MagicMock(returncode=0, stdout="OK", stderr=""),  # First reconstruction
-            MagicMock(returncode=0, stdout="OK", stderr=""),  # Second validation
-            MagicMock(returncode=1, stdout="", stderr="Error"),  # Second reconstruction fails
-            MagicMock(returncode=0, stdout="OK", stderr=""),  # Third would succeed
-        ]
+        # Create custom side effect that makes second reconstruction fail
+        call_count = 0
+        
+        def custom_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            
+            if '--help' in args[0]:
+                return MagicMock(
+                    returncode=1,
+                    stdout="Usage: WireScan -i <file> -o <file> -g <file>",
+                    stderr="",
+                    timeout=None
+                )
+            
+            # Make the second actual reconstruction fail (4th call overall)
+            if call_count == 4:
+                return MagicMock(returncode=1, stdout="", stderr="Error")
+            
+            return MagicMock(returncode=0, stdout="OK", stderr="")
+        
+        mock_subprocess.side_effect = custom_side_effect
         
         configs = [
             {'input_file': f'in{i}.h5', 'output_file': f'out{i}_',

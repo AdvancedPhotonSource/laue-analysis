@@ -420,37 +420,6 @@ class PyLaueGo:
         indexing.set('Npeaks', Npeaks)
         return indexing
 
-    def _find_hdf5_lib_path(self):
-        """Find the HDF5 library path from h5cc or conda environment."""
-        # First, check if we're in a conda environment
-        conda_prefix = os.environ.get('CONDA_PREFIX')
-        if conda_prefix:
-            # Check common conda library locations
-            conda_lib_paths = [
-                Path(conda_prefix) / 'lib',
-                Path(conda_prefix) / 'lib64',
-            ]
-            for lib_path in conda_lib_paths:
-                if lib_path.exists():
-                    # Check if HDF5 libraries exist in this path
-                    hdf5_libs = list(lib_path.glob('libhdf5*.so*'))
-                    if hdf5_libs:
-                        return str(lib_path)
-        
-        # Fall back to h5cc
-        try:
-            result = sub.run(['h5cc', '-show'], capture_output=True, text=True)
-            if result.returncode == 0:
-                output = result.stdout
-                # Extract -L paths
-                lib_paths = re.findall(r'-L([^\s]+)', output)
-                if lib_paths:
-                    return lib_paths[0]
-        except (sub.CalledProcessError, FileNotFoundError):
-            pass
-        
-        return None
-
     def runCmdAndCheckOutput(self, cmd):
         '''
         Handle errors for subprocesses
@@ -459,27 +428,8 @@ class PyLaueGo:
         Continue processing and output whichever information
         was found for that step
         '''
-        # Set up environment for HDF5-dependent binaries
-        env = os.environ.copy()
-        
-        # Check if this is a command that needs HDF5 libraries (peaksearch)
-        if cmd[0] == self._config.peaksearchPath or 'peaksearch' in os.path.basename(cmd[0]):
-            hdf5_lib_path = self._find_hdf5_lib_path()
-            
-            if hdf5_lib_path:
-                # Prepend the HDF5 library path to LD_LIBRARY_PATH
-                ld_library_path = env.get('LD_LIBRARY_PATH', '')
-                if ld_library_path:
-                    env['LD_LIBRARY_PATH'] = f"{hdf5_lib_path}:{ld_library_path}"
-                else:
-                    env['LD_LIBRARY_PATH'] = hdf5_lib_path
-                
-                # If we're in a conda environment, disable HDF5 version check
-                if os.environ.get('CONDA_PREFIX'):
-                    env['HDF5_DISABLE_VERSION_CHECK'] = '1'
-        
         try:
-            output = sub.check_output(cmd, stderr=sub.STDOUT, env=env)
+            output = sub.check_output(cmd, stderr=sub.STDOUT)
         except sub.CalledProcessError as e:
             with open(self.errorLog, 'a') as f:
                 f.write(e.output.decode())
