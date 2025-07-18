@@ -49,3 +49,5 @@ tmp/
 # Backup files
 *.bak
 *.backup
+
+sandbox

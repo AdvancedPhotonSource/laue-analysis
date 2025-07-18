@@ -12,7 +12,7 @@
 #define USE_PM500_CORRECTION_MAY06
 /* #define USE_DISTORTION_CORRECTION */
 
-int	positionerType;		/*	0 means no correction (the default)
+extern int	positionerType;		/*	0 means no correction (the default)
 							1 means PM500 correction from May 2006
 							2 means Alio correction from Oct 2009 */
 

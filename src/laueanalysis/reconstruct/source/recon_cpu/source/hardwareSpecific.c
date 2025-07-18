@@ -12,9 +12,7 @@
 #include "WireScanDataTypesN.h"
 #include "hardwareSpecific.h"
 
-size_t myEpoch(int year, int month, int date, int hour, int min, int sec);
-
-
+static size_t myEpoch(int year, int month, int date, int hour, int min, int sec);
 
 gsl_matrix_float * distortion_map_i = NULL;
 gsl_matrix_float * distortion_map_j = NULL;
@@ -45,7 +43,7 @@ int positionerTypeFromFileTime(char *fileTime)
 }
 
 
-size_t myEpoch(
+static size_t myEpoch(
 int		year,
 int		month,
 int		date,
