@@ -20,80 +20,85 @@
 #define CHECK_FREE(A)   { if(A) free(A); (A)=NULL; }
 #endif
 
-int xmlBuf2GeoN(char *buf, struct geoStructure *geo);
-int tagValBuf2GeoN(char *buf, struct geoStructure *geo);
-int strFromTagFile(FILE *f,char *tagIn, char *value, int maxLen);
-int DetectorUpdateCalc(struct detectorGeometry *d);
-void SampleUpdateCalc(struct sampleGeometry *sa);
-void WireUpdateCalc(struct wireGeometry *w);
-int stringTo3Vector(char *in, double vec[3], double factor);
-int DetectorBad(struct detectorGeometry *d);
-int WireBad(struct wireGeometry *w);
-int SampleBad(struct sampleGeometry *s);
-void copySampleGeometry(struct sampleGeometry *f, struct sampleGeometry *i);
-void copyWireGeometry(struct wireGeometry *f, struct wireGeometry *i);
-void copyDetectorGeometry(struct detectorGeometry *f, struct detectorGeometry *i);
+static int strFromTagFile(FILE *f,char *tagIn, char *value, long maxLen);
+// int strFromTagBuf(char *buffer, char *tagIn, char *value, long maxLen);
+static int DetectorUpdateCalc(struct detectorGeometry *d);
+static void SampleUpdateCalc(struct sampleGeometry *sa);
+static void WireUpdateCalc(struct wireGeometry *w);
+static int stringTo3Vector(char *in, double vec[3], double factor);
+static int DetectorBad(struct detectorGeometry *d);
+static int WireBad(struct wireGeometry *w);
+static int SampleBad(struct sampleGeometry *s);
+static void copySampleGeometry(struct sampleGeometry *f, struct sampleGeometry *i);
+static void copyWireGeometry(struct wireGeometry *f, struct wireGeometry *i);
+static void copyDetectorGeometry(struct detectorGeometry *f, struct detectorGeometry *i);
 
 
 /*
 This is an example of what the input file looks like (this one only has 2 of the three detectors):
 
- $filetype		geometryFileN
- $dateWritten	Sat, Feb 20, 2010
- $timeWritten	23:19:41.5 (-6)
- $EPOCH			3349552782					// seconds from midnight January 1, 1904
- $fileNote		measured for all 3, first time ever
- 
- // Sample
- $SampleOrigin	{8200.00,-4758.83,-4476.00}	// sample origin in raw PM500 units (micron)
- $SampleRot		{-0.006,0.006,-0.000018}	// sample positioner rotation vector (length is angle in radians)
- 
- // Detectors
- $Ndetectors		2						// number of detectors in use, must be <= MAX_Ndetectors
- 
- $d0_Nx			2048						// number of un-binned pixels in full detector
- $d0_Ny			2048
- $d0_sizeX		409.6						// size of CCD (mm)
- $d0_sizeY		409.6
- $d0_R			{-1.20310066,-1.21179927,-1.21933886}	// rotation vector (length is angle in radians)
- $d0_P			{25.826,-0.728,510.812}		// translation vector (mm)
- $d0_timeMeasured	Sat, Feb 20, 2010, 13:25:52 (-6)	// when this geometry was calculated
- $d0_geoNote	Optimized using CalibrationList_Orange0
- $d0_detectorID	PE1621 723-3335				// unique detector ID
- 
- $d1_Nx			1024						// number of un-binned pixels in full detector
- $d1_Ny			1024
- $d1_sizeX		204.8						// size of CCD (mm)
- $d1_sizeY		204.8
- $d1_R			{-1.76742461,-0.72877176,-1.75941268}	// rotation vector (length is angle in radians)
- $d1_P			{-142.549,-1.003,412.988}	// translation vector (mm)
- $d1_timeMeasured	Sat, Feb 20, 2010, 14:23:05 (-6)	// when this geometry was calculated
- $d1_geoNote	Optimized using CalibrationList_yellow1
- $d1_detectorID	PE0820 763-1807				// unique detector ID
- 
- // Wire
- $wireDia		52.00						// diameter of wire (micron)
- $wireKnife		0							// true if wire on a knife edge, false for free-standing wire
- $wireOrigin		{4.41,0.00,0.00}			// wire origin in raw PM500 frame (micron)
- $wireRot		{0.00449992,-0.015,-0.00003375}	// wire positioner rotation vector (length is angle in radians)
- $wireAxis		{1.0,0.0,0.0}				// unit vector along wire axis, usually close to (1,0,0)
- $wireF			-200.0						// F of wire for a constant F wire scan (raw PM500 units)
+$filetype		geometryFileN
+$dateWritten	Wed, Nov 12, 2008
+$timeWritten	16:53:33 (CST)
+$fileNote		writen by 'writeGeoNToFile.tcl'
+
+// Sample
+$SampleOrigin	{0.00,0.00,0.00}			// sample origin in raw PM500 units (micron)
+$SampleRot		{-0.00600000,0.00600000,-0.00001800}	// sample positioner rotation vector (length is angle in radians)
+
+// Detectors
+$Ndetectors		2							// number of detectors, must be <= MAX_Ndetectors
+
+$d1_Nx			1024						// number of un-binned pixels in full detector
+$d1_Ny			1024
+$d1_sizeX		204.8						// size of detector (mm)
+$d1_sizeY		204.8
+$d1_R			{-0.61394300,1.48219000,0.61394300}	// rotation vector (length is angle in radians)
+$d1_P			{0.000,0.000,400.000}		// translation vector (mm)
+$d1_timeMeasured	Nov 12, 2008	// when this geometry was calculated
+$d1_geoNote	default values
+$d1_detectorID	PE0820, 476-1807			// unique detector ID
+
+$d2_Nx			1024						// number of un-binned pixels in full detector
+$d2_Ny			1024
+$d2_sizeX		204.8						// size of detector (mm)
+$d2_sizeY		204.8
+$d2_R			{-0.61394300,-1.48219000,-0.61394300}	// rotation vector (length is angle in radians)
+$d2_P			{0.000,0.000,400.000}		// translation vector (mm)
+$d2_timeMeasured	Nov 12, 2008	// when this geometry was calculated
+$d2_geoNote	default values
+$d2_detectorID	PE0820, 476-1850			// unique detector ID
+
+// Wire
+$wireDia		52.00						// diameter of wire (micron)
+$wireKnife		0							// true if wire on a knife edge, false for free-standing wire
+$wireOrigin		{0.00,0.00,0.00}			// wire origin in raw PM500 units (micron)
+$wireRot		{-0.00600000,0.00600000,-0.00001800}	// wire positioner rotation vector (length is angle in radians)
+$wireAxis		{1.000000,0.000000,0.000000}	// unit vector along wire axis, usually close to (1,0,0)
+$wireF			3000						// wire F during a scan
 */
 
 
 
 /* read geometry parameters from front of a file, returns 0 if OK */
-int readGeoFromFile(
+long readGeoFromFile(
 char	*fname,
 struct geoStructure *geo)
 {
 	char	*buf=NULL;								/* string with tag values */
 	FILE	*f=NULL;								/* file descriptor */
+	char	line[502];								/* line of data read from file */
 	size_t	len;									/* allocated length of buf[] */
 	char	*p;										/* generic pointer into a string */
 	int		err=1;
 	int		n=0;									/* flags geometry parameters as they are read */
 	int		itype;									/* file type, 1=old, 2=xml */
+	char	*geoN;
+	char	*keyVals;
+	long	Ndetectors;
+	char	*Detectors=NULL, *Wire=NULL, *Sample=NULL, *detector;
+	char	*str;
+	long	i, id;
 	
 	/* some defaults */
 	geo->Ndetectors = 1;							/* # of detectors in structure */
@@ -125,26 +130,180 @@ struct geoStructure *geo)
 	strcpy(geo->d[0].detectorID,"PE1621, 723-3335"); 
 	geo->d[0].distortionMapFile[0] = '\0';
 
+	itype = checkFileType(fname, "geometryFileN","geoN");
+	if (!itype) {
+		fprintf(stderr,"in readGeoFromFile(), cannot determine file type\n");
+		goto exitPoint;
+	}
+	if (( f = fopen(fname, "r")) == NULL) { fprintf(stderr,"Can't open file '%s' in readGeoFromFile()\n",fname);  goto exitPoint; }
+
+//	line[0] = 0;
+//	fgets(line,500,f);
+//	n = MIN(strlen(line),500);
+//	if (!(itype=checkFileTypeLine(line,"geometryFileN"))) goto exitPoint;	/* break out if checkFileType is false */
+
 	len = 200*1024;									/* allocate space for the header, 200KB should be more than enough */
 	buf = (char*)calloc(len,sizeof(char));
 	if (!buf) { fprintf(stderr,"unable to allocate space for 'buf' in readGeoFromFile()\n"); goto exitPoint; }
-	
-	itype = checkFileType(fname,"geometryFileN","geoN");	/* return 1 for old style '$', return 2 for xml, return 0 if not OK */
-	if (!itype) { fprintf(stderr,"Bad geometry file '%s' in readGeoFromFile()\n",fname);  goto exitPoint; }
-	if (( f = fopen(fname, "r")) == NULL) { fprintf(stderr,"Can't re-open file '%s' in readGeoFromFile()\n",fname);  goto exitPoint; }
 	len = fread(buf,sizeof(char),len-1,f);
 	fclose(f);
 	f = NULL;
 	if (len<1) { fprintf(stderr,"unable to read buffer in readGeoFromFile()\n"); goto exitPoint; }
 	buf[len-1] = '\0';								/* ensure null terminated */
 	p = buf;
-	while(p=strchr(p,'\r')) *p = '\n';				/* convert all carriage returns to new lines */
 
-	if (itype==1) n = tagValBuf2GeoN(buf,geo);		/* interpret old file type with "$tag value" pairs */
-	else if(itype==2) n = xmlBuf2GeoN(buf,geo);		/* interpret new xml file type */
-	else n = 0;
-	if (n != (1<<10)-1) goto exitPoint;				/* did not find all of the required parameters */
+	if (itype==1) {									/* old file type with "$tag value" pairs */
+		while((p=strchr(p,'\r'))) *p = '\n';		/* convert all carriage returns to new lines */
 
+		n = 0;										/* a bit flag used to make sure that essential values have been read */
+		/*	1<<2 == 4 */
+		if (!strFromTagBuf(buf,"Ndetectors",line,250))	{ geo->Ndetectors = (int)strtol(line,NULL,10); n=n|1<<0; }	/* # of detectors */
+
+		if (!strFromTagBuf(buf,"d0_Nx",line,250))		{ geo->d[0].Nx = strtol(line,NULL,10); n=n|1<<1; }	/* detector 0 description */
+		if (!strFromTagBuf(buf,"d0_Ny",line,250))		{ geo->d[0].Ny = strtol(line,NULL,10); n=n|1<<2; }
+		if (!strFromTagBuf(buf,"d0_sizeX",line,250))	{ geo->d[0].sizeX = strtod(line,NULL)*1000.; n=n|1<<3; }
+		if (!strFromTagBuf(buf,"d0_sizeY",line,250))	{ geo->d[0].sizeY = strtod(line,NULL)*1000.; n=n|1<<4; }
+		if (!strFromTagBuf(buf,"d0_R",line,250))		{ err=stringTo3Vector(line,geo->d[0].R,1.); if (!err) n=n|1<<5; }
+		if (!strFromTagBuf(buf,"d0_P",line,250))		{ err=stringTo3Vector(line,geo->d[0].P,1e3); if (!err) n=n|1<<6; }
+		if (!strFromTagBuf(buf,"d0_timeMeasured",line,READGEON_MAXlen))		{ strncpy(geo->d[0].timeMeasured,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d0_geoNote",line,READGEON_MAXlen))			{ strncpy(geo->d[0].geoNote,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d0_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[0].detectorID,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d0_distortionMapFile",line,READGEON_MAXlen))	{ strncpy(geo->d[0].distortionMapFile,line,READGEON_MAXlen); }
+		geo->d[0].used = (strlen(geo->d[0].detectorID)>0);
+
+		if (!strFromTagBuf(buf,"d1_Nx",line,250))		{ geo->d[1].Nx = strtol(line,NULL,10); n=n|1<<1; }	/* detector 1 description */
+		if (!strFromTagBuf(buf,"d1_Ny",line,250))		{ geo->d[1].Ny = strtol(line,NULL,10); n=n|1<<2; }
+		if (!strFromTagBuf(buf,"d1_sizeX",line,250))	{ geo->d[1].sizeX = strtod(line,NULL)*1000.; n=n|1<<3; }
+		if (!strFromTagBuf(buf,"d1_sizeY",line,250))	{ geo->d[1].sizeY = strtod(line,NULL)*1000.; n=n|1<<4; }
+		if (!strFromTagBuf(buf,"d1_R",line,250))		{ err=stringTo3Vector(line,geo->d[1].R,1.); if (!err) n=n|1<<5; }
+		if (!strFromTagBuf(buf,"d1_P",line,250))		{ err=stringTo3Vector(line,geo->d[1].P,1e3); if (!err) n=n|1<<6; }
+		if (!strFromTagBuf(buf,"d1_timeMeasured",line,READGEON_MAXlen))		{ strncpy(geo->d[1].timeMeasured,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d1_geoNote",line,READGEON_MAXlen))			{ strncpy(geo->d[1].geoNote,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d1_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[1].detectorID,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d1_distortionMapFile",line,READGEON_MAXlen))	{ strncpy(geo->d[1].distortionMapFile,line,READGEON_MAXlen); }
+		geo->d[1].used = (strlen(geo->d[1].detectorID)>0);
+
+		if (!strFromTagBuf(buf,"d2_Nx",line,250))		{ geo->d[2].Nx = strtol(line,NULL,10); n=n|1<<1; }	/* detector 2 description */
+		if (!strFromTagBuf(buf,"d2_Ny",line,250))		{ geo->d[2].Ny = strtol(line,NULL,10); n=n|1<<2; }
+		if (!strFromTagBuf(buf,"d2_sizeX",line,250))	{ geo->d[2].sizeX = strtod(line,NULL)*1000.; n=n|1<<3; }
+		if (!strFromTagBuf(buf,"d2_sizeY",line,250))	{ geo->d[2].sizeY = strtod(line,NULL)*1000.; n=n|1<<4; }
+		if (!strFromTagBuf(buf,"d2_R",line,250))		{ err=stringTo3Vector(line,geo->d[2].R,1.); if (!err) n=n|1<<5; }
+		if (!strFromTagBuf(buf,"d2_P",line,250))		{ err=stringTo3Vector(line,geo->d[2].P,1e3); if (!err) n=n|1<<6; }
+		if (!strFromTagBuf(buf,"d2_timeMeasured",line,READGEON_MAXlen))		{ strncpy(geo->d[2].timeMeasured,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d2_geoNote",line,READGEON_MAXlen))			{ strncpy(geo->d[2].geoNote,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d2_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[2].detectorID,line,READGEON_MAXlen); }
+		if (!strFromTagBuf(buf,"d2_distortionMapFile",line,READGEON_MAXlen))	{ strncpy(geo->d[2].distortionMapFile,line,READGEON_MAXlen); }
+		geo->d[2].used = (strlen(geo->d[2].detectorID)>0);
+
+		if (!strFromTagBuf(buf,"wireDia",line,250))		{ geo->wire.dia = strtod(line,NULL); n=n|1<<7; }	/* wire description */
+		if (!strFromTagBuf(buf,"wireKnife",line,250))	{ geo->wire.knife = (int)strtol(line,NULL,10); n=n|1<<8; }
+		if (!strFromTagBuf(buf,"wireOrigin",line,250))	{ err=stringTo3Vector(line,geo->wire.origin,1.); if (!err) n=n|1<<9; }
+		if (!strFromTagBuf(buf,"wireRot",line,250))		{ err=stringTo3Vector(line,geo->wire.R,1.); }
+		if (!strFromTagBuf(buf,"wireAxis",line,250))	{ err=stringTo3Vector(line,geo->wire.axis,.1); }
+		if (!strFromTagBuf(buf,"wireF",line,250))		{ geo->wire.F = strtod(line,NULL); }
+		}
+	else if(itype==2) {									/* new xml file type */
+		n = 0;											/* a bit flag used to make sure that essential values have been read */
+		geoN = XMLtagContents("geoN",buf,0);
+		XMLattibutes2KeyList("Detectors",geoN,0,&keyVals);
+		Ndetectors = IntByKey_new("Ndetectors",keyVals,'=',';');
+		CHECK_FREE(keyVals)
+		if (Ndetectors>=1 && Ndetectors<=3)		{ geo->Ndetectors = (int)Ndetectors; n = n|1<<0; }	/* # of detectors */
+		Detectors = XMLtagContents("Detectors",geoN,0);
+		geo->d[0].used = geo->d[1].used = geo->d[2].used = 0;	/* init to all unused */
+
+		for (i=0;i<Ndetectors;i++) {
+			XMLattibutes2KeyList("Detector",Detectors,(int)i,&keyVals);
+			id = IntByKey_new("N",keyVals,'=',';');
+			CHECK_FREE(keyVals)
+			
+			detector = XMLtagContents("Detector",Detectors,(int)i);
+			if (id>=0 && id <=3) {
+				/* detector id description */
+				geo->d[id].used = 1;
+				if ((str=XMLtagContents("Npixels",detector,0))) {
+					if (sscanf(str,"%ld %ld",&(geo->d[id].Nx),&(geo->d[id].Ny))==2) { n = n|1<<1; n = n|1<<2; }
+				}
+				CHECK_FREE(str);
+				
+				if ((str=XMLtagContents("size",detector,0))) {
+					if (sscanf(str,"%lg %lg",&(geo->d[id].sizeX),&(geo->d[id].sizeY))==2) { n = n|1<<3; n = n|1<<4; }
+					geo->d[id].sizeX *= 1000.;					/* file is in mm, I need micron in the geoN structure */
+					geo->d[id].sizeY *= 1000.;
+				}
+				CHECK_FREE(str);
+				
+				if ((str=XMLtagContents("R",detector,0))) {
+					if (!stringTo3Vector(str,geo->d[id].R,1.)) n = n|1<<5;
+				}
+				CHECK_FREE(str);
+				
+				if ((str=XMLtagContents("P",detector,0))) {
+					if (!stringTo3Vector(str,geo->d[id].P,1e3)) n = n|1<<6;
+				}
+				CHECK_FREE(str);
+
+				if ((str=XMLtagContents("timeMeasured",detector,0))) strncpy(geo->d[id].timeMeasured,str,READGEON_MAXlen);
+				CHECK_FREE(str);
+				if ((str=XMLtagContents("geoNote",detector,0))) strncpy(geo->d[id].geoNote,str,READGEON_MAXlen);
+				CHECK_FREE(str);
+				if ((str=XMLtagContents("ID",detector,0))) strncpy(geo->d[id].detectorID,str,READGEON_MAXlen);
+				CHECK_FREE(str);
+				if ((str=XMLtagContents("distortionMap",detector,0))) strncpy(geo->d[id].distortionMapFile,str,READGEON_MAXlen);
+				CHECK_FREE(str);
+			}
+			CHECK_FREE(detector);
+		}
+		CHECK_FREE(Detectors);
+
+		Wire = XMLtagContents("Wire",geoN,0);
+		if (Wire) {
+			str = XMLtagContents("R",Wire,0);
+			if (str) stringTo3Vector(str,geo->wire.R,1.);
+			CHECK_FREE(str);
+			
+			str = XMLtagContents("Axis",Wire,0);
+			if (str) stringTo3Vector(str,geo->wire.axis,.1);
+			CHECK_FREE(str);
+			
+			str = XMLtagContents("dia",Wire,0);
+			if (str) {
+				if (sscanf(str,"%lg",&(geo->wire.dia))==1) n = n|1<<7;
+			}
+			CHECK_FREE(str);
+			
+			str = XMLtagContents("F",Wire,0);
+			if (str) sscanf(str,"%lg",&(geo->wire.F));
+			CHECK_FREE(str);
+			
+			str = XMLtagContents("Knife",Wire,0);
+			if (str) {
+				if (sscanf(str,"%d",&(geo->wire.knife))==1) n = n|1<<8;
+				}
+			CHECK_FREE(str);
+
+			str = XMLtagContents("Origin",Wire,0);
+			if (str) {
+				if (!stringTo3Vector(str,geo->wire.origin,1.)) n = n|1<<9;
+			}
+			CHECK_FREE(str);
+		}
+
+		Sample = XMLtagContents("Sample",geoN,0);
+		if (Sample) {
+			str = XMLtagContents("Origin",Sample,0);
+			if (str) stringTo3Vector(str,geo->s.O,1.);
+			CHECK_FREE(str);
+			
+			str = XMLtagContents("R",Sample,0);
+			if (str) stringTo3Vector(str,geo->s.O,1.);
+			CHECK_FREE(str);
+			CHECK_FREE(Sample);
+		}
+
+	}
+
+	if (n != (1<<10)-1) { err=1; goto exitPoint; }	/* did not find all of the required parameters */
 	GeometryStructureUpdate(geo);					/* set the computed geometry parameters */
 	err = 0;
 	exitPoint:
@@ -154,207 +313,19 @@ struct geoStructure *geo)
 }
 
 
-/* the contents of the xml geometry file is in buf, put values into the geoStructure, return n, flag showing what was read */
-int xmlBuf2GeoN(
-char	*buf,										/* string containing xml */
-struct geoStructure *geo)
-{
-	int 	n;										/* flags geometry parameters as they are read */
-	char	*geoN;
-	char	*keyVals;
-	int		Ndetectors;
-	char	*Detectors=NULL, *Wire=NULL, *Sample=NULL, *detector;
-	char	*str;
-	int		i, id;
-
-	n = 0;
-	geoN = XMLtagContents("geoN",buf,0);			/* allocates space for geoN, does NOT free it */
-	XMLattibutes2KeyList("Detectors",geoN,0,&keyVals);
-	Ndetectors = IntByKey("Ndetectors",keyVals,'=',';');
-	CHECK_FREE(keyVals)
-	if (Ndetectors>=1 && Ndetectors<=3)		{ geo->Ndetectors = Ndetectors; n = (n|1<<0); }	/* # of detectors */
-	Detectors = XMLtagContents("Detectors",geoN,0);
-	geo->d[0].used = geo->d[1].used = geo->d[2].used = 0;	/* init to all unused */
-
-	for (i=0;i<Ndetectors;i++) {
-		XMLattibutes2KeyList("Detector",Detectors,i,&keyVals);
-		id = IntByKey("N",keyVals,'=',';');
-		CHECK_FREE(keyVals)
-		
-		detector = XMLtagContents("Detector",Detectors,i);
-		if (id>=0 && id <=3) {
-			/* detector id description */
-			geo->d[id].used = 1;
-			if (str=XMLtagContents("Npixels",detector,0)) {
-				if (sscanf(str,"%d %d",&(geo->d[id].Nx),&(geo->d[id].Ny))==2) { n = n|1<<1; n = n|1<<2; }
-			}
-			CHECK_FREE(str);
-			
-			if (str=XMLtagContents("size",detector,0)) {
-				if (sscanf(str,"%lg %lg",&(geo->d[id].sizeX),&(geo->d[id].sizeY))==2) { n = n|1<<3; n = n|1<<4; }
-				geo->d[id].sizeX *= 1000.;					/* file is in mm, I need micron in the geoN structure */
-				geo->d[id].sizeY *= 1000.;
-			}
-			CHECK_FREE(str);
-			
-			if (str=XMLtagContents("R",detector,0)) {
-				if (!stringTo3Vector(str,geo->d[id].R,1.)) n = n|1<<5;
-			}
-			CHECK_FREE(str);
-			
-			if (str=XMLtagContents("P",detector,0)) {
-				if (!stringTo3Vector(str,geo->d[id].P,1e3)) n = n|1<<6;
-			}
-			CHECK_FREE(str);
-
-			if ((str=XMLtagContents("timeMeasured",detector,0))) strncpy(geo->d[id].timeMeasured,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-			if ((str=XMLtagContents("note",detector,0))) strncpy(geo->d[id].geoNote,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-			if ((str=XMLtagContents("ID",detector,0))) strncpy(geo->d[id].detectorID,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-			if ((str=XMLtagContents("distortionMap",detector,0))) strncpy(geo->d[id].distortionMapFile,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-		}
-		CHECK_FREE(detector);
-	}
-	CHECK_FREE(Detectors);
-
-	Wire = XMLtagContents("Wire",geoN,0);
-	if (Wire) {
-		str = XMLtagContents("R",Wire,0);
-		if (str) stringTo3Vector(str,geo->wire.R,1.);
-		CHECK_FREE(str);
-		
-		str = XMLtagContents("Axis",Wire,0);
-		if (str) stringTo3Vector(str,geo->wire.axis,1.);
-		CHECK_FREE(str);
-		
-		str = XMLtagContents("dia",Wire,0);
-		if (str) {
-			if (sscanf(str,"%lg",&(geo->wire.dia))==1) n = n|1<<7;
-		}
-		CHECK_FREE(str);
-		
-		str = XMLtagContents("F",Wire,0);
-		if (str) sscanf(str,"%lg",&(geo->wire.F));
-		CHECK_FREE(str);
-		
-		str = XMLtagContents("Knife",Wire,0);
-		if (str) {
-			if (sscanf(str,"%d",&(geo->wire.knife))==1) n = n|1<<8;
-			}
-		CHECK_FREE(str);
-
-		str = XMLtagContents("Origin",Wire,0);
-		if (str) {
-			if (!stringTo3Vector(str,geo->wire.origin,1.)) n = n|1<<9;
-		}
-		CHECK_FREE(str);
-		CHECK_FREE(Wire);
-	}
-
-	Sample = XMLtagContents("Sample",geoN,0);		/* sample info (not used for reconstruction, but passing it on anyhow) */
-	if (Sample) {
-		str = XMLtagContents("Origin",Sample,0);
-		if (str) stringTo3Vector(str,geo->s.O,1.);
-		CHECK_FREE(str);
-		
-		str = XMLtagContents("R",Sample,0);
-		if (str) stringTo3Vector(str,geo->s.R,1.);
-		CHECK_FREE(str);
-		CHECK_FREE(Sample);
-	}
-	CHECK_FREE(geoN);
-
-	return n;
-}
-
-
-/* the contents of the old $tag value pair geometry file is in buf, put values into the geoStructure, return n, flag showing what was read */
-int tagValBuf2GeoN(
-char	*buf,										/* string containing xml */
-struct geoStructure *geo)
-{
-	char	line[READGEON_MAXlen+2];				/* line of data read from file */
-	int		n;										/* a bit flag used to make sure that essential values have been read */
-	
-	n = 0;
-	/*	1<<2 == 4 */
-	if (!strFromTagBuf(buf,"Ndetectors",line,READGEON_MAXlen))	{ geo->Ndetectors = (int)strtol(line,NULL,10); n=(n|1<<0); }	/* # of detectors */
-
-	/* detector 0 description (Orange) */
-	if (!strFromTagBuf(buf,"d0_Nx",line,READGEON_MAXlen))		{ geo->d[0].Nx = (int)strtol(line,NULL,10); n=n|1<<1; }
-	if (!strFromTagBuf(buf,"d0_Ny",line,READGEON_MAXlen))		{ geo->d[0].Ny = (int)strtol(line,NULL,10); n=n|1<<2; }
-	if (!strFromTagBuf(buf,"d0_sizeX",line,READGEON_MAXlen))	{ geo->d[0].sizeX = strtod(line,NULL)*1000.; n=n|1<<3; }
-	if (!strFromTagBuf(buf,"d0_sizeY",line,READGEON_MAXlen))	{ geo->d[0].sizeY = strtod(line,NULL)*1000.; n=n|1<<4; }
-	if (!strFromTagBuf(buf,"d0_R",line,READGEON_MAXlen))		{ if (!stringTo3Vector(line,geo->d[0].R,1.)) n=n|1<<5; }
-	if (!strFromTagBuf(buf,"d0_P",line,READGEON_MAXlen))		{ if (!stringTo3Vector(line,geo->d[0].P,1e3)) n=n|1<<6; }
-	if (!strFromTagBuf(buf,"d0_timeMeasured",line,READGEON_MAXlen))		{ strncpy(geo->d[0].timeMeasured,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d0_geoNote",line,READGEON_MAXlen))			{ strncpy(geo->d[0].geoNote,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d0_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[0].detectorID,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d0_distortionMapFile",line,READGEON_MAXlen)){ strncpy(geo->d[0].distortionMapFile,line,READGEON_MAXlen); }
-	geo->d[0].used = (strlen(geo->d[0].detectorID)>0);
-
-	/* detector 1 description (Yellow) */
-	if (!strFromTagBuf(buf,"d1_Nx",line,READGEON_MAXlen))		{ geo->d[1].Nx = (int)strtol(line,NULL,10); n=n|1<<1; }
-	if (!strFromTagBuf(buf,"d1_Ny",line,READGEON_MAXlen))		{ geo->d[1].Ny = (int)strtol(line,NULL,10); n=n|1<<2; }
-	if (!strFromTagBuf(buf,"d1_sizeX",line,READGEON_MAXlen))	{ geo->d[1].sizeX = strtod(line,NULL)*1000.; n=n|1<<3; }
-	if (!strFromTagBuf(buf,"d1_sizeY",line,READGEON_MAXlen))	{ geo->d[1].sizeY = strtod(line,NULL)*1000.; n=n|1<<4; }
-	if (!strFromTagBuf(buf,"d1_R",line,READGEON_MAXlen))		{ if (!stringTo3Vector(line,geo->d[1].R,1.)) n=n|1<<5; }
-	if (!strFromTagBuf(buf,"d1_P",line,READGEON_MAXlen))		{ if (!stringTo3Vector(line,geo->d[1].P,1e3)) n=n|1<<6; }
-	if (!strFromTagBuf(buf,"d1_timeMeasured",line,READGEON_MAXlen))		{ strncpy(geo->d[1].timeMeasured,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d1_geoNote",line,READGEON_MAXlen))			{ strncpy(geo->d[1].geoNote,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d1_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[1].detectorID,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d1_distortionMapFile",line,READGEON_MAXlen)){ strncpy(geo->d[1].distortionMapFile,line,READGEON_MAXlen); }
-	geo->d[1].used = (strlen(geo->d[1].detectorID)>0);
-
-	/* detector 2 description (Purple) */
-	if (!strFromTagBuf(buf,"d2_Nx",line,READGEON_MAXlen))		{ geo->d[2].Nx = (int)strtol(line,NULL,10); n=n|1<<1; }
-	if (!strFromTagBuf(buf,"d2_Ny",line,READGEON_MAXlen))		{ geo->d[2].Ny = (int)strtol(line,NULL,10); n=n|1<<2; }
-	if (!strFromTagBuf(buf,"d2_sizeX",line,READGEON_MAXlen))	{ geo->d[2].sizeX = strtod(line,NULL)*1000.; n=n|1<<3; }
-	if (!strFromTagBuf(buf,"d2_sizeY",line,READGEON_MAXlen))	{ geo->d[2].sizeY = strtod(line,NULL)*1000.; n=n|1<<4; }
-	if (!strFromTagBuf(buf,"d2_R",line,READGEON_MAXlen))		{ if (!stringTo3Vector(line,geo->d[2].R,1.)) n=n|1<<5; }
-	if (!strFromTagBuf(buf,"d2_P",line,READGEON_MAXlen))		{ if (!stringTo3Vector(line,geo->d[2].P,1e3)) n=n|1<<6; }
-	if (!strFromTagBuf(buf,"d2_timeMeasured",line,READGEON_MAXlen))		{ strncpy(geo->d[2].timeMeasured,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d2_geoNote",line,READGEON_MAXlen))			{ strncpy(geo->d[2].geoNote,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d2_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[2].detectorID,line,READGEON_MAXlen); }
-	if (!strFromTagBuf(buf,"d2_distortionMapFile",line,READGEON_MAXlen)){ strncpy(geo->d[2].distortionMapFile,line,READGEON_MAXlen); }
-	geo->d[2].used = (strlen(geo->d[2].detectorID)>0);
-
-	/* wire description */
-	if (!strFromTagBuf(buf,"wireDia",line,READGEON_MAXlen))		{ geo->wire.dia = strtod(line,NULL); n=n|1<<7; }
-	if (!strFromTagBuf(buf,"wireKnife",line,READGEON_MAXlen))	{ geo->wire.knife = (int)strtol(line,NULL,10); n=(n|1<<8); }
-	if (!strFromTagBuf(buf,"wireOrigin",line,READGEON_MAXlen))	{ if (!stringTo3Vector(line,geo->wire.origin,1.)) n=n|1<<9; }
-	if (!strFromTagBuf(buf,"wireRot",line,READGEON_MAXlen))		{ stringTo3Vector(line,geo->wire.R,1.); }
-	if (!strFromTagBuf(buf,"wireAxis",line,READGEON_MAXlen))	{ stringTo3Vector(line,geo->wire.axis,1.0); }
-	if (!strFromTagBuf(buf,"wireF",line,READGEON_MAXlen))		{ geo->wire.F = strtod(line,NULL); }
-
-	/* sample description (not used for reconstruction, but passing it on anyhow) */
-	if (!strFromTagBuf(buf,"SampleOrigin",line,READGEON_MAXlen))	{ stringTo3Vector(line,geo->s.O,1.); }
-	if (!strFromTagBuf(buf,"SampleRot",line,READGEON_MAXlen))		{ stringTo3Vector(line,geo->s.R,1.); }
-
-	return n;
-}
-
-
-int stringTo3Vector(						/* given a string such as "{123,3.55,17}" fill vec with values */
+static int stringTo3Vector(					/* given a string such as "{123,3.55,17}" fill vec with values */
 char	*in,								/* input string */
 double	vec[3],
 double	factor)								/* multiply result by factor, use 1 to do nothing */
 {
 	double x,y,z;
-	int i;
-
-	i = (sscanf(in,"{%lg, %lg, %lg}",&x,&y,&z) != 3);
-	if (i) { i = (sscanf(in,"%lg %lg %lg",&x,&y,&z) != 3); }
-
-	if (i==0) {
-		vec[0] = x*factor;
-		vec[1] = y*factor;
-		vec[2] = z*factor;
+	if (3 != sscanf(in,"%lg %lg %lg",&x,&y,&z)) {
+		if (3 != sscanf(in,"{%lg, %lg, %lg}",&x,&y,&z)) return 1;
 	}
-	return i;
+	vec[0] = x*factor;
+	vec[1] = y*factor;
+	vec[2] = z*factor;
+	return 0;
 }
 
 
@@ -365,12 +336,12 @@ int strFromTagBuf(	/* look for the tag and return 0 if it finds the tag, 1 if no
 char	*buffer,	/* char buffer with all of the tagged strings */
 char	*tagIn,		/* the tag, this should NOT have the leading '$' */
 char	*value,		/* put the rest of the line following tag here, line should be at least maxLen long */
-int		maxLen)		/* max length of line to pass back */
+long	maxLen)		/* max length of line to pass back */
 {
 	char	tag[128];		/* local version of tag with leading $ */
 	size_t	tagLen;			/* length of tag */
 	char	*p;				/* generic pointer for string stuff */
-	int		i;				/* generic index */
+	long	i;				/* generic index */
 
 	tagLen = strlen(tagIn);
 	if (tagLen<1 || tagLen>120) return 1;			/* empty tag is not allowed, not too long either */
@@ -381,7 +352,7 @@ int		maxLen)		/* max length of line to pass back */
 
 	/* search buffer for $tag followed by character <= 32, also tag must start a line */
 	p = buffer;
-	while(p=strstr(p,tag)) {						/* find $tag, then check for white space after */
+	while((p=strstr(p,tag))) {						/* find $tag, then check for white space after */
 		if (!p) {value='\0'; return 1; }			/* NULL pointer, $tag was not found */
 		if (p!=buffer && *(p-1)!='\n') {p++; continue;}	/* check if $tag at start or preceeded by new line */
 		p += tagLen;								/* points to first character after $tag */
@@ -396,8 +367,8 @@ int		maxLen)		/* max length of line to pass back */
 
 	strncpy(value,p,(size_t)(maxLen-1));			/* now value contains the value part */
 	value[maxLen-1] = '\0';							/* and it is definitely terminated */
-	if (p=strchr(value,'\n')) *p = '\0';			/* trim at new line */
-	if (p=strstr(value,"//")) *p = '\0';			/* strip off any following comment */
+	if ((p=strchr(value,'\n'))) *p = '\0';			/* trim at new line */
+	if ((p=strstr(value,"//"))) *p = '\0';			/* strip off any following comment */
 
 	/* trim off any trailing white space */
 	p = value+strlen(value)+1;						/* p points to null after last character */
@@ -410,17 +381,17 @@ int		maxLen)		/* max length of line to pass back */
    and tag is separated from its value by white space.  anything after a // is ignored, and can be used as comments in the file
    tags are limited to 120 characters, and the tag+value is limited to 500 characters 
    leaves file pointer at start of next line (the line after the one with the tag) */
-int strFromTagFile(	/* look for the tag and return 0 if it finds the tag, 1 if not found */
+static int strFromTagFile(	/* look for the tag and return 0 if it finds the tag, 1 if not found */
 FILE	*f,			/* file id */
 char	*tagIn,		/* the tag, this should NOT have the leading '$' */
 char	*value,		/* put the rest of the line following tag here, line should be at least maxLen long */
-int		maxLen)		/* max length of line to pass back */
+long	maxLen)		/* max length of line to pass back */
 {
 	char	line[512];		/* contains one line from the file */
 	char	tag[128];		/* local version of tag with leading $ */
 	size_t	tagLen;			/* length of tag */
 	char	*p;				/* generic pointer for string stuff */
-	int		i;				/* generic index */
+	long	i;				/* generic index */
 
 	tagLen = strlen(tagIn);
 	if (tagLen<1 || tagLen>120) return 1;			/* empty tag is not allowed, not too long either */
@@ -430,7 +401,7 @@ int		maxLen)		/* max length of line to pass back */
 	tagLen++;
 
 	fseek(f,0,SEEK_SET); 							/* always start searching from start of file */
-	while (p=fgets(line,511,f)) {					/* break on EOF */
+	while ((p=fgets(line,511,f))) {					/* break on EOF */
 		if (strncmp(line,tag,tagLen)) continue;		/* wrong tag, continue checking */
 		else if (line[tagLen]>' ') continue;		/* the tag in line is longer than tag[] */
 		p = &(line[tagLen]);						/* points to start of value part */
@@ -438,13 +409,13 @@ int		maxLen)		/* max length of line to pass back */
 	}
 	if (!p) {value[0]='\0'; return 1; }				/* NULL pointer, this mainly catches the EOF */
 
-	i = (int)tagLen;
+	i = tagLen;
 	while (*p>0 && *p<=' ' && i<500) { p++; i++; }	/* find the start of the value, skip white space */
 	if (*p==0 || i>=500) { value[0]='\0'; return 0; } /* the tag was there, but no value part found */
 
 	strncpy(value,p,(size_t)(maxLen-1));			/* now value contains the value part */
 	value[maxLen-1] = '\0';							/* and it is terminated */
-	if (p=strstr(value,"//")) *p = '\0';			/* strip off any following comment */
+	if ((p=strstr(value,"//"))) *p = '\0';			/* strip off any following comment */
 
 	/* trim off any trailing white space */
 	p = value+strlen(value)+1;						/* p points to null after last character */
@@ -496,7 +467,7 @@ char	*type)										/* desired file type */
 	typeList[1] = '\0';
 	strncat(typeList,p,(size_t)(maxLen-1));			/* now typeList contains the typeList part with a leading semi-colon */
 	typeList[maxLen] = '\0';						/* and it is definitely terminated */
-	if (p=strstr(typeList,"//")) *p = '\0';			/* strip off any following comment */
+	if ((p=strstr(typeList,"//"))) *p = '\0';			/* strip off any following comment */
 
 	/* trim off any trailing white space */
 	p = typeList+strlen(typeList)+1;				/* p points to null after last character */
@@ -517,7 +488,7 @@ char	*type)										/* desired file type */
 void GeometryStructureUpdate(						/* update all internally calculated things in the structure */
 struct geoStructure *geo)
 {
-	int		i, N=0;
+	long i, N=0;
 
 	if (geo->Ndetectors>MAX_Ndetectors) {
 		printf("\nERROR, geo0->Ndetectors is %d, which is bigger than max value of %d. Reducing it\n",geo->Ndetectors,MAX_Ndetectors);
@@ -531,12 +502,12 @@ struct geoStructure *geo)
 			N += 1;
 		}
 	}
-	geo->Ndetectors = N;
+	geo->Ndetectors = (int)N;
 }
 
 
 
-int DetectorUpdateCalc(								/* update all internally calculated things in the detector structure */
+static int DetectorUpdateCalc(						/* update all internally calculated things in the detector structure */
 struct detectorGeometry *d)
 {
 	double Rx, Ry, Rz;								/* used to make the rotation matrix rho from vector R */
@@ -566,7 +537,7 @@ struct detectorGeometry *d)
 
 
 
-void SampleUpdateCalc(								/* update all internally calculated things in the structure */
+static void SampleUpdateCalc(						/* update all internally calculated things in the structure */
 struct sampleGeometry *sa)
 {
 	double Rx, Ry, Rz;								/* used to make the rotation matrix rho from vector R */
@@ -594,7 +565,7 @@ struct sampleGeometry *sa)
 }
 
 
-void WireUpdateCalc(								/* update parts of the wire structure */
+static void WireUpdateCalc(							/* update parts of the wire structure */
 struct wireGeometry *w)
 {
 	double Rx, Ry, Rz;								/* used to make the rotation matrix rho from vector R */
@@ -618,7 +589,7 @@ struct wireGeometry *w)
 	if (w->Rmag != w->Rmag || theta==0) {			/* rotation of wire stage */
 		w->R[0] = 0;	w->R[1] = 0;	w->R[2] = 0;
 		w->Rmag = 0;
-		w->R00 = 1;		w->R01 = 0;		w->R02 = 0;	/* identity matrix */
+		w->R00 = 1;		w->R01 = 0;		w->R02 = 0;	/* matrix is identity */
 		w->R10 = 0;		w->R11 = 1;		w->R12 = 0;
 		w->R20 = 0;		w->R21 = 0;		w->R22 = 1;
 		w->axisR[0] = w->axis[0];					/* both axes the same, no rotation */
@@ -714,8 +685,8 @@ struct	geoStructure *geo)
 			if (!(geo->d[i].used)) continue;
 			sprintf(pre,"d%d_",i);
 			fprintf(f,"\n");
-			fprintf(f,"$%sNx			%d						// number of un-binned pixels in full detector\n",pre,geo->d[i].Nx);
-			fprintf(f,"$%sNy			%d\n",pre,geo->d[i].Ny);
+			fprintf(f,"$%sNx			%ld						// number of un-binned pixels in full detector\n",pre,geo->d[i].Nx);
+			fprintf(f,"$%sNy			%ld\n",pre,geo->d[i].Ny);
 			fprintf(f,"$%ssizeX		%.3f						// size of detector (mm)\n",pre,(geo->d[i].sizeX)/1000);
 			fprintf(f,"$%ssizeY		%.3f\n",pre,(geo->d[i].sizeY/1000));
 			fprintf(f,"$%sR			{%.8f,%.8f,%.8f}	// rotation vector (length is angle in radians)\n",pre,geo->d[i].R[0],geo->d[i].R[1],geo->d[i].R[2]);
@@ -743,7 +714,7 @@ struct detectorGeometry *d)
 {
 	if (!(d->used)) return 1;
 
-	fprintf(f,"	Nx=%d, Ny=%d			// number of un-binned pixels in detector\n",d->Nx,d->Ny);
+	fprintf(f,"	Nx=%ld, Ny=%ld			// number of un-binned pixels in detector\n",d->Nx,d->Ny);
 	fprintf(f,"	sizeX=%g, sizeY=%g		// size of detector (mm)\n",(d->sizeX/1000), (d->sizeY/1000));
 	fprintf(f,"	R = {%.7g, %.7g, %.7g}, a rotation of %.7g°	// rotation vector\n",d->R[0],d->R[1],d->R[2],sqrt(d->R[0]*d->R[0] + d->R[1]*d->R[1] + d->R[2]*d->R[2])*180/M_PI);
 	fprintf(f,"	P = {%g, %g, %g}					// translation vector (mm)\n",(d->P[0])/1000,(d->P[1])/1000,(d->P[2])/1000);
@@ -765,9 +736,9 @@ struct detectorGeometry *d)
 int MicroGeometryBad(							/* check for a valid or Invalid structure */
 struct geoStructure *g)							/* f is the destination, i is source */
 {
-	int		bad;
-	int		N;
-	int		m, i;
+	int	bad;
+	long N;
+	long m, i;
 
 	bad = SampleBad(&(g->s));
 	N = g->Ndetectors;							/* Ndetectors must be 1, 2, or 3 */
@@ -785,7 +756,7 @@ struct geoStructure *g)							/* f is the destination, i is source */
 	return (bad>0);
 }
 
-int DetectorBad(
+static int DetectorBad(
 struct detectorGeometry *d)
 {
 	int bad=0;
@@ -804,7 +775,7 @@ struct detectorGeometry *d)
 	return (bad>0);
 }
 
-int WireBad(
+static int WireBad(
 struct wireGeometry *w)
 {
 	double sxyz;
@@ -818,7 +789,7 @@ struct wireGeometry *w)
 	return (bad>0);
 }
 
-int SampleBad(
+static int SampleBad(
 struct sampleGeometry *s)						/* sample strucure */
 {
 	double sxyz, value;
@@ -845,7 +816,7 @@ struct geoStructure *in)						/* input structure */
 	copyWireGeometry(&(dest->wire),&(in->wire));/* copy the wire */
 }
 
-void copySampleGeometry(						/* copy a Sample geometry structure, set f = i */
+static void copySampleGeometry(					/* copy a Sample geometry structure, set f = i */
 struct sampleGeometry *f,						/* destination structure */
 struct sampleGeometry *i)						/* input structure */
 {
@@ -857,7 +828,7 @@ struct sampleGeometry *i)						/* input structure */
 	f->R20=i->R20;			f->R21=i->R21;			f->R22=i->R22;
 }
 
-void copyWireGeometry(							/* copy a wire geometry structure, set f = i */
+static void copyWireGeometry(					/* copy a wire geometry structure, set f = i */
 struct wireGeometry *f,							/* destination structure */
 struct wireGeometry *i)							/* input structure */
 {
@@ -874,7 +845,7 @@ struct wireGeometry *i)							/* input structure */
 	f->R20=i->R20;				f->R21=i->R21;				f->R22=i->R22;
 }
 
-void copyDetectorGeometry(						/* copy a detector structure */
+static void copyDetectorGeometry(				/* copy a detector structure */
 struct detectorGeometry *f,						/* destination structure */
 struct detectorGeometry *i)						/* input structure */
 {

@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <errno.h>
-/* #include <stdint.h> */
 #include "microHDF5.h"
 
 
@@ -21,7 +20,7 @@
 #define isnan(A) (!( (A)==(A) ))
 #endif
 */
-/* #define VERBOSE */
+/* #define VERBOSE_microHDF5 */
 
 #ifdef __linux__
 #define repackPATH "/clhome/aps_tools/hdf5-1.8.2/hdf5/bin/h5repack"
@@ -41,20 +40,22 @@
 #define CHECK_FREE(A)   { if(A) free(A); (A)=NULL; }
 
 
-#define RECONSTRUCT_BACKWARDS				// this is the way it used to be (an error).  leave this commented out
+// #define RECONSTRUCT_BACKWARDS
 
 
 /* Local Routines */
-int get1HDF5data_float(hid_t file_id, char *dataName, double *value);
-int get1HDF5data_int(hid_t file_id, char *dataName, int *value);
-int get1HDF5data_string(hid_t file_id, char *dataName, char *value, int N);
-herr_t get1HDF5attr_float(hid_t file_id, char *groupName, char *attrName, double *value);
-herr_t get1HDF5attr_int(hid_t file_id, char *groupName, char *attrName, int *value);
-herr_t get1HDF5attr_string(hid_t file_id, char *groupName, char *attrName, char *value);
+static int copyobjattr(hid_t oid_src,hid_t oid_dst,const char *objname,const H5O_info_t *objinfo);
+static size_t HDF5ReadDoubleVector(hid_t file_id, const char *dataName, double **vbuf);
+static int get1HDF5data_float(hid_t file_id, char *dataName, double *value);
+static int get1HDF5data_int(hid_t file_id, char *dataName, long *value);
+static int get1HDF5data_string(hid_t file_id, char *dataName, char *value, long N);
+static herr_t get1HDF5attr_float(hid_t file_id, char *groupName, char *attrName, double *value);
+static herr_t get1HDF5attr_int(hid_t file_id, char *groupName, char *attrName, long *value);
+static herr_t get1HDF5attr_string(hid_t file_id, char *groupName, char *attrName, char *value);
 
-int get1HDF5data_tagVal(hid_t file_id, char *groupName, char *dataName, char *tagName, char result1[256]);
-int get1HDF5attr_tagVal(hid_t file_id, char *groupName, char *attrName, char *tagName, char result1[256]);
-herr_t groupExists(hid_t file_id, char *groupName);
+static int get1HDF5data_tagVal(hid_t file_id, char *groupName, char *dataName, char *tagName, char result1[256]);
+static int get1HDF5attr_tagVal(hid_t file_id, char *groupName, char *attrName, char *tagName, char result1[256]);
+static herr_t groupExists(hid_t file_id, char *groupName);
 
 
 
@@ -62,11 +63,70 @@ herr_t groupExists(hid_t file_id, char *groupName);
 *********************************  External HDF5 Routines  *********************************
 ********************************************************************************************/
 
+/* function as callback in H5Ovisit() called by makeTemplateFile to copy object to new H5 file */
+herr_t cp_h5obj(
+	hid_t oid,
+	const char *objname,
+	const H5O_info_t *objinfo,
+	void *param)
+{
+	hid_t *pfid_dst; // pointer to the destination file_id
+	hid_t gid;
+	herr_t err;
+	hsize_t i;
+
+	err = 0;
+	gid = 0;
+	
+	// file id of the destination file
+	pfid_dst = (hid_t*) param;
+
+	// if is group, create same group in new file & copy the attributes
+	if(objinfo->type == H5O_TYPE_GROUP && strcmp(objname,"entry1/wire") != 0) // all groups except "wire"
+	{
+		if(strcmp(objname,".") == 0)
+		{	gid = H5Gopen(*pfid_dst,".",H5P_DEFAULT);  // no need to create root group
+		}
+		else
+		{	gid = H5Gcreate2(*pfid_dst,objname,H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
+		}
+
+		// interate through the attributes of the group & copy to the new file
+		if(objinfo->num_attrs > 0)
+			copyobjattr(oid,gid,objname,objinfo);
+	}
+	else if(objinfo->type != H5O_TYPE_GROUP) // objects other than groups
+	{	
+		if(strcmp(objname,"entry1/data/data") == 0 || \
+		   strcmp(objname,"entry1/wire/wireX") == 0 || \
+		   strcmp(objname,"entry1/wire/wireY") == 0 || \
+		   strcmp(objname,"entry1/wire/wireZ") == 0 || \
+		   strcmp(objname,"entry1/wire/wirescan") == 0 || \
+		   strcmp(objname,"entry1/wire/H_upCts") == 0 || \
+		   strcmp(objname,"entry1/wire/H_downCts") == 0 || \
+		   strcmp(objname,"entry1/wire/wirebaseX") == 0 || \
+		   strcmp(objname,"entry1/wire/wirebaseY") == 0 || \
+		   strcmp(objname,"entry1/wire/wirebaseZ") == 0) 
+		{}	// do nothing on selected objects
+		else
+		{	// copy object
+			err = H5Ocopy(oid, objname, *pfid_dst, objname, H5P_DEFAULT, H5P_DEFAULT);
+		}
+	}
+	
+	if(gid>0) H5Gclose(gid);
+
+	return err;
+}
+
+
+
 /* write a HDF5 file data part ROI.  To get header information, first call HDF5ReadHeader */
 /* the image is in vbuf, it is ordered with x moving fastest */
 /* the type of data in vbuf comes from the header (itype), and the type of data written is already established in the file */
 int HDF5WriteROI(						/* this overwrites an ROI in a dataset.  Note, the data must already exist (and be bigger than the ROI) */
-const char *fileName,					/* full path name to file */
+//const char *fileName,					/* full path name to file */
+hid_t	file_id,
 const char *dataName,					/* full path name to data, e.g. "entry1/data/data" */
 void	*vbuf,							/* pointer to existing data, contains what I will write */
 size_t	xlo,							/* writes region [xlo,ylo] to [xhi,yhi] */
@@ -77,7 +137,7 @@ hid_t	dataType,						/* hdf5 data type (HDF5, not WinView) for the numbers in vb
 struct HDF5_Header *head)				/* HDF5 header information (header must be valid and have correct values!) */
 {
 	herr_t	i, err=0;					/* TRUE=ERROR,  FALSE=OK on return */
-	hid_t	file_id;
+//	hid_t	file_id;
 	hid_t	data_id=0;					/* location id of the data in file */
 	hid_t	dataspace=0;
 	hid_t	memspace=0; 
@@ -98,7 +158,8 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid an
 	size_t	ny;							/* number of points in y,  yhi - ylo + 1 */
 
 	if (!(vbuf)) return -1;								/* vbuf must exist and be full of data to write */
-	if (strlen(fileName)<1 || strlen(dataName)<1) return -1;	/* need valid file and data name */
+//	if (strlen(fileName)<1 || strlen(dataName)<1) return -1;	/* need valid file and data name */
+	if (strlen(dataName)<1) return -1;					/* need valid data name */
 	if (!head) return -1;								/* header must be valid */
 	xdim = head->xdim;
 	ydim = head->ydim;
@@ -107,26 +168,21 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid an
 	if (!ilen) return 3;								/* no word length in header */
 
 	/* this section used if xhi or yhi <=0 */
-/*	xhi = (xhi<0 || xhi>(xdim-1)) ? xdim-1 : xhi;		// xhi is now actual to use
-	yhi = (yhi<0 || yhi>(ydim-1)) ? ydim-1 : yhi;
-	xlo = (xlo>xhi) ? xhi : xlo;
-	ylo = (ylo>yhi) ? yhi : ylo;
-	xlo = (xlo<0) ? 0 : xlo;
-	ylo = (ylo<0) ? 0 : ylo;
-	nx = xhi - xlo + 1;									// number of pixels in ROI along X and Y
-	ny = yhi - ylo + 1;
-	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	// no image to write, invalid range
-*/
+//	xhi = (xhi<0 || xhi>(xdim-1)) ? xdim-1 : xhi;		/* xhi is now actual to use */
+//	yhi = (yhi<0 || yhi>(ydim-1)) ? ydim-1 : yhi;
 	xhi = (xhi>(xdim-1)) ? xdim-1 : xhi;		/* xhi is now actual to use */
 	yhi = (yhi>(ydim-1)) ? ydim-1 : yhi;
 	xlo = (xlo>xhi) ? xhi : xlo;
 	ylo = (ylo>yhi) ? yhi : ylo;
+//	xlo = (xlo<0) ? 0 : xlo;							/* xlo is size_t, it cannot be <0 */
+//	ylo = (ylo<0) ? 0 : ylo;							/* ylo is size_t, it cannot be <0 */
 	nx = xhi - xlo + 1;									/* number of pixels in ROI along X and Y */
 	ny = yhi - ylo + 1;
+//	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	/* no image to write, invalid range */
 	if (xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	/* no image to write, invalid range */
 	pixels = xdim * ydim;								/* total number of pixels in the image */
 
-	if ((file_id=H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT))<=0) { fprintf(stderr,"ERROR -- HDF5WriteROI(), cannot open the file '%s'\n",fileName); ERROR_PATH(file_id) }
+//	if ((file_id=H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT))<=0) { fprintf(stderr,"ERROR -- HDF5WriteROI(), cannot open the file '%s'\n",fileName); ERROR_PATH(file_id) }
 	if ((data_id=H5Dopen(file_id,dataName,H5P_DEFAULT))<=0) { fprintf(stderr,"ERROR -- HDF5WriteROI(), the data '%s' does not exist\n",dataName); ERROR_PATH(data_id) }
 	if ((dataspace=H5Dget_space(data_id))<=0) ERROR_PATH(-1)	/* dataspace identifier */
 
@@ -135,9 +191,9 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid an
 	if (err) ERROR_PATH(err)
 	if (rank != 2) ERROR_PATH(rank)						/* only understand rank==2 data here */
 
-	#ifdef DEBUG
+	#ifdef VERBOSE_microHDF5
 		printf("    image buffer = vbuf = %p,   xdim = %lu, ydim = %lu\n",vbuf,xdim,ydim);
-		printf("    [xlo,xhi]=[%ld,%ld] nx=%ld,  [ylo,yh]=[%ld,%ld] ny=%ld,  write %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
+		printf("    [xlo,xhi]=[%ld,%ld] nx=%ld,  [ylo,yhi]=[%ld,%ld] ny=%ld,  write %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
 	#endif
 
 	/* specify definition of memory space containing the image (i.e. vbuf) */
@@ -159,7 +215,7 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid an
 	if (memspace>0) H5Sclose(memspace);
 	if (dataspace>0) H5Sclose(dataspace);
 	if (data_id>0) H5Dclose(data_id);
-	if (file_id>0) H5Fclose(file_id);
+//	if (file_id>0) H5Fclose(file_id);
 	return err;
 }
 
@@ -208,22 +264,17 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid!) 
 	if (!ilen) return 3;								/* no word length in header */
 
 	/* this section used if xhi or yhi <=0 */
-/*	xhi = (xhi<0 || xhi>(xdim-1)) ? xdim-1 : xhi;		// xhi is now actual to use
-	yhi = (yhi<0 || yhi>(ydim-1)) ? ydim-1 : yhi;
-	xlo = (xlo>xhi) ? xhi : xlo;
-	ylo = (ylo>yhi) ? yhi : ylo;
-	xlo = (xlo<0) ? 0 : xlo;
-	ylo = (ylo<0) ? 0 : ylo;
-	nx = xhi - xlo + 1;									// number of pixels in ROI along X and Y
-	ny = yhi - ylo + 1;
-	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	// no image to read, invalid range
-*/
+//	xhi = (xhi<0 || xhi>(xdim-1)) ? xdim-1 : xhi;		/* xhi is now actual to use */
+//	yhi = (yhi<0 || yhi>(ydim-1)) ? ydim-1 : yhi;
 	xhi = (xhi>(xdim-1)) ? xdim-1 : xhi;		/* xhi is now actual to use */
 	yhi = (yhi>(ydim-1)) ? ydim-1 : yhi;
 	xlo = (xlo>xhi) ? xhi : xlo;
 	ylo = (ylo>yhi) ? yhi : ylo;
+	//	xlo = (xlo<0) ? 0 : xlo;						/* xlo is size_t, it cannot be <0 */
+	//	ylo = (ylo<0) ? 0 : ylo;						/* ylo is size_t, it cannot be <0 */
 	nx = xhi - xlo + 1;									/* number of pixels in ROI along X and Y */
 	ny = yhi - ylo + 1;
+//	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	/* no image to read, invalid range */
 	if (xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	/* no image to read, invalid range */
 	pixels = xdim * ydim;								/* total number of pixels in the image */
 
@@ -245,7 +296,7 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid!) 
 	if (!(*vbuf)) return 5;								/* allocation error */
 	#ifdef DEBUG
 		printf("    image buffer = vbuf = %p,   xdim = %lu, ydim = %lu\n",vbuf,xdim,ydim);
-		printf("    [xlo,xhi]=[%ld,%ld] nx=%ld,  [ylo,yh]=[%ld,%ld] ny=%ld,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
+		printf("    [xlo,xhi]=[%ld,%ld] nx=%ld,  [ylo,yhi]=[%ld,%ld] ny=%ld,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
 	#endif
 
 	dimsm[0] = nx;		dimsm[1] = ny;					/* memory space dimensions */
@@ -312,22 +363,17 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid!) 
 	if (!ilen) return 3;								/* no word length in header */
 
 	/* this section used if xhi or yhi <=0 */
-/*	xhi = (xhi<0 || xhi>(xdim-1)) ? xdim-1 : xhi;		// xhi is now actual to use
-	yhi = (yhi<0 || yhi>(ydim-1)) ? ydim-1 : yhi;
-	xlo = (xlo>xhi) ? xhi : xlo;
-	ylo = (ylo>yhi) ? yhi : ylo;
-	xlo = (xlo<0) ? 0 : xlo;
-	ylo = (ylo<0) ? 0 : ylo;
-	nx = xhi - xlo + 1;									// number of pixels in ROI along X and Y
-	ny = yhi - ylo + 1;
-	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	// no image to read, invalid range
-*/
+//	xhi = (xhi<0 || xhi>(xdim-1)) ? xdim-1 : xhi;		/* xhi is now actual to use */
+//	yhi = (yhi<0 || yhi>(ydim-1)) ? ydim-1 : yhi;
 	xhi = (xhi>(xdim-1)) ? xdim-1 : xhi;		/* xhi is now actual to use */
 	yhi = (yhi>(ydim-1)) ? ydim-1 : yhi;
 	xlo = (xlo>xhi) ? xhi : xlo;
 	ylo = (ylo>yhi) ? yhi : ylo;
+//	xlo = (xlo<0) ? 0 : xlo;					/* xlo is size_t, it cannot be <0 */
+//	ylo = (ylo<0) ? 0 : ylo;					/* ylo is size_t, it cannot be <0 */
 	nx = xhi - xlo + 1;									/* number of pixels in ROI along X and Y */
 	ny = yhi - ylo + 1;
+//	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	/* no image to read, invalid range */
 	if (xlo>xhi || ylo>yhi || xhi>xdim-1 || yhi>ydim-1) return 2;	/* no image to read, invalid range */
 	pixels = xdim * ydim;								/* total number of pixels in the image */
 
@@ -349,10 +395,10 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid!) 
 	if (!(*vbuf)) return 5;								/* allocation error */
 	#ifdef DEBUG
 		printf("    image buffer = vbuf = %p,   xdim = %lu, ydim = %lu\n",vbuf,xdim,ydim);
-		printf("    [xlo,xhi]=[%ld,%ld] nx=%ld,  [ylo,yh]=[%ld,%ld] ny=%ld,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
+		printf("    [xlo,xhi]=[%ld,%ld] nx=%ld,  [ylo,yhi]=[%ld,%ld] ny=%ld,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
 	#endif
 
-#ifdef RECONSTRUCT_BACKWARDS							/* this is the way it used to be */
+#ifdef RECONSTRUCT_BACKWARDS
 	dimsm[0] = nx;		dimsm[1] = ny;					/* memory space dimensions */
 #else
 /* HDF stores transpose of what I expect */
@@ -360,7 +406,7 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid!) 
 #endif
 	if ((memspace=H5Screate_simple(2,dimsm,NULL))<0) ERROR_PATH(memspace)	/* Define the memory space */
 
-#ifdef RECONSTRUCT_BACKWARDS							/* this is the way it used to be */
+#ifdef RECONSTRUCT_BACKWARDS
 	offset[0]=xlo;		offset[1]=ylo;					/* define which part of the data in the file to read */
 	count[0]=nx;		count[1]=ny;
 	count_out[0]=nx;	count_out[1]=ny;
@@ -384,16 +430,131 @@ struct HDF5_Header *head)				/* HDF5 header information (header must be valid!) 
 
 
 
+#ifdef MULTI_IMAGE_FILE
+/* read an HDF5 file data part.  To get header information, first call HDF5ReadHeader */
+/* the image is in vbuf, it is ordered with x moving fastest, This image is "double" */
+/* CAUTION,  It allocates space for image in vbuf only if vbuf is NULL, so pass it with a null value, and remember to free it later yourself */
+/* if vbuf is not NULL, then there better be enough room for the image */
+int HDF5ReadROIdoubleSlice(
+const char	*fileName,					/* full path name to file */
+const char	*dataName,					/* full path name to data, e.g. "entry1/data/data" */
+double	**vbuf,							/* pointer to image, if not NULL, space is allocated here, otherwise assume vbuf is big enough, and it better be too! */
+long	xlo,							/* reads region [xlo,ylo] to [xhi,yhi] */
+long	xhi,							/* if xhi or yhi are <0, then it uses xdim or ydim */
+long	ylo,							/* note, max yhi is ydim-1, and ditto for x */
+long	yhi,
+struct HDF5_Header *head,				/* HDF5 header information (header must be valid!) */
+size_t	slice)							/* particular image in the stack */
+{
+	herr_t	i, err=0;
+	hid_t	file_id;
+	hid_t	data_id=0;					/* location id of the data in file */
+	hid_t	dataspace=0;
+	hid_t	memspace=0; 
+	hsize_t	dims_out[5];				/* dataset dimensions, 5 is larger than necessary, we should only need 2 */
+	int		rank=0;
+
+	hsize_t	dimsm[3]={0,0,0};			/* memory space dimensions */
+	hsize_t	count[3]={0,0,0};			/* size of the hyperslab in the file, file is 3D */
+	hsize_t	offset[3]={0,0,0};			/* hyperslab offset in the file */
+	hsize_t	count_out[2]={0,0};			/* size of the hyperslab in memory, memory is 2D */
+	hsize_t	offset_out[2]={0,0};		/* hyperslab offset in memory */
+
+	size_t	xdim;						/* x,y dimensions of image in file */
+	size_t	ydim;
+	size_t	pixels;						/* number of pixels to read, = nx*ny */
+	size_t	ilen;						/* number of bytes per pixel in output array, we are using double here */
+	size_t	nx;							/* number of points in x,  xhi - xlo + 1 */
+	size_t	ny;							/* number of points in y,  yhi - ylo + 1 */
+
+	if (strlen(fileName)<1 || strlen(dataName)<1) return -1;	/* need valid file and data name */
+	if (!head) return -1;								/* header must be valid */
+//	if (slice<0 || slice>=head->Nimages) return 2;		/* slice out of range */
+	if (slice>=head->Nimages) return 2;		/* slice out of range */
+	xdim = head->xdim;
+	ydim = head->ydim;
+	ilen = sizeof(double);				/*	used to be this:	ilen = head->isize; */
+	if (!ilen) return 3;				/* no word length in header */
+
+	/* this section used if xhi or yhi <=0 */
+	xhi = (xhi<0 || xhi>((long)xdim-1)) ? (long)xdim-1 : xhi;	/* xhi is now actual to use */
+	yhi = (yhi<0 || yhi>((long)ydim-1)) ? (long)ydim-1 : yhi;
+	xlo = (xlo>xhi) ? xhi : xlo;
+	ylo = (ylo>yhi) ? yhi : ylo;
+	xlo = (xlo<0) ? 0 : xlo;
+	ylo = (ylo<0) ? 0 : ylo;
+	nx = xhi - xlo + 1;									/* number of pixels in ROI along X and Y */
+	ny = yhi - ylo + 1;
+	if (xlo<0 || ylo<0 || xlo>xhi || ylo>yhi || xhi>(long)xdim-1 || yhi>(long)ydim-1) return 2;	/* no image to read, invalid range */
+	// pixels = xdim * ydim;							/* total number of pixels in the image */
+	pixels = nx * ny;									/* total number of pixels in the output image */
+
+	if ((file_id=H5Fopen(fileName,H5F_ACC_RDONLY,H5P_DEFAULT))<=0) { fprintf(stderr,"ERROR -- HDF5ReadROIdoubleSlice(), cannot open the file '%s'\n",fileName); ERROR_PATH(file_id) }
+	if ((data_id=H5Dopen(file_id,dataName,H5P_DEFAULT))<=0) { fprintf(stderr,"ERROR -- HDF5ReadROIdoubleSlice(), the data '%s' does not exist\n",dataName); ERROR_PATH(data_id) }
+	if ((dataspace=H5Dget_space(data_id))<=0) ERROR_PATH(-1)	/* dataspace identifier */
+
+	/* check for existance of data */
+	if ((rank=H5Sget_simple_extent_dims(dataspace,dims_out,NULL))>=0) err = (rank<0 ? -1 : 0);
+	if (err) ERROR_PATH(err)
+	if (rank != 3) ERROR_PATH(rank)						/* only understand rank==3 data here */
+
+	/* allocate space for the image */
+	#ifdef VERBOSE_microHDF5
+		printf("in HDF5ReadROIdoubleSlice (slice=%lu):\n",slice);
+		printf("    about to try to allocate image space of %ld Kbytes\n",pixels*ilen/1024);
+	#endif
+	if (!(*vbuf)) *vbuf = (double*)calloc(pixels,ilen);	/* allocate space here if vbuf is NULL, otherwise it better be big enough */
+	if (!(*vbuf)) return 5;								/* allocation error */
+	#ifdef VERBOSE_microHDF5
+		printf("    [xlo,xhi]=[%ld,%ld] nx=%lu,  [ylo,yhi]=[%ld,%ld] ny=%lu,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
+	#endif
+
+#ifdef RECONSTRUCT_BACKWARDS
+	dimsm[0] = nx;		dimsm[1] = ny;					/* memory space dimensions */
+#else
+/* HDF stores transpose of what I expect */
+	dimsm[0]=nx;		dimsm[1]=ny;					/* memory space dimensions */
+#endif
+	if ((memspace=H5Screate_simple(2,dimsm,NULL))<0) ERROR_PATH(memspace)	/* Define the memory space */
+
+#ifdef RECONSTRUCT_BACKWARDS
+	offset[1]=xlo;		offset[2]=ylo;					/* define which part of the data in the file to read */
+	count[1]=nx;		count[2]=ny;					/*	size of region to read */
+	count_out[0]=nx;	count_out[1]=ny;				/*	size of output region (memspace) */
+#else
+	offset[2]=xlo;		offset[1]=ylo;					/* define which part of the data in the file to read */
+	count[2]=nx;		count[1]=ny;					/*	size of region to read */
+	count_out[1]=nx;	count_out[0]=ny;				/*	size of output region */
+#endif
+	offset[0]=slice;									/* a single slice into dataspace */
+	count[0] = 1LL;
+
+	if ((i=H5Sselect_hyperslab(memspace,H5S_SELECT_SET,offset_out,NULL,count_out,NULL))<0)	{ fprintf(stderr,"error in H5Sselect_hyperslab(memspace)=%d\n",i); ERROR_PATH(i) }
+	if ((i=H5Sselect_hyperslab(dataspace,H5S_SELECT_SET,offset,NULL,count,NULL))<0)			{ fprintf(stderr,"error in H5Sselect_hyperslab(dataspace)=%d\n",i); ERROR_PATH(i) }
+	if ((i=H5Dread(data_id,H5T_IEEE_F64LE,memspace,dataspace,H5P_DEFAULT,*vbuf))<0)			{ fprintf(stderr,"error in H5Dread(hyperslab)=%d\n",i); ERROR_PATH(i) }
+
+	error_path:
+	if (memspace>0) H5Sclose(memspace);
+	if (dataspace>0) H5Sclose(dataspace);
+	if (data_id>0) H5Dclose(data_id);
+	if (file_id>0) H5Fclose(file_id);
+	return err;
+}
+#endif
+
+
+
 /* Create the data space for the dataset. */
 /*	e.g.	dims[2]={4,6};	 for rank=2 */
 int createNewData(
-const char *fileName,						/* name of file to use */
+//const char *fileName,						/* name of file to use */
+hid_t 	file_id,							/* id of the file already openned */
 const char *dataName,						/* FULL name of data set, e.g. "entry1/data/data" */
 int		rank,								/* rank of new data */
 int		*dims,								/* inidvidual dimensions (dims must be of length rank) */
 int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
 {
-	hid_t	file_id, dataset_id, dataspace_id;  /* identifiers */
+	hid_t	dataset_id, dataspace_id;		/* identifiers */
 	hid_t	attribute_id;
 	hid_t	attr_dataspace_id;
 	herr_t	status;
@@ -402,7 +563,7 @@ int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getH
 	int		i;
 	for (i=0;i<rank;i++) dimsHDF5[i] = dims[i];
 
-	file_id = H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT);	/* Open an existing file */
+//	file_id = H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT);	/* Open an existing file */
 	dataspace_id = H5Screate_simple(rank,dimsHDF5,NULL);	/* create the data space */
 
 	/* Create the dataset. */
@@ -416,17 +577,120 @@ int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getH
 
 	status = status | H5Dclose(dataset_id);		/* End access to the dataset and release resources used by it. */
 	status = status | H5Sclose(dataspace_id);	/* Terminate access to the data space. */ 
-	status = status | H5Fclose(file_id);		/* Close the file. */
+//	status = status | H5Fclose(file_id);		/* Close the file. */
 
 	return status;
 }
 
 
+
+herr_t writeImageCosmicInFile(
+hid_t	file_id,
+int		cosmicIn)
+{
+	hid_t	grp=0;
+	hid_t	data_id=0;
+	hsize_t	dims[1]={1};
+	int		dataBuf[1]={0};
+	int		rank;
+	herr_t	tempErr, err=0;
+
+	cosmicIn = cosmicIn ? 1 : 0;		/* only write a boolean value 0 or 1 */
+	dataBuf[0] = cosmicIn;
+
+	if ((grp=H5Gopen(file_id, "entry1/microDiffraction",H5P_DEFAULT))<=0) ERROR_PATH(grp)
+	if (H5LTget_dataset_ndims(grp,"cosmic_filter",&rank)<0 && cosmicIn) {			/* does not exists and cosmic is true */
+		if ((err=H5LTmake_dataset_int(grp,"cosmic_filter",1,dims,dataBuf))) fprintf(stderr,"error writing dataSet cosmic_filter, err = %d\n",err);
+	}
+	else {							/* cosmic_filter already exists, so just change it */
+#ifdef VERBOSE_microHDF5
+		printf("\n\"/entry1/microDiffraction/cosmic_filter\" already exists, changing cosmic_filter to %g\n",cosmic);
+#endif
+		if ((data_id=H5Dopen(grp,"cosmic_filter",H5P_DEFAULT))<=0) ERROR_PATH(data_id)
+			err = H5Dwrite(data_id,H5T_NATIVE_INT,H5S_ALL,H5S_ALL,H5P_DEFAULT,dataBuf);
+	}
+
+error_path:
+	if (data_id>0) {
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- writeImageCosmicInFile(), data close error = %d\n",err); err = err ? err : tempErr; }
+	}
+	if (grp>0) {
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- writeImageCosmicInFile(), group close error = %d\n",err); err = err ? err : tempErr; }
+	}
+	return err;
+}
+
+
+
+herr_t writeImageNormalizationsInFile(
+hid_t	file_id,
+double	norm_exponent,
+double  norm_threshold,
+double	norm_rescale)
+{
+	hid_t	grp=0;
+	hid_t	data_id=0;
+	hsize_t	dims[1]={1};
+	double	dataBuf[1]={0};
+	int		rank;
+	herr_t	tempErr, err=0;
+
+	if (norm_exponent <= 0.0) return 1;
+
+	if ((grp=H5Gopen(file_id, "entry1/microDiffraction",H5P_DEFAULT))<=0) ERROR_PATH(grp)
+
+	dataBuf[0] = norm_exponent;
+	if (H5LTget_dataset_ndims(grp,"norm_exponent",&rank)<0) {			/* does not exists */
+		if ((err=H5LTmake_dataset_double(grp,"norm_exponent",1,dims,dataBuf))) fprintf(stderr,"error writing dataSet norm_exponent, err = %d\n",err);
+	}
+	else {							/* norm_exponent already exists, so just change it */
+#ifdef VERBOSE_microHDF5
+		printf("\n\"/entry1/microDiffraction/norm_exponent\" already exists, changing norm_exponent to %g\n",norm_exponent);
+#endif
+		if ((data_id=H5Dopen(grp,"norm_exponent",H5P_DEFAULT))<=0) ERROR_PATH(data_id)
+			err = H5Dwrite(data_id,H5T_NATIVE_DOUBLE,H5S_ALL,H5S_ALL,H5P_DEFAULT,dataBuf);
+	}
+
+	dataBuf[0] = norm_threshold;
+	if (H5LTget_dataset_ndims(grp,"norm_threshold",&rank)<0) {			/* does not exists */
+		if ((err=H5LTmake_dataset_double(grp,"norm_threshold",1,dims,dataBuf))) fprintf(stderr,"error writing dataSet norm_threshold, err = %d\n",err);
+	}
+	else {							/* norm_threshold already exists, so just change it */
+#ifdef VERBOSE_microHDF5
+		printf("\n\"/entry1/microDiffraction/norm_threshold\" already exists, changing norm_threshold to %g\n",norm_threshold);
+#endif
+		if ((data_id=H5Dopen(grp,"norm_threshold",H5P_DEFAULT))<=0) ERROR_PATH(data_id)
+			err = H5Dwrite(data_id,H5T_NATIVE_DOUBLE,H5S_ALL,H5S_ALL,H5P_DEFAULT,dataBuf);
+	}
+
+	dataBuf[0] = norm_rescale;
+	if (H5LTget_dataset_ndims(grp,"norm_rescale",&rank)<0) {			/* does not exists */
+		if ((err=H5LTmake_dataset_double(grp,"norm_rescale",1,dims,dataBuf))) fprintf(stderr,"error writing dataSet norm_rescale, err = %d\n",err);
+	}
+	else {							/* norm_rescale already exists, so just change it */
+#ifdef VERBOSE_microHDF5
+		printf("\n\"/entry1/microDiffraction/norm_rescale\" already exists, changing norm_rescale to %g\n",norm_rescale);
+#endif
+		if ((data_id=H5Dopen(grp,"norm_rescale",H5P_DEFAULT))<=0) ERROR_PATH(data_id)
+			err = H5Dwrite(data_id,H5T_NATIVE_DOUBLE,H5S_ALL,H5S_ALL,H5P_DEFAULT,dataBuf);
+	}
+
+error_path:
+	if (data_id>0) {
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- writeImageNormalizationsInFile(), data close error = %d\n",err); err = err ? err : tempErr; }
+	}
+	if (grp>0) {
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- writeImageNormalizationsInFile(), group close error = %d\n",err); err = err ? err : tempErr; }
+	}
+	return err;
+}
+
+
+
 herr_t writeDepthInFile(
-const char *fileName,
+hid_t	file_id,
 double	depth)
 {
-	hid_t	file_id=0;
 	hid_t	grp=0;
 	hid_t	data_id=0;
 	hsize_t	dims[1]={1};
@@ -435,33 +699,75 @@ double	depth)
 	herr_t	tempErr, err=0;
 
 	dataBuf[0] = depth;
-	if ((file_id=H5Fopen(fileName, H5F_ACC_RDWR, H5P_DEFAULT))<=0) { fprintf(stderr,"after file open, file_id = %d\n",file_id); ERROR_PATH(file_id) }
 	if ((grp=H5Gopen(file_id, "entry1",H5P_DEFAULT))<=0) ERROR_PATH(grp)
 
 	if (H5LTget_dataset_ndims(grp,"depth",&rank)<0) {			/* does not exists */
-		if (err=H5LTmake_dataset_double(grp,"depth",1,dims,dataBuf)) fprintf(stderr,"error writing dataSet depth, err = %d\n",err);
-		if (err=H5LTset_attribute_string(grp, "depth", "units", "micron")) fprintf(stderr,"error writing units attribute to depth, err = %d\n",err);
+		if ((err=H5LTmake_dataset_double(grp,"depth",1,dims,dataBuf))) fprintf(stderr,"error writing dataSet depth, err = %d\n",err);
+		if ((err=H5LTset_attribute_string(grp, "depth", "units", "micron"))) fprintf(stderr,"error writing units attribute to depth, err = %d\n",err);
 	}
 	else {							/* depth does exist, so just change it */
-		#ifdef VERBOSE
+#ifdef VERBOSE_microHDF5
 		printf("\n\"/entry1/depth\" already exists, changing depth to %lg\n",depth);
-		#endif
+#endif
 		if ((data_id=H5Dopen(grp,"depth",H5P_DEFAULT))<=0) ERROR_PATH(data_id)
 		err = H5Dwrite(data_id,H5T_NATIVE_DOUBLE,H5S_ALL,H5S_ALL,H5P_DEFAULT,dataBuf);
 	}
 
-	error_path:
+error_path:
 	if (data_id>0) {
-		if (tempErr=H5Dclose(data_id)) { fprintf(stderr,"ERROR -- writeDepthInFile(), data close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- writeDepthInFile(), data close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (grp>0) {
-		if (tempErr=H5Gclose(grp)) { fprintf(stderr,"ERROR -- writeDepthInFile(), group close error = %d\n",err); err = err ? err : tempErr; }
-	}
-	if (file_id>0) {
-		if (tempErr=H5Fclose(file_id)) { fprintf(stderr,"ERROR -- writeDepthInFile(), file close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- writeDepthInFile(), group close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
+
+
+
+#warning "FIX writeReconPgmInFile()"
+herr_t writeReconPgmInFile(
+hid_t file_id)
+{
+	hid_t	grp=0;
+	hid_t	data_id=0;
+	int		rank;
+	herr_t	tempErr, err=0;
+	char	*pgmName = NULL;
+	size_t	len=0;
+
+#ifdef TARGET_NAME
+	len = strlen(TARGET_NAME);
+	if (len<1) return 1;
+	pgmName = calloc(len+2,sizeof(char));
+	strncpy(pgmName, TARGET_NAME, len);
+#endif
+	if (!pgmName) return 1;				/* TARGET_NAME not defined or empty */
+
+	if ((grp=H5Gopen(file_id, "entry1",H5P_DEFAULT))<=0) ERROR_PATH(grp)
+
+	if (H5LTget_dataset_ndims(grp,"reconPgm",&rank)<0) {	/* dataset does not exists */
+		if ((err=H5LTmake_dataset_string(grp,"reconPgm",pgmName))) fprintf(stderr,"error writing dataSet reconPgm, err = %d\n",err);
+	}
+	else {								/* dataset reconPgm does exist, so just change it */
+#ifdef VERBOSE_microHDF5
+		printf("\n\"/entry1/reconPgm\" already exists, changing reconPgm to \"%s\"\n",pgmName);
+#endif
+		if ((data_id=H5Dopen(grp,"reconPgm",H5P_DEFAULT))<=0) ERROR_PATH(data_id);
+		err = H5Dwrite(data_id, H5T_NATIVE_CHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, pgmName);
+	}
+
+error_path:
+	CHECK_FREE(pgmName);
+	if (data_id>0) {
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- writeReconPgmInFile(), data close error = %d\n",err); err = err ? err : tempErr; }
+	}
+	if (grp>0) {
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- writeReconPgmInFile(), group close error = %d\n",err); err = err ? err : tempErr; }
+	}
+	return err;
+}
+
 
 
 herr_t deleteDataFromFile(
@@ -470,17 +776,15 @@ char	*groupName,
 char	*dataName)
 {
 	hid_t	grp=0;
-	int		rank;
-	herr_t	tempErr, err=0;
+	herr_t	err=0;
 
 	if ((grp=H5Gopen(file_id,groupName,H5P_DEFAULT))<=0) ERROR_PATH(grp)
-	if (H5LTget_dataset_ndims(grp,dataName,&rank)>=0) {
-		if (err=H5Ldelete(grp,dataName,H5P_DEFAULT)) { fprintf(stderr,"err on '%s/%s' unlink = %d\n",groupName,dataName,err); ERROR_PATH(err) }
-	}
+	if ((err=H5Ldelete(grp,dataName,H5P_DEFAULT))) { fprintf(stderr,"err on '%s/%s' unlink = %d\n",groupName,dataName,err); ERROR_PATH(err) }
 
 	error_path:
 	if (grp>0) {
-		if (tempErr=H5Gclose(grp)) { fprintf(stderr,"ERROR -- deleteDataFromFile(), group close error = %d\n",err); err = err ? err : tempErr; }
+		herr_t	tempErr;
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- deleteDataFromFile(), group close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
@@ -503,12 +807,15 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	hid_t	H5class;
 	int		itype=-1;
 	double	value;
-	int		ivalue;
+	long	ivalue;
+	size_t	Nimages=1;						/* number of images stored together */
+	size_t	Nvec=0;
 	int		oldStyleExposure;				/* old way of doing exposure time */
 	int		wireFolder;						/* flag, TRUE means 'entry1/wire' exists */
 
 	if (!head) { fprintf(stderr,"readHDF5header called with header=NULL\n"); return 1; }
 
+	Nvec = 0;
 	head->itype = -1;						/* pre-set the structure with default values */
 	head->isize = 0;
 	head->xdim = head->ydim = 0;
@@ -516,14 +823,27 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	head->startx = head->endx = 0;
 	head->starty = head->endy = 0;
 	head->groupx = head->groupy = 1;
+#ifdef MULTI_IMAGE_FILE
+	empty_Dvector(&head->xSample);	empty_Dvector(&head->ySample);	empty_Dvector(&head->zSample);
+	empty_Dvector(&head->xWire);	empty_Dvector(&head->yWire);	empty_Dvector(&head->zWire);
+	empty_Dvector(&head->wirescan);
+	empty_Dvector(&head->energy);
+	empty_Dvector(&head->exposure);
+	empty_Dvector(&head->depth);
+	empty_Dvector(&head->timingClock);
+	empty_Dvector(&head->ringCurrent);
+	empty_Dvector(&head->undGap);
+	empty_Dvector(&head->undTaper);
+#else
 	head->xSample = head->ySample = head->zSample = NAN;
 	head->xWire = head->yWire = head->zWire = NAN;
-	head->AerotechH = NAN;
+	head->wirescan = NAN;
 	head->energy = NAN;
 	head->exposure = NAN;
 	head->depth = NAN;
 	head->timingClock = NAN;
 	head->ringCurrent = head->undGap = head->undTaper = NAN;
+#endif
 	head->wirebaseX = head->wirebaseY = head->wirebaseZ = NAN;		/* wire base (micron) */
 	head->monitor_I0 = head->monitor_Istart = head->monitor_Ifinal = -1;
 	head->gain = head->sampleDistance = NAN;
@@ -541,8 +861,8 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	if (!get1HDF5attr_string(file_id,".","file_name",str)) strncpy(head->fileName,str,MAX_micro_STRING_LEN);
 	if (!get1HDF5attr_string(file_id,".","file_time",str)) strncpy(head->fileTime,str,MAX_micro_STRING_LEN);
 	{
-		int yr,month;
-		sscanf(str,"%d-%d",&yr,&month);
+		long yr,month;
+		sscanf(str,"%ld-%ld",&yr,&month);
 		oldStyleExposure = (12*yr + month)<24118;		/* 24118 = 12*2009 + 10 */
 	}
 
@@ -555,17 +875,77 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	head->endy		= get1HDF5data_int(file_id,"/entry1/detector/endy",&ivalue) ? ENDY : ivalue;
 	head->groupy	= get1HDF5data_int(file_id,"/entry1/detector/biny",&ivalue) ? GROUPY : ivalue;
 
+#ifdef MULTI_IMAGE_FILE
+	if (wireFolder) {								/* look in 'entry1/wire' if it exists */
+		head->xWire.N = HDF5ReadDoubleVector(file_id, "entry1/wire/wireX", &(head->xWire.v));
+		head->yWire.N = HDF5ReadDoubleVector(file_id, "entry1/wire/wireY", &(head->yWire.v));
+		head->zWire.N = HDF5ReadDoubleVector(file_id, "entry1/wire/wireZ", &(head->zWire.v));
+		head->wirescan.N = HDF5ReadDoubleVector(file_id, "entry1/wire/wirescan", &(head->wirescan.v));
+	}
+	else {											/* this default is for old files */
+		head->xWire.N = HDF5ReadDoubleVector(file_id, "entry1/wireX", &(head->xWire.v));
+		head->yWire.N = HDF5ReadDoubleVector(file_id, "entry1/wireY", &(head->yWire.v));
+		head->zWire.N = HDF5ReadDoubleVector(file_id, "entry1/wireZ", &(head->zWire.v));
+		head->wirescan.N = HDF5ReadDoubleVector(file_id, "entry1/wirescan", &(head->wirescan.v));
+	}
+	head->xSample.N = HDF5ReadDoubleVector(file_id, "entry1/sample/sampleX", &(head->xSample.v));
+	head->ySample.N = HDF5ReadDoubleVector(file_id, "entry1/sample/sampleY", &(head->ySample.v));
+	head->zSample.N = HDF5ReadDoubleVector(file_id, "entry1/sample/sampleZ", &(head->zSample.v));
+	head->energy.N = HDF5ReadDoubleVector(file_id, "entry1/sample/incident_energy", &(head->energy.v));
+	head->depth.N = HDF5ReadDoubleVector(file_id, "entry1/depth", &(head->depth.v));
+	head->timingClock.N = HDF5ReadDoubleVector(file_id, "entry1/timingClock", &(head->timingClock.v));
+	head->ringCurrent.N = HDF5ReadDoubleVector(file_id, "entry1/microDiffraction/source/current", &(head->ringCurrent.v));
+	head->undGap.N = HDF5ReadDoubleVector(file_id, "entry1/microDiffraction/source/gap", &(head->undGap.v));
+	head->undTaper.N = HDF5ReadDoubleVector(file_id, "entry1/microDiffraction/source/taper", &(head->undTaper.v));
+	head->xWire.N = MAX(head->xWire.N,0);
+	head->yWire.N = MAX(head->yWire.N,0);
+	head->zWire.N = MAX(head->zWire.N,0);
+	head->wirescan.N = MAX(head->wirescan.N,0);
+	head->xSample.N = MAX(head->xSample.N,0);
+	head->ySample.N = MAX(head->ySample.N,0);
+	head->zSample.N = MAX(head->zSample.N,0);
+	head->energy.N = MAX(head->energy.N,0);
+	head->depth.N = MAX(head->depth.N,0);
+	head->timingClock.N = MAX(head->timingClock.N,0);
+	head->ringCurrent.N = MAX(head->ringCurrent.N,0);
+	head->undGap.N = MAX(head->undGap.N,0);
+	head->undTaper.N = MAX(head->undTaper.N,0);
+	Nvec = MAX(head->xWire.N,head->yWire.N);
+	Nvec = MAX(Nvec,head->zWire.N);
+	Nvec = MAX(Nvec,head->wirescan.N);
+	Nvec = MAX(Nvec,head->xSample.N);
+	Nvec = MAX(Nvec,head->ySample.N);
+	Nvec = MAX(Nvec,head->zSample.N);
+	Nvec = MAX(Nvec,head->energy.N);
+	Nvec = MAX(Nvec,head->depth.N);
+	Nvec = MAX(Nvec,head->ringCurrent.N);
+	Nvec = MAX(Nvec,head->undGap.N);
+	Nvec = MAX(Nvec,head->undTaper.N);
+	if (Nvec<1) { fprintf(stderr,"ERROR -- readHDF5header(), all position vectors are empty\n"); ERROR_PATH(-1); }
+
+	head->exposure.N = HDF5ReadDoubleVector(file_id, "entry1/detector/exposure", &(head->exposure.v));
+	head->exposure.N = MAX(head->exposure.N,0);
+	Nvec = MAX(Nvec,head->exposure.N);
+	if (oldStyleExposure && head->exposure.N > 0) {
+		value = head->exposure.v[0];
+		if (value==value && value==round(value) && value>=0 && value<=7) {		/* value is an integer in [0,7] */
+			double expTimes[]={66.5,79.9,99.8,133.2,199.9,400.0,999.8,1999.8};	/* these are times in ms, convert to sec */
+			size_t i;
+			for (i=0;i<head->exposure.N;i++) head->exposure.v[i] = expTimes[(int)head->exposure.v[i]] * 1e-3;
+		}
+	}
+#else
 	if (wireFolder) {								/* look in 'entry1/wire' if it exists */
 		head->xWire	= get1HDF5data_float(file_id,"entry1/wire/wireX",&value) ? NAN : value;
 		head->yWire	= get1HDF5data_float(file_id,"entry1/wire/wireY",&value) ? NAN : value;
 		head->zWire	= get1HDF5data_float(file_id,"entry1/wire/wireZ",&value) ? NAN : value;
-		head->AerotechH	= get1HDF5data_float(file_id,"entry1/wire/AerotechH",&value) ? NAN : value;
+		head->wirescan	= get1HDF5data_float(file_id,"entry1/wire/wirescan",&value) ? NAN : value;
 	}
 	else {											/* this default is for old files */
 		head->xWire	= get1HDF5data_float(file_id,"entry1/wireX",&value) ? NAN : value;
 		head->yWire	= get1HDF5data_float(file_id,"entry1/wireY",&value) ? NAN : value;
 		head->zWire	= get1HDF5data_float(file_id,"entry1/wireZ",&value) ? NAN : value;
-		head->AerotechH	= get1HDF5data_float(file_id,"entry1/AerotechH",&value) ? NAN : value;
+		head->wirescan	= get1HDF5data_float(file_id,"entry1/wirescan",&value) ? NAN : value;
 	}
 	head->energy	= get1HDF5data_float(file_id,"entry1/sample/incident_energy",&value) ? NAN : value;
 	head->timingClock= get1HDF5data_float(file_id,"entry1/timingClock",&value) ? NAN : value;
@@ -582,8 +962,8 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	head->ringCurrent = get1HDF5data_float(file_id,"entry1/microDiffraction/source/current",&value) ? NAN : value;
 	head->undGap = get1HDF5data_float(file_id,"entry1/microDiffraction/source/gap",&value) ? NAN : value;
 	head->undTaper = get1HDF5data_float(file_id,"entry1/microDiffraction/source/taper",&value) ? NAN : value;
-
-	/* wirebaseXYZ is useful when Aerotech at 45 is present */
+#endif
+	/* wirebaseXYZ is useful when wirescan stage at 45 is present */
 	if (wireFolder){								/* look in 'entry1/wire' if it exists */
 		head->wirebaseX = get1HDF5data_float(file_id,"entry1/wire/wirebaseX",&value) ? NAN : value;
 		head->wirebaseY = get1HDF5data_float(file_id,"entry1/wire/wirebaseY",&value) ? NAN : value;
@@ -598,7 +978,7 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	head->monitor_Istart= get1HDF5data_int(file_id,"entry1/monitor/I_start",&ivalue) ? -1 : ivalue;
 	head->monitor_Ifinal= get1HDF5data_int(file_id,"entry1/monitor/I_final",&ivalue) ? -1 : ivalue;
 	head->sampleDistance = get1HDF5data_float(file_id,"entry1/sample/distance",&value) ? NAN : value*1e-3;	/* convert mm to micron */
-	head->scanNum	= get1HDF5data_int(file_id,"/entry1/scanNum",&ivalue) ? -1 : ivalue;
+	head->scanNum	= get1HDF5data_int(file_id,"/entry1/scanNum",&ivalue) ? -1 : (int)ivalue;
 	head->gain		= get1HDF5data_float(file_id,"entry1/detector/gain",&value) ? NAN : value;
 	value = head->gain;
 	if (value==value && value==round(value) && value>=0 && value<=5) {		/* value is an integer in [0,5] */
@@ -621,14 +1001,14 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 	if (!get1HDF5data_string(file_id,"entry1/user/name",str,1023))				strncpy(head->userName,str,MAX_micro_STRING_LEN);
 	if (!get1HDF5data_string(file_id,"entry1/sample/name",str,1023))			strncpy(head->sampleName,str,MAX_micro_STRING_LEN);
 
-	head->beamBad	= get1HDF5data_int(file_id,"/entry1/microDiffraction/BeamBad",&ivalue) ? -1 : ivalue;
-	head->CCDshutter= get1HDF5data_int(file_id,"/entry1/microDiffraction/CCDshutter",&ivalue) ? -1 : ivalue;	// 0=in, 1=out
-	head->lightOn	= get1HDF5data_int(file_id,"/entry1/microDiffraction/LightOn",&ivalue) ? -1 : ivalue;
+	head->beamBad	= get1HDF5data_int(file_id,"/entry1/microDiffraction/BeamBad",&ivalue) ? -1 : (int)ivalue;
+	head->CCDshutter= get1HDF5data_int(file_id,"/entry1/microDiffraction/CCDshutter",&ivalue) ? -1 : (int)ivalue;	// 0=in, 1=out
+	head->lightOn	= get1HDF5data_int(file_id,"/entry1/microDiffraction/LightOn",&ivalue) ? -1 : (int)ivalue;
 	head->hutchTemperature = get1HDF5data_float(file_id,"entry1/microDiffraction/HutchTemperature",&value) ? NAN : value;
 	if (!get1HDF5data_string(file_id,"entry1/microDiffraction/MonoMode",str,1023))	strncpy(head->monoMode,str,MAX_micro_STRING_LEN);
 
 	if ((data_id=H5Dopen(file_id,"/entry1/data/data",H5P_DEFAULT))<=0) { fprintf(stderr,"the data \"entry1/data/data\" does not exist\n"); ERROR_PATH(data_id) }
-	if ((dataspace=H5Dget_space(data_id))<=0) { fprintf(stderr,"ERROR -- readHDF5header cannot get dataspace\n"); ERROR_PATH(dataspace) }	/* dataspace identifier */
+	if ((dataspace=H5Dget_space(data_id))<=0) { fprintf(stderr,"ERROR -- readHDF5header cannot get dataspace\n"); ERROR_PATH(dataspace) }    /* dataspace identifier */
 	if ((dataType=H5Dget_type(data_id))<0) { fprintf(stderr,"ERROR -- readHDF5header cannot get dataType\n"); ERROR_PATH(dataType) }
 
 	sz = H5Tget_size(dataType);
@@ -637,50 +1017,81 @@ struct HDF5_Header *head)	/* HDF5 header information (header must be valid!) */
 		H5T_sign_t sign;
 		sign = H5Tget_sign(dataType);
 		if (sign == H5T_SGN_NONE && sz==1) itype = 7;		/* unsigned int8 (1 byte) */
-		else if (sign == H5T_SGN_NONE && sz==2) itype = 3;	/* unsigned short integer (2 byte) */
-		else if (sign == H5T_SGN_2 && sz==4) itype = 1;		/* int (4 byte) */
-		else if (sign == H5T_SGN_2 && sz==2) itype = 2;		/* int (2 byte) */
-		else if (sign == H5T_SGN_2 && sz==1) itype = 6;		/* int (1 byte) */
+		else if (sign == H5T_SGN_NONE && sz==2) itype = 3;	/* unsigned integer (2 byte) */
+		else if (sign == H5T_SGN_2 && sz==4) itype = 1;		/* long integer (4 byte) */
+		else if (sign == H5T_SGN_2 && sz==2) itype = 2;		/* integer (2 byte) */
+		else if (sign == H5T_SGN_2 && sz==1) itype = 6;		/* integer (1 byte) */
 	}
 	else if (H5class == H5T_FLOAT && sz==4) itype = 0;		/* float (4 byte) */
 	else if (H5class == H5T_FLOAT && sz==8) itype = 5;		/* float (8 byte) */
 	else itype = -1;										/* what is this */
 
-	if ((rank=H5Sget_simple_extent_dims(dataspace,dims_out,NULL))!=2) ERROR_PATH(rank)		/* only understand rank 2 data */
-	#ifdef VERBOSE
+	rank = H5Sget_simple_extent_dims(dataspace,dims_out,NULL);
+	if (!(rank==2 || rank==3)) ERROR_PATH(rank)
+	#ifdef VERBOSE_microHDF5
 	printf("		data type = %d,  size of one element = %ld bytes\n",dataType,sz);
-	printf("		rank %d, dimensions %llu x %llu \n", rank, dims_out[0],dims_out[1]);
+	printf("		rank %d, dims_out = [%llu, %llu, %llu, %llu, %llu]\n", rank, dims_out[0],dims_out[1],dims_out[2],dims_out[3],dims_out[4]);
+	if (rank==2) printf("		data contains 1 simple image\n");
+	else if (rank==3) printf("		data contains %llu, images\n", dims_out[0]);
 	#endif
 
 	head->itype	= itype;									/* Old WinView types */
 	head->isize	= (int)sz;									/* length of one element (one pixel in bytes) */
-
-#ifdef RECONSTRUCT_BACKWARDS								/* this is the way it used to be */
-	head->xdim	= (size_t)dims_out[0];						/* size of image in file */
-	head->ydim	= (size_t)dims_out[1];
+#ifdef RECONSTRUCT_BACKWARDS
+	if (rank==2) {
+		head->xdim	= (size_t)dims_out[0];					/* size of image in file */
+		head->ydim	= (size_t)dims_out[1];
+	}
+	else if (rank==3) {
+		Nimages = (size_t)dims_out[0];
+		head->xdim	= (size_t)dims_out[1];
+		head->ydim	= (size_t)dims_out[2];
+	}
 #else
-	head->xdim	= (size_t)dims_out[1];						/* size of image in file, HDF stores them backwards! */
-	head->ydim	= (size_t)dims_out[0];
+	if (rank==2) {
+		head->xdim	= (size_t)dims_out[1];					/* size of image in file, HDF stores them backwards! */
+		head->ydim	= (size_t)dims_out[0];
+	}
+	else if (rank==3) {
+		Nimages = (size_t)dims_out[0];
+		head->xdim	= (size_t)dims_out[2];					/* size of image in file, HDF stores them backwards! */
+		head->ydim	= (size_t)dims_out[1];
+	}
 #endif
-//	int dimtest;
-//	dimtest = (head->endx - head->startx + 1) / (int)(head->groupx);
-//	if (dimtest != (int)head->xdim) { fprintf(stderr,"ERROR -- readHDF5header  X size of ROI = %ld, but xdim=%lu\n",dimtest,head->xdim); ERROR_PATH(dataspace) }		/* dataspace identifier */
-//	dimtest = (head->endy - head->starty + 1) / (int)(head->groupy);
-//	if (dimtest != (int)head->ydim) { fprintf(stderr,"ERROR -- readHDF5header Y size of ROI = %ld, but ydim=%lu\n",dimtest,head->ydim); ERROR_PATH(dataspace) }		/* dataspace identifier */
+	head->Nimages = Nimages;
+if (0) {
+	long dimtest;
+	dimtest = (head->endx - head->startx + 1) / (int)(head->groupx);
+	if (dimtest != (long)head->xdim) { fprintf(stderr,"ERROR -- readHDF5header  X size of ROI = %ld, but xdim=%lu\n",dimtest,head->xdim); ERROR_PATH(dataspace) }    /* dataspace identifier */
+	dimtest = (head->endy - head->starty + 1) / (int)(head->groupy);
+	if (dimtest != (long)head->ydim) { fprintf(stderr,"ERROR -- readHDF5header Y size of ROI = %ld, but ydim=%lu\n",dimtest,head->ydim); ERROR_PATH(dataspace) }    /* dataspace identifier */
+}
+#ifdef VERBOSE_microHDF5
+else {
+	long dimtest;
+	dimtest = (head->endx - head->startx + 1) / (int)(head->groupx);
+	fprintf(stdout,"X size of ROI = %ld, but xdim=%lu\n",dimtest,head->xdim);
+	dimtest = (head->endy - head->starty + 1) / (int)(head->groupy);
+	fprintf(stdout,"Y size of ROI = %ld, but ydim=%lu\n",dimtest,head->ydim);
+}
+#endif
 
 	error_path:
 	if (dataType>0) {
-		if (tempErr=H5Tclose(dataType)) { fprintf(stderr,"ERROR -- readHDF5header(), datatype close error = %d\n",tempErr); err = err ? err : tempErr; }
+		if ((tempErr=H5Tclose(dataType))) { fprintf(stderr,"ERROR -- readHDF5header(), datatype close error = %d\n",tempErr); err = err ? err : tempErr; }
 	}
 	if (dataspace>0) {
-		if (tempErr=H5Sclose(dataspace)) { fprintf(stderr,"ERROR -- readHDF5header(), dataspace close error = %d\n",tempErr); err = err ? err : tempErr; }
+		if ((tempErr=H5Sclose(dataspace))) { fprintf(stderr,"ERROR -- readHDF5header(), dataspace close error = %d\n",tempErr); err = err ? err : tempErr; }
 	}
 	if (data_id>0) {
-		if (tempErr=H5Dclose(data_id)) { fprintf(stderr,"ERROR -- readHDF5header(), data close error = %d\n",tempErr); err = err ? err : tempErr; }
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- readHDF5header(), data close error = %d\n",tempErr); err = err ? err : tempErr; }
 	}
 	if (file_id>0) {
-		if (tempErr = H5Fclose(file_id)) { fprintf(stderr,"ERROR -- readHDF5header(), file close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr = H5Fclose(file_id))) { fprintf(stderr,"ERROR -- readHDF5header(), file close error = %d\n",err); err = err ? err : tempErr; }
 	}
+	if (err) return err;
+
+	if (Nvec>0 && rank==3 && Nvec!=(Nimages+1)) { fprintf(stderr,"ERROR -- readHDF5header(), Nimages = %lu,  but biggest vector has %lu values\n",Nimages,Nvec); err=-1; }
 	return err;
 }
 
@@ -691,17 +1102,35 @@ struct HDF5_Header *h)		/* HDF5 header information (header must be valid!) */
 {
 	char	str[50];
 	if (!h) return 1;
+#ifdef MULTI_IMAGE_FILE
+	long	Nx,Ny,Nz;
+#endif
 
 	printf("data file header:\n");
-	printf("	itype = %d,  %s\n",h->itype,getFileTypeString(h->itype,str));
-	printf("	length of one pixel %d bytes\n",h->isize);								/* number of bytes in each pixel */
-	printf("	full un-binned detector is %lu x %lu pixels\n",h->xDimDet,h->yDimDet);	/* x-y dimension of detector (pixels) */
-	printf("	image in file is %ld x %ld binned pixels\n",h->xdim,h->ydim);			/* x,y dimensions of image (after any internal binning) */
-	printf("	binned region X=[%ld, %ld], group=%ld\n",h->startx,h->endx,h->groupx);	/* ROI (unbinned pixels) */
-	printf("	binned region Y=[%ld, %ld], group=%ld\n",h->starty,h->endy,h->groupy);
+	printf("	itype = %d,  %s\n",(int)h->itype,getFileTypeString(h->itype,str));
+	printf("	length of one pixel %d bytes\n",(int)h->isize);								/* number of bytes in each pixel */
+	printf("	full un-binned detector is %ld x %ld pixels\n",(long)h->xDimDet,(long)h->yDimDet);	/* x-y dimension of detector (pixels) */
+	printf("	image in file is %ld x %ld binned pixels",(long)h->xdim,(long)h->ydim);			/* x,y dimensions of image (after any internal binning) */
+	if (h->Nimages > 1) printf(",	file contains %ld images",(long)h->Nimages);			/* number of images in file */
+	printf("\n");
+	printf("	binned region X=[%ld, %ld], group=%ld\n",(long)h->startx,(long)h->endx,(long)h->groupx);	/* ROI (unbinned pixels) */
+	printf("	binned region Y=[%ld, %ld], group=%ld\n",(long)h->starty,(long)h->endy,(long)h->groupy);
+#ifdef MULTI_IMAGE_FILE
+	Nx = h->exposure.N;
+	if (Nx > 0) {																	/* exposure time (seconds) */
+		if (Nx > 1) printf("	exposure times = [%g, %g](%ld) sec",h->exposure.v[0],h->exposure.v[Nx-1],Nx);
+		else printf("	exposure time = %g sec",h->exposure.v[0]);
+	}
+	if (!isnan(h->gain)) {
+		if (Nx > 0) printf(",   ");
+		printf("	gain = %gpF",h->gain);											/* and gain */
+	}
+	if (Nx > 0 || !isnan(h->gain)) printf("\n");
+#else
 	if (!isnan(h->exposure)) printf("	exposure time = %g sec",h->exposure);		/* exposure time (seconds) */
 	if (!isnan(h->gain)) printf("	gain = %gpF",h->gain);							/* and gain */
 	if (!isnan(h->exposure) || !isnan(h->gain)) printf("\n");
+#endif
 	if (!isnan(h->sampleDistance)) printf("	sample distance = %g micron\n",h->sampleDistance);	/* sample distance from Keyence (micron) */
 
 	#ifdef VO2
@@ -716,30 +1145,70 @@ struct HDF5_Header *h)		/* HDF5 header information (header must be valid!) */
 	if (strlen(h->detector_ID)+strlen(h->detector_model)) printf("	detector is model='%s',  ID = '%s',  Vendor = '%s'\n",h->detector_model,h->detector_ID,h->detector_vendor);
 	if (strlen(h->fileName)) printf("	original file = '%s'\n",h->fileName);
 	if (strlen(h->fileTime)) printf("	image taken on '%s'\n",h->fileTime);
-	if ((h->scanNum)>=0) printf("	scan number = %d\n",h->scanNum);
+	if ((h->scanNum)>=0) printf("	scan number = %ld\n",(long)h->scanNum);
 
 	printf("\t--------\n");
-	if (strlen(h->title)) printf("	title = '%s'\n",h->title);
-	if (strlen(h->sampleName)+strlen(h->userName)) printf("	for sample '%s',  user = '%s'\n",h->sampleName,h->userName);
+	if (strlen(h->title)) printf("	title:  '%s'\n",h->title);
+	if (strlen(h->sampleName)+strlen(h->userName)) printf("	for: sample '%s',  user = '%s'\n",h->sampleName,h->userName);
+#ifdef MULTI_IMAGE_FILE
+	Nx = h->xSample.N;		Ny = h->ySample.N;		Nz = h->zSample.N;
+	if (Nx>0 || Ny>0 || Nz>0) {
+		printf("	sample positioner"); /* sample position from PM500 */
+		if (Nx>0) printf(",  X=[%g, %g](%ld)",h->xSample.v[0],h->xSample.v[Nx-1],Nx);
+		if (Ny>0) printf(",  Y=[%g, %g](%ld)",h->ySample.v[0],h->ySample.v[Ny-1],Ny);
+		if (Nz>0) printf(",  Z=[%g, %g](%ld)",h->zSample.v[0],h->zSample.v[Nz-1],Nz);
+		printf(" (micron)\n");
+	}
+	Nx = h->xWire.N;		Ny = h->yWire.N;		Nz = h->zWire.N;
+	if (Nx>0 || Ny>0 || Nz>0) {														/* wire position from Alio Stage */
+		printf("	wire raw positioner");
+		if (Nx>0) printf(",  X=[%g, %g](%ld)",h->xWire.v[0],h->xWire.v[Nx-1],Nx);
+		if (Ny>0) printf(",  Y=[%g, %g](%ld)",h->yWire.v[0],h->yWire.v[Ny-1],Ny);
+		if (Nz>0) printf(",  Z=[%g, %g](%ld)",h->zWire.v[0],h->zWire.v[Nz-1],Nz);
+		printf(" (micron)\n");
+	}
+
+	Nx = h->wirescan.N;															/* wirescan (micron) */
+	if (Nx>0) printf("	wirescan = [%lg, %lg](%ld) (micron)\n",h->wirescan.v[0],h->wirescan.v[Nx-1],Nx);
+
+	Nx = h->energy.N;																/* monochromator energy (keV) */
+	if (Nx>0) printf("	energy = [%lg, %lg](%ld) (keV)\n",h->energy.v[0],h->energy.v[Nx-1],Nx);
+
+	Nx = h->depth.N;																/* depth of reconstructed image (micron) */
+	if (Nx>0) printf("	depth = [%lg, %lg](%ld) (keV)\n",h->depth.v[0],h->depth.v[Nx-1],Nx);
+
+	Nx = h->timingClock.N;															/* timing clock from Struck (second) */
+	if (Nx>0) printf("	timingClock = [%lg, %lg](%ld) (sec)\n",h->timingClock.v[0],h->timingClock.v[Nx-1],Nx);
+
+	Nx = h->ringCurrent.N;
+	if (Nx>0) printf("	ring current = [%lg, %lg](%ld) (mA)\n",h->ringCurrent.v[0],h->ringCurrent.v[Nx-1],Nx);
+
+	Nx = h->undGap.N;																/* undulator gap (mm) */
+	if (Nx>0) printf("	undulator gap = [%lg, %lg](%ld) (mm)\n",h->undGap.v[0],h->undGap.v[Nx-1],Nx);
+
+	Nx = h->undTaper.N;																/* undulator taper (mm) */
+	if (Nx>0) printf("	undulator taper = [%lg, %lg](%ld) (mm)\n",h->undTaper.v[0],h->undTaper.v[Nx-1],Nx);
+
+#else
 	if (!isnan(h->xSample + h->ySample + h->zSample))
 		printf("	sample PM500 = {%g, %g, %g} (micron)\n",h->xSample,h->ySample,h->zSample); /* sample position from PM500 */
 	if (!isnan(h->xWire + h->yWire + h->zWire))
 		printf("	wire raw positioner = {%g, %g, %g} (micron)\n",h->xWire,h->yWire,h->zWire);	/* wire position from wire stage */
-	if (!isnan(h->AerotechH)) printf("	AerotechH = %lg (micron)\n",h->AerotechH);				/* AerotechH (micron) */
+	if (!isnan(h->wirescan)) printf("	wirescan = %lg (micron)\n",h->wirescan);				/* wirescan (micron) */
 	if (!isnan(h->energy)) printf("	energy = %lg (keV)\n",h->energy);							/* monochromator energy (keV) */
 	if (!isnan(h->depth)) printf("	depth = %lg (micron)\n",h->depth);							/* depth of reconstructed image (micron) */
 	if (!isnan(h->timingClock)) printf("	timingClock = %lg (sec)\n",h->timingClock);			/* timing clock from Struck (second) */
 	if (!isnan(h->ringCurrent)) printf("	current = %lg (mA)\n",h->ringCurrent);				/* storage ring current (mA) */
 	if (!isnan(h->undGap)) printf("	gap = %lg (mm)\n",h->undGap);								/* undulator gap (mm) */
 	if (!isnan(h->undTaper)) printf("	taper = %lg (mm)\n",h->undTaper);						/* undulator taper (mm) */
-
+#endif
 	if (!isnan(h->wirebaseX + h->wirebaseY + h->wirebaseZ))
 		printf("	wire base = {%g, %g, %g} (micron)\n",h->wirebaseX,h->wirebaseY,h->wirebaseZ);	/* wire position from Alio Stage */
 	if (h->monitor_I0 >= 0 || h->monitor_Istart >= 0 || h->monitor_Ifinal >= 0) {
 		printf("	monitor");								/* monitor intensities */
-		if (h->monitor_I0 >= 0) printf(", I0 = %d (counts)\n",h->monitor_I0);					/* monitor I0 */
-		if (h->monitor_Istart >= 0) printf(", I_start = %d (counts)\n",h->monitor_Istart);		/* monitor I_start */
-		if (h->monitor_Ifinal >= 0) printf(", I_final = %d (counts)\n",h->monitor_Ifinal);		/* monitor I_final */
+		if (h->monitor_I0 >= 0) printf(", I0 = %ld (counts)",h->monitor_I0);					/* monitor I0 */
+		if (h->monitor_Istart >= 0) printf(", I_start = %ld (counts)",h->monitor_Istart);		/* monitor I_start */
+		if (h->monitor_Ifinal >= 0) printf(", I_final = %ld (counts)",h->monitor_Ifinal);		/* monitor I_final */
 		printf("\n");
 	}
 	if (!isnan(h->hutchTemperature)) printf("	hutchTemperature = %lg (C)\n",h->hutchTemperature);	/* Hutch Temperature (C) */
@@ -754,6 +1223,7 @@ struct HDF5_Header *h)		/* HDF5 header information (header must be valid!) */
 
 	return 0;
 }
+
 
 
 /* a short cut routine to read just one value from a file, data always returned as double */
@@ -771,7 +1241,7 @@ const char *dataName)				/* full data name, e.g. "entry1/wireX" */
 	hsize_t	total;
 	size_t	size;
 	int		un_signed=0;
-	hid_t	scalarSpace=0;			/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
+	hid_t	scalarSpace;			/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
 
 	if (strlen(fileName)<1 || strlen(dataName)<1) ERROR_PATH(-1);
 	if ((file_id=H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT))<=0) ERROR_PATH(file_id)
@@ -784,7 +1254,7 @@ const char *dataName)				/* full data name, e.g. "entry1/wireX" */
 	scalarSpace = H5Screate(H5S_SCALAR);
 	//	scalarSpace = H5S_ALL;
 
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	InfoAboutDataType(dataType);
 	printf("		total data size = %ld bytes\n",total);
 	#endif
@@ -823,12 +1293,12 @@ const char *dataName)				/* full data name, e.g. "entry1/wireX" */
 		value = inum;
 	}
 	else if (H5class==H5T_INTEGER && un_signed && size==4) {/* 4 byte unsigned int */
-		unsigned int inum;
+		unsigned long inum;
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		value = inum;
 	}
 	else if (H5class==H5T_INTEGER && size==2) {				/* 4 byte signed int */
-		int inum;
+		long inum;
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		value = inum;
 	}
@@ -836,18 +1306,19 @@ const char *dataName)				/* full data name, e.g. "entry1/wireX" */
 	if (err) { fprintf(stderr,"ERROR, readHDF5oneValue(), data read error = %d\n",err); ERROR_PATH(err) }
   
 	error_path:
-	if (scalarSpace) H5Sclose(scalarSpace);
 	if (dataType>0) {
-		if (tempErr=H5Tclose(dataType)) { fprintf(stderr,"ERROR -- readHDF5oneValue(), dataType close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Tclose(dataType))) { fprintf(stderr,"ERROR -- readHDF5oneValue(), dataType close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (data_id>0) {
-		if (tempErr=H5Dclose(data_id)) { fprintf(stderr,"ERROR -- readHDF5oneValue(), data close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- readHDF5oneValue(), data close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (file_id>0) {
-		if (tempErr = H5Fclose(file_id)) { fprintf(stderr,"ERROR -- readHDF5oneValue(), file close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr = H5Fclose(file_id))) { fprintf(stderr,"ERROR -- readHDF5oneValue(), file close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return value;
 }
+
+
 
 double readHDF5oneHeaderValue(			/* return value of item in header based on string in name */
 struct HDF5_Header *head,
@@ -866,13 +1337,29 @@ char *name)						/* name of value to return */
 	else if (!strcmp(name,"endy"))		return (double)head->endy;
 	else if (!strcmp(name,"groupy"))	return (double)head->groupy;
 	else if (!strcmp(name,"gain"))		return head->gain;
+#ifdef MULTI_IMAGE_FILE
+	else if (!strcmp(name,"xSample"))	return head->xSample.N ? head->xSample.v[0] : NAN;
+	else if (!strcmp(name,"ySample"))	return head->ySample.N ? head->ySample.v[0] : NAN;
+	else if (!strcmp(name,"zSample"))	return head->zSample.N ? head->zSample.v[0] : NAN;
+	else if (!strcmp(name,"xWire"))		return head->xWire.N ? head->xWire.v[0] : NAN;
+	else if (!strcmp(name,"yWire"))		return head->yWire.N ? head->yWire.v[0] : NAN;
+	else if (!strcmp(name,"zWire"))		return head->zWire.N ? head->zWire.v[0] : NAN;
+	else if (!strcmp(name,"wirescan"))	return head->wirescan.N ? head->wirescan.v[0] : NAN;
+	else if (!strcmp(name,"energy"))	return head->energy.N ? head->energy.v[0] : NAN;
+	else if (!strcmp(name,"depth"))		return head->depth.N ? head->depth.v[0] : NAN;
+	else if (!strcmp(name,"timingClock")) return head->timingClock.N ? head->timingClock.v[0] : NAN;
+	else if (!strcmp(name,"exposure"))	return head->exposure.N ? head->exposure.v[0] : NAN;
+	else if (!strcmp(name,"mA"))		return head->ringCurrent.N ? head->ringCurrent.v[0] : NAN;
+	else if (!strcmp(name,"gap"))		return head->undGap.N ? head->undGap.v[0] : NAN;
+	else if (!strcmp(name,"taper"))		return head->undTaper.N ? head->undTaper.v[0] : NAN;
+#else
 	else if (!strcmp(name,"xSample"))	return head->xSample;
 	else if (!strcmp(name,"ySample"))	return head->ySample;
 	else if (!strcmp(name,"zSample"))	return head->zSample;
 	else if (!strcmp(name,"xWire"))		return head->xWire;
 	else if (!strcmp(name,"yWire"))		return head->yWire;
 	else if (!strcmp(name,"zWire"))		return head->zWire;
-	else if (!strcmp(name,"AerotechH"))	return head->AerotechH;	
+	else if (!strcmp(name,"wirescan"))	return head->wirescan;	
 	else if (!strcmp(name,"energy"))	return head->energy;
 	else if (!strcmp(name,"depth"))		return head->depth;
 	else if (!strcmp(name,"timingClock"))	return head->timingClock;
@@ -880,7 +1367,7 @@ char *name)						/* name of value to return */
 	else if (!strcmp(name,"mA"))		return head->ringCurrent;
 	else if (!strcmp(name,"gap"))		return head->undGap;
 	else if (!strcmp(name,"taper"))		return head->undTaper;
-
+#endif
 	else if (!strcmp(name,"wirebaseX")) return head->wirebaseX;
 	else if (!strcmp(name,"wirebaseY")) return head->wirebaseY;
 	else if (!strcmp(name,"wirebaseZ")) return head->wirebaseZ;
@@ -901,6 +1388,25 @@ char *name)						/* name of value to return */
 	else if (!strcmp(name,"LightOn"))	return (double)head->lightOn;
 	else if (!strcmp(name,"hutchTemperature"))	return head->hutchTemperature;
 	return NAN;
+}
+
+
+
+int readHDF5oneHeaderVector(
+const char *fileName,			/* full path name of file to use */
+char *name,						/* name of value to return */
+Dvector *vec)
+ {
+	hid_t	file_id=0;
+	herr_t	err=0;
+
+	if ((file_id=H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT))<=0) return file_id;
+	(*vec).N = HDF5ReadDoubleVector(file_id, name, &((*vec).v));
+
+	if (file_id>0) {
+		if ((err = H5Fclose(file_id))) { fprintf(stderr,"ERROR -- readHDF5header(), file close error = %d\n",err); return err; }
+	}
+	return err;
 }
 
 
@@ -931,7 +1437,92 @@ struct HDF5_Header *in)							/* input structure */
 		dest->VO2_Volt = in->VO2_Volt;
 		dest->VO2_Resistance = in->VO2_Resistance;
 	#endif
+#ifdef MULTI_IMAGE_FILE
+	/* if dest->XXXX.v is not NULL, then assume enough space has been allocated */
+	dest->xSample.N = in->xSample.N;
+	if (in->xSample.N > 0) {
+		if (!(dest->xSample.v)) dest->xSample.v = (double*)calloc(in->xSample.N,sizeof(double));
+		memcpy(dest->xSample.v, in->xSample.v, (size_t)(sizeof(double)*(in->xSample.N)));
+	}
 
+	dest->ySample.N = in->ySample.N;
+	if (in->ySample.N > 0) {
+		if (!(dest->ySample.v)) dest->ySample.v = (double*)calloc(in->ySample.N,sizeof(double));
+		memcpy(dest->ySample.v, in->ySample.v, (size_t)(sizeof(double)*(in->ySample.N)));
+	}
+
+	dest->zSample.N = in->zSample.N;
+	if (in->zSample.N > 0) {
+		if (!(dest->zSample.v)) dest->zSample.v = (double*)calloc(in->zSample.N,sizeof(double));
+		memcpy(dest->zSample.v, in->zSample.v, (size_t)(sizeof(double)*(in->zSample.N)));
+	}
+
+	dest->xWire.N = in->xWire.N;
+	if (in->xWire.N > 0) {
+		if (!(dest->xWire.v)) dest->xWire.v = (double*)calloc(in->xWire.N,sizeof(double));
+		memcpy(dest->xWire.v, in->xWire.v, (size_t)(sizeof(double)*(in->xWire.N)));
+	}
+
+	dest->yWire.N = in->yWire.N;
+	if (in->yWire.N > 0) {
+		if (!(dest->yWire.v)) dest->yWire.v = (double*)calloc(in->yWire.N,sizeof(double));
+		memcpy(dest->yWire.v, in->yWire.v, (size_t)(sizeof(double)*(in->yWire.N)));
+	}
+
+	dest->zWire.N = in->zWire.N;
+	if (in->zWire.N > 0) {
+		if (!(dest->zWire.v)) dest->zWire.v = (double*)calloc(in->zWire.N,sizeof(double));
+		memcpy(dest->zWire.v, in->zWire.v, (size_t)(sizeof(double)*(in->zWire.N)));
+	}
+
+	dest->wirescan.N = in->wirescan.N;
+	if (in->wirescan.N > 0) {
+		if (!(dest->wirescan.v)) dest->wirescan.v = (double*)calloc(in->wirescan.N,sizeof(double));
+		memcpy(dest->wirescan.v, in->wirescan.v, (size_t)(sizeof(double)*(in->wirescan.N)));
+	}
+
+	dest->energy.N = in->energy.N;
+	if (in->energy.N > 0) {
+		if (!(dest->energy.v)) dest->energy.v = (double*)calloc(in->energy.N,sizeof(double));
+		memcpy(dest->energy.v, in->energy.v, (size_t)(sizeof(double)*(in->energy.N)));
+	}
+
+	dest->depth.N = in->depth.N;
+	if (in->depth.N > 0) {
+		if (!(dest->depth.v)) dest->depth.v = (double*)calloc(in->depth.N,sizeof(double));
+		memcpy(dest->depth.v, in->depth.v, (size_t)(sizeof(double)*(in->depth.N)));
+	}
+
+	dest->timingClock.N = in->timingClock.N;
+	if (in->timingClock.N > 0) {
+		if (!(dest->timingClock.v)) dest->timingClock.v = (double*)calloc(in->timingClock.N,sizeof(double));
+		memcpy(dest->timingClock.v, in->timingClock.v, (size_t)(sizeof(double)*(in->timingClock.N)));
+	}
+
+	dest->exposure.N = in->exposure.N;
+	if (in->exposure.N > 0) {
+		if (!(dest->exposure.v)) dest->exposure.v = (double*)calloc(in->exposure.N,sizeof(double));
+		memcpy(dest->exposure.v, in->exposure.v, (size_t)(sizeof(double)*(in->exposure.N)));
+	}
+
+	dest->ringCurrent.N = in->ringCurrent.N;
+	if (in->ringCurrent.N > 0) {
+		if (!(dest->ringCurrent.v)) dest->ringCurrent.v = (double*)calloc(in->ringCurrent.N,sizeof(double));
+		memcpy(dest->ringCurrent.v, in->ringCurrent.v, (size_t)(sizeof(double)*(in->ringCurrent.N)));
+	}
+
+	dest->undGap.N = in->undGap.N;
+	if (in->undGap.N > 0) {
+		if (!(dest->undGap.v)) dest->undGap.v = (double*)calloc(in->undGap.N,sizeof(double));
+		memcpy(dest->undGap.v, in->undGap.v, (size_t)(sizeof(double)*(in->undGap.N))); 
+	}
+
+	dest->undTaper.N = in->undTaper.N;
+	if (in->undTaper.N > 0) {
+		if (!(dest->undTaper.v)) dest->undTaper.v = (double*)calloc(in->undTaper.N,sizeof(double));
+		memcpy(dest->undTaper.v, in->undTaper.v, (size_t)(sizeof(double)*(in->undTaper.N)));
+	}
+#else
 	dest->exposure	= in->exposure;
 	dest->xSample	= in->xSample;
 	dest->ySample	= in->ySample;
@@ -939,14 +1530,14 @@ struct HDF5_Header *in)							/* input structure */
 	dest->xWire		= in->xWire;
 	dest->yWire		= in->yWire;
 	dest->zWire		= in->zWire;
-	dest->AerotechH	= in->AerotechH;
+	dest->wirescan	= in->wirescan;
 	dest->energy	= in->energy;
 	dest->depth		= in->depth;
 	dest->timingClock = in->timingClock;
 	dest->ringCurrent = in->ringCurrent;
 	dest->undGap = in->undGap;
 	dest->undTaper = in->undTaper;
-
+#endif
 	dest->wirebaseX	= in->wirebaseX;
 	dest->wirebaseY	= in->wirebaseY;
 	dest->wirebaseZ	= in->wirebaseZ;
@@ -982,20 +1573,31 @@ struct HDF5_Header *h)				/* destination header structure */
 	h->endx = h->endy = 0;			/* highest x pixel value (unbinned pixels) */
 	h->groupx = h->groupy = 1;		/* amount x is binned/grouped in hardware */
 /*	h->geo_rotate = h->geo_reverse = h->geo_flip = 0;		// geometric effect applied */
-/*	h->Nimages = 1;					// number of images stored together */
+	h->Nimages = 1;					/* number of images stored together */
 	h->gain = NAN;					/* actually capacitance (pF) */
-
+#ifdef MULTI_IMAGE_FILE
+	init_Dvector(&h->xSample);	init_Dvector(&h->ySample);	init_Dvector(&h->zSample);
+	init_Dvector(&h->xWire);	init_Dvector(&h->yWire);	init_Dvector(&h->zWire);
+	init_Dvector(&h->wirescan);
+	init_Dvector(&h->exposure);
+	init_Dvector(&h->energy);
+	init_Dvector(&h->depth);
+	init_Dvector(&h->timingClock);
+	init_Dvector(&h->ringCurrent);
+	init_Dvector(&h->undGap);
+	init_Dvector(&h->undTaper);
+#else
 	h->exposure = NAN;				/* exposure time (seconds) */
 	h->xSample = h->ySample = h->zSample = NAN;	/* xyz sample position from PVlist */
 	h->xWire = h->yWire = h->zWire = NAN;		/* xyz wire position from PVlist */
-	h->AerotechH = NAN;
+	h->wirescan = NAN;
 	h->energy = NAN;				/* monochromator energy (keV) */
 	h->depth = NAN;					/* depth of reconstructed image (micron) */
 	h->timingClock = NAN;
 	h->ringCurrent = NAN;			/* current in storage ring (mA) */
 	h->undGap = NAN;				/* undulator gap (mm) */
 	h->undTaper = NAN;				/* undulator taper (mm) */
-
+#endif
 	h->sampleDistance = NAN;		/* sample distance, from the Keyence (micron) */
 	h->wirebaseX = h->wirebaseY = h->wirebaseZ = NAN;		/* wire base (micron) */
 	h->scanNum = -1;				/* scan number, not very important */
@@ -1023,18 +1625,17 @@ struct HDF5_Header *h)				/* destination header structure */
 
 
 
-
 hid_t getHDFtype(			/* returns HDF5 number type */
 int	itype)					/* the WinView number type */
 {
 	switch (itype) {
 		case 0:  return H5T_INTEL_F32;		/* float (4 byte) */
-		case 1:  return H5T_NATIVE_INT32;	/* int (4 byte) */
-		case 2:  return H5T_NATIVE_INT16;	/* short int (2 byte) */
-		case 3:  return H5T_NATIVE_UINT16;	/* unsigned short int (2 byte) */
+		case 1:  return H5T_NATIVE_INT32;	/* long integer (4 byte) */
+		case 2:  return H5T_NATIVE_INT16;	/* integer (2 byte) */
+		case 3:  return H5T_NATIVE_UINT16;	/* unsigned integer (2 byte) */
 		case 5:  return H5T_INTEL_F64;		/* double (8 byte) */
-		case 6:  return H5T_NATIVE_INT8;	/* signed char (1 byte) */
-		case 7:  return H5T_NATIVE_UINT8;	/* unsigned char (1 byte) */
+		case 6:  return H5T_NATIVE_INT8;	/* signed int8 (1 byte) */
+		case 7:  return H5T_NATIVE_UINT8;	/* unsigned int8 (1 byte) */
 	}
 	return -1;								/* invalid, itype=4 is a character which is also invalid */
 
@@ -1056,7 +1657,7 @@ int	itype)					/* the WinView number type */
  *			sign = H5Tget_sign(htype);
  *			if (sign == H5T_SGN_NONE && sz==1) strcpy(str,"H unsigned int8 (1 byte)");
  *			else if (sign == H5T_SGN_NONE && sz==2) strcpy(str,"H unsigned integer (2 byte)");
- *			else if (sign == H5T_SGN_2 && sz==4) strcpy(str,"H int integer (4 byte)");
+ *			else if (sign == H5T_SGN_2 && sz==4) strcpy(str,"H long integer (4 byte)");
  *			else if (sign == H5T_SGN_2 && sz==2) strcpy(str,"H integer (2 byte)");
  *			else if (sign == H5T_SGN_2 && sz==1) strcpy(str,"H integer (1 byte)");
  *		}
@@ -1072,7 +1673,7 @@ char *getFileTypeString(	/* puts a descriptive string into stype */
 int		itype,				/* WinView file type */
 char	*stype)				/* to recieve descriptive string make at least 30 long */
 {
-	char	*name[]={"float (4 byte)","integer (4 byte)","integer (2 byte)","unsigned integer (2 byte)",\
+	char	*name[]={"float (4 byte)","long integer (4 byte)","integer (2 byte)","unsigned integer (2 byte)",\
 					"string/char (1 byte)","double (8 byte)","signed int8 (1 byte)","unsigned int8 (1 byte)"};
 /*	if (itype<0 || itype>7) stype[0]='\0'; */
 	if (itype<0 || itype>7) strcpy(stype,"INVALID type");
@@ -1088,7 +1689,7 @@ hid_t data_id)
 	hid_t	dataspace=0;
 	int		rank;
 	hsize_t	dims_out[5];				/* dataset dimensions, 5 is just larger than necessary */
-	int		npoints;
+	long	npoints;
 	size_t	size;
 	hid_t	dataType;
 
@@ -1098,15 +1699,15 @@ hid_t data_id)
 		dataType = 0;
 	}
 
-	if ((dataspace=H5Dget_space(data_id))<=0) return;	/* dataspace identifier */
+	if ((dataspace=H5Dget_space(data_id))<=0) return;    /* dataspace identifier */
 
 	if (H5Sis_simple(dataspace)) printf("		simple (not complicated) data\n");
 	else printf("		scalar data\n");
 
-	npoints = (int)H5Sget_simple_extent_npoints(dataspace);
+	npoints = (long)H5Sget_simple_extent_npoints(dataspace);
 	size = (size_t)H5Dget_storage_size(data_id);
 	if ((rank = H5Sget_simple_extent_dims(dataspace,dims_out,NULL))>0) {
-		printf("		total dataSize = %lu bytes,  and number of points = %d\n",size,npoints);	/* get total size of data in bytes */
+		printf("		total dataSize = %ld bytes,  and number of points = %ld\n",size,npoints);	/* get total size of data in bytes */
 		printf("		rank %d, dimensions %llu", rank, dims_out[0]);
 		int i;
 		for (i=1;i<rank;i++) printf(" x %llu",dims_out[i]);
@@ -1131,17 +1732,17 @@ hid_t dataType)
 	printf("		data type = %d,  size of one element = %ld bytes\n",dataType,sz);
 
 	order = H5Tget_order(dataType);
-	if (order == H5T_ORDER_LE) printf("		Little endian order\n");
-	else if (order == H5T_ORDER_BE) printf("		Big endian order\n");
+    if (order == H5T_ORDER_LE) printf("		Little endian order\n");
+    else if (order == H5T_ORDER_BE) printf("		Big endian order\n");
 	else printf("		Unknown order for data type %d,  may be string\n",dataType);
 
-	H5class = H5Tget_class(dataType);
+    H5class = H5Tget_class(dataType);
 	if (H5class == H5T_INTEGER) {
 		H5T_sign_t sign;
 		sign = H5Tget_sign(dataType);
 		if (sign == H5T_SGN_NONE) printf("		Dataset has UNsigned integers\n");
 		else if (sign == H5T_SGN_2) printf("		Dataset has signed integers\n");
-		else if (sign = H5T_SGN_ERROR) printf("		sign for this Dataset is an ERROR\n");
+		else if (sign == H5T_SGN_ERROR) printf("		sign for this Dataset is an ERROR\n");
 		else printf("		for this data type, sign = %d, UNKNOWN integer type\n",sign);
 
 	}
@@ -1163,7 +1764,7 @@ hid_t dataType)
 
 
 int	WinView_itype2len(		/* convert WinView file type to number of bytes/pixel, 0 is for error*/
-int		itype)			/* WinView itype */
+int		itype)		/* WinView itype */
 {
 	int		ilen;
 
@@ -1174,7 +1775,7 @@ int		itype)			/* WinView itype */
 			ilen=1;
 			break;
 		case 2:			/* int16 (2 byte) */
-		case 3:			/* unsigned int16 byte) */
+		case 3:			/* unsigned int16 (2 byte) */
 			ilen=2;
 			break;
 		case 0:			/* float (4 byte) */
@@ -1190,6 +1791,22 @@ int		itype)			/* WinView itype */
 	return ilen;
 }
 
+
+void init_Dvector(
+Dvector	*d)
+{
+	d->N = 0;
+	d->v = NULL;
+}
+
+
+void empty_Dvector(
+Dvector	*d)
+{
+	d->N = 0;
+	CHECK_FREE(d->v);
+}
+
 /*******************************************************************************************/
 /*******************************************************************************************/
 
@@ -1200,7 +1817,136 @@ int		itype)			/* WinView itype */
 **********************************  Local HDF5 Routines  ***********************************
 ********************************************************************************************/
 
-herr_t get1HDF5attr_float(	/* get float value of an attribute, returns TRUE=error */
+
+/* copy an object's attribute to object in new H5 file */
+static int copyobjattr(
+	hid_t oid_src,
+	hid_t oid_dst,
+	const char *objname,
+	const H5O_info_t *objinfo)
+{
+#define MAX_ATTR_NAME_LEN 1000
+	hid_t aid,aid2,attr_ds_id,attr_ds_id2,attr_dt_id;
+	herr_t aerr;
+	hsize_t i,attr_size;
+	size_t attr_type_size;
+	char attrname[MAX_ATTR_NAME_LEN];
+	ssize_t attrname_len;
+	H5A_info_t attrinfo;
+	void *attr_data;
+
+	for(i=0;i<objinfo->num_attrs;i++)
+	{
+		// open attribute # i
+		aid = H5Aopen_by_idx(oid_src,objname,H5_INDEX_CRT_ORDER,H5_ITER_NATIVE,i,H5P_DEFAULT,H5P_DEFAULT);
+		// get attirubte name & datatype
+		attrname_len = H5Aget_name(aid,(size_t)MAX_ATTR_NAME_LEN,attrname);
+		aerr = H5Aget_info(aid,&attrinfo);
+		// get attribute dataspace, datatype (memory type), datasize
+		attr_ds_id = H5Aget_space(aid);
+		attr_dt_id = H5Aget_type(aid);
+		attr_size = H5Aget_storage_size(aid);
+		attr_type_size = H5Tget_size(attr_dt_id);
+		// read data
+		attr_data = malloc(attr_size);
+		H5Aread(aid,attr_dt_id,attr_data);
+		// prepare for creation: define datatype,dataspace,creation property list
+		attr_ds_id2 = H5Scopy(attr_ds_id);
+		// create attribute at destination
+		aid2 = H5Acreate2(oid_dst,attrname,attr_dt_id,attr_ds_id2,H5P_DEFAULT,H5P_DEFAULT);
+		// write attibute data
+		aerr = H5Awrite(aid2,attr_dt_id,attr_data);
+		// close property lists, dataspaces, datatypes etc
+		H5Sclose(attr_ds_id);
+		H5Sclose(attr_ds_id2);
+		H5Tclose(attr_dt_id);
+		free(attr_data);
+		// close both attributes
+		H5Aclose(aid);
+		H5Aclose(aid2);
+	}
+	return 0;
+}
+
+
+
+#define SKIP 1							/* number at start of a vector to skip, for 1, skip first point of a vector */
+
+/* read in a 1D vector from an HDF5 file.  To get header information, first call HDF5ReadHeader */
+/* the image is in vbuf, the result is always returned as type "double" regardless of how it is stored */
+/* returns number of values in vector, returns negative on error */
+/* CAUTION,  It allocates space for image in vbuf only if vbuf is NULL, so pass it with a null value, and remember to free it later yourself */
+/* CAUTION,  if vbuf is not NULL, then there better be enough room for the image */
+static size_t HDF5ReadDoubleVector(
+hid_t	file_id,
+const char	*dataName,					/* full path name to data, e.g. "entry1/data/data" */
+double	**vbuf)							/* pointer to image, if not NULL, space is allocated here, otherwise assume vbuf is big enough, and it better be too! */
+{
+	herr_t	i, err=0;
+	hid_t	data_id=0;					/* location id of the data in file */
+	hid_t	dataspace=0;
+	hid_t	memspace=0; 
+	hsize_t	dims_out[5];				/* dataset dimensions, 5 is larger than necessary, we should only need 1 */
+	int		rank=0;
+
+	hsize_t	dimsm[1]={0};				/* memory space dimensions */
+	hsize_t	count[1]={0};				/* size of the hyperslab in the file */
+	hsize_t	offset[1]={0};				/* hyperslab offset in the file */
+	hsize_t	count_out[1]={0};			/* size of the hyperslab in memory */
+	hsize_t	offset_out[1]={0};			/* hyperslab offset in memory */
+
+	size_t	dim=0;						/* number of points in vector (in file) */
+	size_t	ilen;						/* number of bytes per value in output array, we are using double here */
+	size_t	skip;						/* local copy of SKIP */
+
+	ilen = sizeof(double);				/*	used to be this:	ilen = head->isize; */
+	if (!ilen) return 0;								/* no word length in header */
+
+	if ((data_id=H5Dopen(file_id,dataName,H5P_DEFAULT))<=0) ERROR_PATH(data_id)	/* probably not there, failure, but not a real error */
+//	if ((data_id=H5Dopen(file_id,dataName,H5P_DEFAULT))<=0) { fprintf(stderr,"ERROR -- HDF5ReadDoubleVector(), the data '%s' does not exist\n",dataName); ERROR_PATH(data_id) }
+	if ((dataspace=H5Dget_space(data_id))<=0) ERROR_PATH(-1)	/* dataspace identifier */
+
+	/* check for existance of data */
+	if ((rank=H5Sget_simple_extent_dims(dataspace,dims_out,NULL))>=0) err = (rank<0 ? -1 : 0);
+	if (err) ERROR_PATH(err)
+	if (rank != 1) ERROR_PATH(rank)						/* only understand rank==1 data here */
+	dim	= (size_t)dims_out[0];							/* length of vector in file */
+	skip = dim<=SKIP ? 0 : SKIP;						/* basically ignore SKIP if only one image */
+	dim -= skip;										/* reduce length of vector saved by SKIP */
+	if (dim<1) ERROR_PATH((int)dim)							/* nothing here */
+
+	/* allocate space for the vector */
+	#ifdef DEBUG
+		printf("in HDF5ReadDoubleVector reading '%s':\n",dataName);
+		printf("    about to try to allocate image space of %ld bytes\n",dim*ilen);
+	#endif
+	if (!(*vbuf)) *vbuf = (double*)calloc(dim,ilen);	/* allocate space here if vbuf is NULL, otherwise it better be big enough */
+	if (!(*vbuf)) return 0;								/* allocation error */
+	#ifdef VERBOSE_microHDF5
+		printf("    vector buffer = vbuf = %p,   dim = %lu\n",vbuf,dim);
+	#endif
+
+	dimsm[0] = dim;										/* memory space dimensions */
+	if ((memspace=H5Screate_simple(1,dimsm,NULL))<0) ERROR_PATH(memspace)	/* Define the memory space, to receive data */
+//	offset[0] = 0;										/* define which part of the vector in the file to read, want all */
+	offset[0] = skip;									/* define which part of the vector in the file to read, want all */
+	count[0] = count_out[0] = dim;						/*	size of region to read and save */
+
+	if ((i=H5Sselect_hyperslab(memspace,H5S_SELECT_SET,offset_out,NULL,count_out,NULL))<0)	{ fprintf(stderr,"error in H5Sselect_hyperslab(memspace)=%d\n",i); ERROR_PATH(i) }
+	if ((i=H5Sselect_hyperslab(dataspace,H5S_SELECT_SET,offset,NULL,count,NULL))<0)			{ fprintf(stderr,"error in H5Sselect_hyperslab(dataspace)=%d\n",i); ERROR_PATH(i) }
+	if ((i=H5Dread(data_id,H5T_IEEE_F64LE,memspace,dataspace,H5P_DEFAULT,*vbuf))<0)			{ fprintf(stderr,"error in H5Dread(hyperslab)=%d\n",i); ERROR_PATH(i) }
+
+	error_path:
+	if (memspace>0) H5Sclose(memspace);
+	if (dataspace>0) H5Sclose(dataspace);
+	if (data_id>0) H5Dclose(data_id);
+	err = err>0 ? -err : err;
+	return (size_t)(err<0 ? 0 : dim);
+}
+
+
+
+static herr_t get1HDF5attr_float(	/* get float value of an attribute, returns TRUE=error */
 hid_t	file_id,
 char	*groupName,
 char	*attrName,
@@ -1224,7 +1970,7 @@ double	*value)				/* holds result */
 	total = H5Aget_storage_size(attr_id);					/* total number of bytes stored */
 	if (total!=size) { fprintf(stderr,"ERROR, get1HDF5attr_float(), %llu != %ld\n",total,size); ERROR_PATH(-1) }
 
-/*	#ifdef VERBOSE
+/*	#ifdef VERBOSE_microHDF5
  *	InfoAboutDataType(dataType);
  *	printf("-------------------------\n");
  *	#endif
@@ -1232,22 +1978,22 @@ double	*value)				/* holds result */
 	H5class = H5Tget_class(dataType);
 	if (H5class==H5T_FLOAT && size==4) {
 		float val;
-		if (err=H5Aread(attr_id,dataType,&val)) {fprintf(stderr,"ERROR-attribute cannot read float\n"); ERROR_PATH(err) }
+		if ((err=H5Aread(attr_id,dataType,&val))) {fprintf(stderr,"ERROR-attribute cannot read float\n"); ERROR_PATH(err) }
 		*value = val;
 	}
 	else if (H5class==H5T_FLOAT && size==8) {
 		double val;
-		if (err=H5Aread(attr_id,dataType,&val)) {fprintf(stderr,"ERROR-attribute cannot read float\n"); ERROR_PATH(err) }
+		if ((err=H5Aread(attr_id,dataType,&val))) {fprintf(stderr,"ERROR-attribute cannot read float\n"); ERROR_PATH(err) }
 		*value = val;
 	}
 	else { fprintf(stderr,"ERROR-attribute not an float\n"); ERROR_PATH(-1) }
 
 	error_path:
 	if (attr_id>0) {
-		if (tempErr=H5Aclose(attr_id)) { fprintf(stderr,"ERROR -- get1HDF5attr_float(), attribute close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Aclose(attr_id))) { fprintf(stderr,"ERROR -- get1HDF5attr_float(), attribute close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (grp>0) {
-		if (tempErr=H5Gclose(grp)) { fprintf(stderr,"ERROR -- get1HDF5attr_float(), group close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- get1HDF5attr_float(), group close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
@@ -1255,11 +2001,11 @@ double	*value)				/* holds result */
 
 
 
-herr_t get1HDF5attr_int(	/* get integer value of an attribute, returns TRUE=error */
+static herr_t get1HDF5attr_int(	/* get integer value of an attribute, returns TRUE=error */
 hid_t	file_id,
 char	*groupName,
 char	*attrName,
-int		*value)				/* holds result */
+long	*value)				/* holds result */
 {
 	hid_t	grp=0;
 	hid_t	attr_id=0;
@@ -1280,7 +2026,7 @@ int		*value)				/* holds result */
 	total = H5Aget_storage_size(attr_id);					/* total number of bytes stored */
 	if (total!=size) { fprintf(stderr,"ERROR, get1HDF5attr_intVal(), %llu != %ld\n",total,size); ERROR_PATH(-1) }
 
-/*	#ifdef VERBOSE
+/*	#ifdef VERBOSE_microHDF5
  *	InfoAboutDataType(dataType);
  *	printf("-------------------------\n");
  *	#endif
@@ -1309,12 +2055,12 @@ int		*value)				/* holds result */
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && un_signed && size==4) {	/* 4 byte unsigned int */
-		unsigned int inum;
+		unsigned long inum;
 		err = H5Aread(attr_id,dataType,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && size==2) {				/* 4 byte signed int */
-		int inum;
+		long inum;
 		err = H5Aread(attr_id,dataType,&inum);
 		*value = inum;
 	}
@@ -1323,17 +2069,17 @@ int		*value)				/* holds result */
 
 	error_path:
 	if (attr_id>0) {
-		if (tempErr=H5Aclose(attr_id)) { fprintf(stderr,"ERROR -- get1HDF5attr_int(), attribute close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Aclose(attr_id))) { fprintf(stderr,"ERROR -- get1HDF5attr_int(), attribute close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (grp>0) {
-		if (tempErr=H5Gclose(grp)) { fprintf(stderr,"ERROR -- get1HDF5attr_int(), group close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- get1HDF5attr_int(), group close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
 
 
 
-herr_t get1HDF5attr_string(	/* get string value of an attribute, returns TRUE=error */
+static herr_t get1HDF5attr_string(	/* get string value of an attribute, returns TRUE=error */
 hid_t	file_id,
 char	*groupName,
 char	*attrName,
@@ -1358,22 +2104,22 @@ char	*value)				/* holds result, should be at least 256 bytes long */
 	total = H5Aget_storage_size(attr_id);					/* total number of bytes stored */
 	if (total!=size) { fprintf(stderr,"ERROR, get1HDF5attr_intVal(), %llu != %ld\n",total,size); ERROR_PATH(-1) }
 
-/*	#ifdef VERBOSE
+/*	#ifdef VERBOSE_microHDF5
  *	InfoAboutDataType(dataType);
  *	printf("-------------------------\n");
  *	#endif
  */
 	if (H5Tget_class(dataType)!=H5T_STRING) { fprintf(stderr,"ERROR-attribute not a string\n"); ERROR_PATH(-1) }
-	if (err=H5Aread(attr_id,dataType,str)) { fprintf(stderr,"ERROR-attribute cannot read string\n"); ERROR_PATH(err) }
+	if ((err=H5Aread(attr_id,dataType,str))) { fprintf(stderr,"ERROR-attribute cannot read string\n"); ERROR_PATH(err) }
 	str[size] = '\0';										/* null terminate */
 	strncpy(value,str,255);
 
 	error_path:
 	if (attr_id>0) {
-		if (tempErr=H5Aclose(attr_id)) { fprintf(stderr,"ERROR -- get1HDF5attr_string(), attribute close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Aclose(attr_id))) { fprintf(stderr,"ERROR -- get1HDF5attr_string(), attribute close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (grp>0) {
-		if (tempErr=H5Gclose(grp)) { fprintf(stderr,"ERROR -- get1HDF5attr_string(), group close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Gclose(grp))) { fprintf(stderr,"ERROR -- get1HDF5attr_string(), group close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (err) printf("ERROR -- get1HDF5attr_string() trying to read group='%s', attribute='%s'\n",groupName,attrName);
 	return err;
@@ -1381,7 +2127,7 @@ char	*value)				/* holds result, should be at least 256 bytes long */
 
 
 
-int get1HDF5data_float(		/* read one float (or the first one of a vector), returns TRUE=ERROR, False is OK */
+static int get1HDF5data_float(	/* read one float (or the first one of a vector), returns TRUE=ERROR, False is OK */
 hid_t	file_id,
 char	*dataName,			/* full data name, includes groups from root */
 double	*value)				/* holds result */
@@ -1392,7 +2138,7 @@ double	*value)				/* holds result */
 	herr_t	tempErr, err=0;
 	hsize_t	total;
 	size_t	size;
-	hid_t	scalarSpace=0;	/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
+	hid_t	scalarSpace;	/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
 
 	*value = NAN;
 	if (strlen(dataName)<1) ERROR_PATH(-1);
@@ -1403,7 +2149,7 @@ double	*value)				/* holds result */
 	total = H5Dget_storage_size(data_id);				/* get total size of data in this data set */
 	if (total<size) { fprintf(stderr,"ERROR, get1HDF5data_float(%s), %llu != %ld\n",dataName,total,size); ERROR_PATH(-1) }
 
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	InfoAboutDataType(dataType);
 	printf("		total data size = %ld bytes\n",total);
 	#endif
@@ -1413,36 +2159,35 @@ double	*value)				/* holds result */
 	H5class = H5Tget_class(dataType);
 	if (H5class==H5T_FLOAT && size==4) {					/* single precision float */
 		float fnum;
-		if (err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&fnum)) { fprintf(stderr,"data read error = %d\n",err); ERROR_PATH(err) }
+		if ((err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&fnum))) { fprintf(stderr,"data read error = %d\n",err); ERROR_PATH(err) }
 		*value = fnum;
 	}
 	else if (H5class==H5T_FLOAT && size==8) {				/* double precision float */
 		double dnum;
-		if (err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&dnum)) { fprintf(stderr,"data read error = %d\n",err); ERROR_PATH(err) }
+		if ((err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&dnum))) { fprintf(stderr,"data read error = %d\n",err); ERROR_PATH(err) }
 		*value = dnum;
 	}
 	else { fprintf(stderr,"ERROR-get1HDF5data_float(), data not a valid float type\n"); ERROR_PATH(-1) }
 
 	error_path:
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("-------------------------\n");
 	#endif
-	if (scalarSpace) H5Sclose(scalarSpace);
 	if (dataType>0) {
-		if (tempErr=H5Tclose(dataType)) { fprintf(stderr,"ERROR -- get1HDF5data_float(), dataType close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Tclose(dataType))) { fprintf(stderr,"ERROR -- get1HDF5data_float(), dataType close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (data_id>0) {
-		if (tempErr=H5Dclose(data_id)) { fprintf(stderr,"ERROR -- get1HDF5data_float(), data close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- get1HDF5data_float(), data close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
 
 
 
-int get1HDF5data_int(		/* read one int (or the first one of a vector), returns TRUE=ERROR, False is OK */
+static int get1HDF5data_int(/* read one int (or the first one of a vector), returns TRUE=ERROR, False is OK */
 hid_t	file_id,
 char	*dataName,			/* full data name, includes groups from root */
-int		*value)				/* holds result */
+long	*value)				/* holds result */
 {
 	hid_t	data_id=0;
 	hid_t	dataType=0;
@@ -1451,7 +2196,7 @@ int		*value)				/* holds result */
 	hsize_t	total;
 	size_t	size;
 	int		un_signed;
-	hid_t	scalarSpace=0;	/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
+	hid_t	scalarSpace;	/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
 
 	*value = 0;
 	if (strlen(dataName)<1) ERROR_PATH(-1)
@@ -1465,28 +2210,13 @@ int		*value)				/* holds result */
 	H5class = H5Tget_class(dataType);
 	un_signed = (H5Tget_sign(dataType)==H5T_SGN_NONE);
 	scalarSpace = H5Screate(H5S_SCALAR);
+//	scalarSpace = H5S_ALL;
 
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	InfoAboutDataType(dataType);
-	printf("		total data size = %lu bytes\n",total);
+	printf("		total data size = %ld bytes\n",total);
 	#endif
 
-	/*
-		printf("\n\n");
-		printf("sizeof(int8_t) = %lu\n",sizeof(int8_t));
-		printf("sizeof(int16_t) = %lu\n",sizeof(int16_t));
-		printf("sizeof(int32_t) = %lu\n",sizeof(int32_t));
-		printf("sizeof(int64_t) = %lu\n",sizeof(int64_t));
-		printf("sizeof(char) = %lu\n",sizeof(char));
-		printf("sizeof(short int) = %lu\n",sizeof(short int));
-		printf("sizeof(int) = %lu\n",sizeof(int));
-		printf("sizeof(long) = %lu\n",sizeof(long));
-
-		sizeof(int8_t) = sizeof(char) =1
-		sizeof(int16_t) = sizeof(short int) =2
-		sizeof(int32_t) = sizeof(int) = 4
-		sizeof(int64_t) = sizeof(long) = 8
-	*/
 	if (H5class==H5T_INTEGER && un_signed && size==1) {		/* 1 byte unsigned int */
 		unsigned char inum;
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
@@ -1508,50 +2238,49 @@ int		*value)				/* holds result */
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && un_signed && size==4) {	/* 4 byte unsigned int */
-		unsigned int inum;
+		unsigned long inum;
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && size==4) {				/* 4 byte signed int */
-		int inum;
+		long inum;
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_FLOAT && size==4) {				/* single precision float */
 		float fnum;
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&fnum);
-		*value = (int)fnum;
+		*value = (long)fnum;
 	}
 	else if (H5class==H5T_FLOAT && size==8) {				/* double precision float */
 		double dnum;
 
 		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&dnum);
-		*value = (int)dnum;
+		*value = (long)dnum;
 	}
 	else { fprintf(stderr,"ERROR-get1HDF5data_int(), data not a valid int type\n"); ERROR_PATH(-1) }
 	if (err) { fprintf(stderr,"ERROR, get1HDF5data_int(), data read error = %d\n",err); ERROR_PATH(err) }
 
+
 	error_path:
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("-------------------------\n");
 	#endif
-
-	if (scalarSpace) H5Sclose(scalarSpace);
 	if (dataType>0) {
-		if (tempErr=H5Tclose(dataType)) { fprintf(stderr,"ERROR -- get1HDF5data_int(), dataType close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Tclose(dataType))) { fprintf(stderr,"ERROR -- get1HDF5data_int(), dataType close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (data_id>0) {
-		if (tempErr=H5Dclose(data_id)) { fprintf(stderr,"ERROR -- get1HDF5data_int(), data close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- get1HDF5data_int(), data close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
 
 
-int get1HDF5data_string(
+static int get1HDF5data_string(
 hid_t	file_id,
 char	*dataName,
 char	*value,				/* holds result, should be at least (N+1) bytes long */
-int		N)					/* max length to try and put into value */
+long	N)					/* max length to try and put into value */
 {
 	hid_t	data_id=0;
 	hid_t	dataType=0;
@@ -1565,7 +2294,7 @@ int		N)					/* max length to try and put into value */
 	if ((data_id=H5Dopen(file_id,dataName,H5P_DEFAULT))<0) ERROR_PATH(data_id)	/* probably not there, not a real error */
 	if ((dataType=H5Dget_type(data_id))<0) { fprintf(stderr,"ERROR -- get1HDF5data_string cannot get dataType\n"); ERROR_PATH(dataType) }
 	total = H5Dget_storage_size(data_id);			/* get total size of data in this data set */
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	InfoAboutDataType(dataType);
 	printf("		total data size = %ld bytes\n",total);
 	#endif
@@ -1573,7 +2302,7 @@ int		N)					/* max length to try and put into value */
 	if (H5Tget_class(dataType) != H5T_STRING) { fprintf(stderr,"ERROR, '%s' not string in get1HDF5data_string()\n",dataName); ERROR_PATH(-1) }
 
 	if (total<MAX_micro_STRING_LEN) {
-		if (err=H5Dread(data_id,dataType,H5S_ALL,H5S_ALL,H5P_DEFAULT,str)) fprintf(stderr,"data read error = %d\n",err);
+		if ((err=H5Dread(data_id,dataType,H5S_ALL,H5S_ALL,H5P_DEFAULT,str))) fprintf(stderr,"data read error = %d\n",err);
 		str[total] = '\0';
 	}
 	else {
@@ -1583,14 +2312,14 @@ int		N)					/* max length to try and put into value */
 	strncpy(value,str,MIN((size_t)N,MAX_micro_STRING_LEN));
 
 	error_path:
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("-------------------------\n");
 	#endif
 	if (dataType>0) {
-		if (tempErr=H5Tclose(dataType)) { fprintf(stderr,"ERROR -- get1HDF5data_int(), dataType close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Tclose(dataType))) { fprintf(stderr,"ERROR -- get1HDF5data_int(), dataType close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	if (data_id>0) {
-		if (tempErr=H5Dclose(data_id)) { fprintf(stderr,"ERROR -- get1HDF5data_string(), data close error = %d\n",err); err = err ? err : tempErr; }
+		if ((tempErr=H5Dclose(data_id))) { fprintf(stderr,"ERROR -- get1HDF5data_string(), data close error = %d\n",err); err = err ? err : tempErr; }
 	}
 	return err;
 }
@@ -1600,7 +2329,7 @@ int		N)					/* max length to try and put into value */
 
 
 
-int get1HDF5attr_tagVal(
+static int get1HDF5attr_tagVal(
 hid_t	file_id,
 char	*groupName,
 char	*attrName,
@@ -1627,7 +2356,7 @@ char	result1[256])
 	if (attr_id>0) {
 		dataType = H5Aget_type(attr_id);						/* printf("attibute data type = %ld\n",dataType); */
 		size = H5Tget_size(dataType);
-		#ifdef VERBOSE
+		#ifdef VERBOSE_microHDF5
 		InfoAboutDataType(dataType);
 		printf("-------------------------\n");
 		#endif
@@ -1638,14 +2367,14 @@ char	result1[256])
 		err = H5Aclose(attr_id);								/* printf("attr close =%s\n",err); */
 		if (strlen(str)>0) sprintf(result1,"%s=%s",tag,str);
 	}
-	if (err=H5Gclose(grp)) { fprintf(stderr,"group close error = %d\n",err); goto return_path; }
+	if ((err=H5Gclose(grp))) { fprintf(stderr,"group close error = %d\n",err); goto return_path; }
 
 	return_path:
 	return err;
 }
 
 
-int get1HDF5data_tagVal(
+static int get1HDF5data_tagVal(
 hid_t	file_id,
 char	*groupName,
 char	*dataName,
@@ -1659,10 +2388,11 @@ char	result1[256])
 	hsize_t dataSize;
 	H5T_cset_t charSet;
 	herr_t err=0;
-	hid_t	scalarSpace=0;	/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
+	hid_t	scalarSpace;	/* set scalarSpace to H5S_ALL to read the whole vector or array, here we only want just the first value */
 	char	*tag;
 	result1[0] = '\0';
 	if (strlen(groupName)<1 || strlen(dataName)<1) goto return_path;
+//	if (tagName && tagName[0]) tag = tagName,255;		// what was the 255 for????
 	if (tagName && tagName[0]) tag = tagName;
 	else tag = dataName;
 
@@ -1670,45 +2400,45 @@ char	result1[256])
 	//	scalarSpace = H5S_ALL;
 
 	err = grp = H5Gopen(file_id, groupName,H5P_DEFAULT);
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("after group open, grp = %ld\n",grp);
 	#endif
 	if (err<0) goto return_path;
 
 	err = data_id = H5Dopen(grp,dataName,H5P_DEFAULT);
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("after data open, data_id = %ld\n",data_id);
 	#endif
 	if (err<0) goto return_path;
 
 	dataType = H5Dget_type(data_id);
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	InfoAboutDataType(dataType);
 	#endif
 
 	dataSize = H5Dget_storage_size(data_id);			/* get total size of data in this data set */
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("		total data size = %ld bytes\n",dataSize);
 	#endif
 
-	H5class = H5Tget_class(dataType);
+    H5class = H5Tget_class(dataType);
 	if (H5class == H5T_INTEGER) {							/* an integer */
 		int	inum;
 		if (dataSize<=4) {
 			inum = 0;
-			if (err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum)) fprintf(stderr,"data read error = %d\n",err);
+			if ((err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum))) fprintf(stderr,"data read error = %d\n",err);
 			sprintf(result1,"%s=%d",tag,inum);
 		}
 	}
 	else if (H5class == H5T_FLOAT) {
 		if (dataSize<=4) {								/* a single precision float */
 			float fnum;
-			if (err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&fnum)) fprintf(stderr,"data read error = %d\n",err);
+			if ((err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&fnum))) fprintf(stderr,"data read error = %d\n",err);
 			sprintf(result1,"%s=%g",tag,fnum);
 		}
 		if (dataSize<=8) {								/* a double precision float */
 			double dnum;
-			if (err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&dnum)) fprintf(stderr,"data read error = %d\n",err);
+			if ((err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&dnum))) fprintf(stderr,"data read error = %d\n",err);
 			sprintf(result1,"%s=%lg",tag,dnum);
 		}
 	}
@@ -1716,7 +2446,7 @@ char	result1[256])
 		char str[256];
 		charSet = H5Tget_cset(dataType);
 		if (dataSize<255) {
-			if (err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,str)) fprintf(stderr,"data read error = %d\n",err);
+			if ((err=H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,str))) fprintf(stderr,"data read error = %d\n",err);
 			str[dataSize] = '\0';
 			sprintf(result1,"%s=%s",tag,str);
 		}
@@ -1729,17 +2459,16 @@ char	result1[256])
 	else if (H5class == H5T_NO_CLASS) fprintf(stderr,"Dataset has no known H5class\n");
 	else fprintf(stderr,"Dataset has some other strange type of H5class\n");
 
-	if (err = H5Dclose(data_id)) { fprintf(stderr,"data close error = %d\n",err); goto return_path; }
+	if ((err=H5Dclose(data_id))) { fprintf(stderr,"data close error = %d\n",err); goto return_path; }
 	data_id = 0;
-	if (err = H5Gclose(grp)) { fprintf(stderr,"group close error = %d\n",err); goto return_path; }
+	if ((err=H5Gclose(grp))) { fprintf(stderr,"group close error = %d\n",err); goto return_path; }
 	grp = 0;
 
 	return_path:
-	#ifdef VERBOSE
+	#ifdef VERBOSE_microHDF5
 	printf("-------------------------\n");
 	#endif
 
-	if (scalarSpace) H5Sclose(scalarSpace);
 	if (dataType>0) H5Tclose(dataType);
 	if (data_id>0) H5Dclose(data_id);
 	if (grp>0) H5Gclose(grp);
@@ -1748,7 +2477,7 @@ char	result1[256])
 
 
 
-herr_t groupExists(	/* tests if a group exists, returns -1 if group OK, 0 if group NOT found */
+static herr_t groupExists(	/* tests if a group exists, returns -1 if group OK, 0 if group NOT found */
 hid_t	file_id,
  char	*groupName)
 {
@@ -1765,8 +2494,6 @@ hid_t	file_id,
 
 /*******************************************************************************************/
 /*******************************************************************************************/
-
-
 
 
 
@@ -1794,7 +2521,7 @@ int		overWrite)			/* TRUE-overwrite existing file, FALSE-do not overwire (return
 
 	if (overWrite)	sprintf(cmdbuf,"cp -f \"%s\" \"%s\"",source,dest);
 	else			sprintf(cmdbuf,"cp -n \"%s\" \"%s\"",source,dest);
-	if (err=system(cmdbuf)) fprintf(stderr,"ERROR -- copyFile()\n\t%s\n\t%s\n",source,dest);
+	if ((err=system(cmdbuf))) fprintf(stderr,"ERROR -- copyFile()\n\t%s\n\t%s\n",source,dest);
 	free(cmdbuf);
 	return err;
 }
@@ -1814,11 +2541,10 @@ const char *dest)			/* path to destination file */
 	len = is + id + strlen(repack) + 10;
 	if (id<1 || is<1 || id>FILENAME_MAX || is>FILENAME_MAX) return -1;	/* bad file name */
 	cmdbuf = (char*)calloc(len,sizeof(char));			/* space for value and terminating NULL */
-/*	if (!cmdbuf) {free(repack); return -1; }			// allocation failed */
 	if (!cmdbuf) return -1;								/* allocation failed */
 
-	sprintf(cmdbuf,"\"%s\" \"%s\" \"%s\"",repack,source,dest);
-	if (err=system(cmdbuf)) fprintf(stderr,"ERROR -- repackFile()\n\t%s\n\t%s\n",source,dest);
+	sprintf(cmdbuf,"%s \"%s\" \"%s\"",repack,source,dest);
+	if ((err=system(cmdbuf))) fprintf(stderr,"ERROR -- repackFile()\n\t%s\n\t%s\n",source,dest);
 	free(cmdbuf);
 	return err;
 }
@@ -1838,7 +2564,7 @@ const char *fileName)			/* path to file that is to be deleted */
 	cmdbuf = (char*)calloc(i+10,sizeof(char));			/* space for value and terminating NULL */
 	if (!cmdbuf) return -1;								/* allocation failed */
 	sprintf(cmdbuf,"rm -f \"%s\"",fileName);
-	if (err=system(cmdbuf)) fprintf(stderr,"ERROR -- deleteFile()\t%s\n",fileName);
+	if ((err=system(cmdbuf))) fprintf(stderr,"ERROR -- deleteFile()\t%s\n",fileName);
 	free(cmdbuf);
 	return err;
 }
@@ -1858,7 +2584,7 @@ if PVlist = "X1=123;Y1=567.200;Z1=678.9", the result will be:
 	
  >	Y1 = 567.2
 */
-double NumberByKey(			/* return a number from a keyed list "key1=val1;key2=val2;...keyN=valN"*/
+double NumberByKey_new(		/* return a number from a keyed list "key1=val1;key2=val2;...keyN=valN"*/
 char	*key,				/* key string to match */
 char	*list,				/* list */
 char	keySepChar,			/* separator character between key and value, <= means use "=" */
@@ -1867,7 +2593,7 @@ char	listSepChar)		/* separator character between list elements, <=0 means use "
 		double	value;				/* the result */
 		char	*ptr;				/* pointer into list, points to start of value */
 
-		ptr = StringByKey(key,list,keySepChar,listSepChar,30);
+		ptr = StringByKey_new(key,list,keySepChar,listSepChar,30);
 		if (ptr) {
 			value = atof(ptr);
 			free(ptr);
@@ -1878,7 +2604,7 @@ char	listSepChar)		/* separator character between list elements, <=0 means use "
 
 
 /*
-Returns an int from a keyed list.  The returned value is rounede, not truncated.  If the key
+Returns a long int from a keyed list.  The returned value is rounede, not truncated.  If the key 
 does not exist in the list, then the integer version of NaN is returned (-2147483648 ?).  
 Each item in the list is of the form key=value.  Where the equal sign is acutally the character 
 given by keySepChar.  If keySepChar is less then or equal to 0, then an equal sign is assumed. 
@@ -1892,13 +2618,13 @@ if PVlist = "X1=123;Y1=567.800;Z1=678.9", the result will be:
 	
  >	Y1 = 568
 */
-int IntByKey(				/* return an integer from a keyed list "key1=val1;key2=val2;...keyN=valN"*/
+long IntByKey_new(			/* return an integer from a keyed list "key1=val1;key2=val2;...keyN=valN"*/
 char	*key,				/* key string to match */
 char	*list,				/* list */
 char	keySepChar,			/* separator character between key and value, <= means use "=" */
 char	listSepChar)		/* separator character between list elements, <=0 means use ";" */
 {
-		return (int)floor(NumberByKey(key,list,keySepChar,listSepChar)+0.5);
+		return (long)floor(NumberByKey_new(key,list,keySepChar,listSepChar)+0.5);
 }
 
 
@@ -1912,14 +2638,14 @@ is from size of search),  and the returned value is limited to maxLen-1 characte
 terminating null).  An example of how it might be used is:
 
 	char *temp;
-	temp = StringByKey("Z1",PVlist,0,0,30);
+	temp = StringByKey_new("Z1",PVlist,0,0,30);
 	if (temp) {
 		printf(" as a string, Z1 = '%s'\n",temp);
 		free(temp);
 	}
 	else printf(" as a string, Z1 is NULL\n");
 */
-char* StringByKey(			/* return a pointer to a string from a keyed list "key1=val1;key2=val2;...keyN=valN"*/
+char* StringByKey_new(		/* return a pointer to a string from a keyed list "key1=val1;key2=val2;...keyN=valN"*/
 char	*key,				/* key string to match */
 char	*list,				/* list */
 char	keySepChar,			/* separator character between key and value, <= means use "=" */
@@ -1927,11 +2653,11 @@ char	listSepChar,		/* separator character between list elements, <=0 means use "
 int		maxLen)				/* maximum length allowed for the result */
 {
 	char	search[256];		/* search string */
-	int		n;					/* length of search string */
+	long	n;					/* length of search string */
 	char	*ptr;				/* pointer into list, points to start of value */
 	char	*ptr2;				/* pointer to end of value */
 	char	*result;			/* answer, allocate space for it too */
-	int		nr;					/* length of result, not > maxLen */
+	long	nr;					/* length of result, not > maxLen */
 
 	if (maxLen<1) return NULL;
 	if (strlen(key)>250) return NULL;		/* key string is too long */
@@ -1942,7 +2668,7 @@ int		maxLen)				/* maximum length allowed for the result */
 	search[0] = listSepChar;				/* search = ";key=" */
 	search[1] = '\0';
 	strcat(search,key);
-	n = (int)strlen(search);
+	n = strlen(search);
 	search[n++] = keySepChar;
 	search[n] = '\0';
 
@@ -1951,8 +2677,8 @@ int		maxLen)				/* maximum length allowed for the result */
 	else return NULL;
 
 	ptr2 = strchr(ptr,listSepChar);						/* points to list separator after value */
-	if (!ptr2) nr = (int)strlen(ptr);					/* assume value goes to end of string */
-	else nr = (int)(ptr2-ptr);
+	if (!ptr2) nr = strlen(ptr);						/* assume value goes to end of string */
+	else nr = ptr2-ptr;
 	if (nr < 1) return NULL;							/* nothing there */
 	if ((nr+1)>maxLen) return NULL;						/* value too long */
 

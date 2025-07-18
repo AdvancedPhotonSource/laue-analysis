@@ -13,9 +13,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <math.h>
-#ifdef __linux__
-#include <wait.h>
-#endif
+/* #include <wait.h> */
+#include <sys/wait.h>
 #include "mathUtil.h"
 
 #include "WireScanDataTypesN.h"
@@ -61,7 +60,7 @@ char distortionFilePath[FILENAME_MAX])
 
 	buf[len-1] = '\0';								/* ensure null terminated */
 	p = buf;
-	while(p=strchr(p,'\r')) *p = '\n';				/* convert all carriage returns to new lines */
+	while((p=strchr(p,'\r'))) *p = '\n';			/* convert all carriage returns to new lines */
 
 	if (!(p = strchr(buf,'\n'))) goto exitPoint;	/* p points to the first new-line (if none found --> invalid file) */
 //	if (!checkFileTypeOLD(buf,p-buf,"depthSortedInfo")) goto exitPoint;	/* check the file type */
@@ -74,16 +73,17 @@ char distortionFilePath[FILENAME_MAX])
 	if (!strFromTagBuf(buf,"ws_depthStart",line,250))		{ *depth_start = atof(line); n=n|1<<2; }			/* first depth relative to Si (micron) */
 	if (!strFromTagBuf(buf,"ws_depthEnd",line,250))			{ *depth_end = atof(line); n=n|1<<3; }				/* last depth relative to Si (micron) */
 	if (!strFromTagBuf(buf,"ws_depthResolution",line,250))	{ *resolution = atof(line); n=n|1<<4; }				/* depth resolution (micron) */
-	if (!strFromTagBuf(buf,"ws_detectorNumber",line,250))	{ *detector = atoi(line); n=n|1<<5; }				/* detector number */
-	if (!strFromTagBuf(buf,"ws_firstInputIndex",line,250))	{ *first_image = atoi(line); }						/* index to first input image */
-	if (!strFromTagBuf(buf,"ws_lastInputIndex",line,250))	{ *last_image = atoi(line); }						/* index to last input image, (optional) */
+	if (!strFromTagBuf(buf,"ws_detectorNumber",line,250))	{ *detector = (int)atol(line); n=n|1<<5; }			/* detector number */
+
+	if (!strFromTagBuf(buf,"ws_firstInputIndex",line,250))	{ *first_image = (int)atol(line); }					/* index to first input image */
+	if (!strFromTagBuf(buf,"ws_lastInputIndex",line,250))	{ *last_image = (int)atol(line); }					/* index to last input image, (optional) */
 	if (!strFromTagBuf(buf,"ws_distortionMap",line,250))	strncpy(distortionFilePath,line,250);				/* path to distortion map */
 	if (!strFromTagBuf(buf,"ws_normalization",line,250))	strncpy(normalization,line,FILENAME_MAX);			/* normalization tag, not required */
 	if (!strFromTagBuf(buf,"ws_percentOfPixels",line,250))	percent = (float)atof(line);						/* % of pixels used */
-	if (!strFromTagBuf(buf,"ws_wireEdge",line,250))			*wireEdge = atoi(line);								/* edge of wire used (1=leading, 0=trailing, -1=both) */
-	if (!strFromTagBuf(buf,"ws_outputPixelType",line,250))	*out_pixel_type = atoi(line);						/* nunmber type of output pixels */
-	if (!strFromTagBuf(buf,"ws_MiB_RAM",line,250))			AVAILABLE_RAM_MiB = atoi(line);						/* MiB of RAM used */
-	if (!strFromTagBuf(buf,"ws_verbose",line,250))			verbose = atoi(line);								/* verbose flag */
+	if (!strFromTagBuf(buf,"ws_wireEdge",line,250))			*wireEdge = (int)atol(line);						/* edge of wire used (1=leading, 0=trailing, -1=both) */
+	if (!strFromTagBuf(buf,"ws_outputPixelType",line,250))	*out_pixel_type = (int)atol(line);					/* nunmber type of output pixels */
+	if (!strFromTagBuf(buf,"ws_MiB_RAM",line,250))			AVAILABLE_RAM_MiB = (int)atol(line);				/* MiB of RAM used */
+	if (!strFromTagBuf(buf,"ws_verbose",line,250))			verbose = (int)atol(line);							/* verbose flag */
 	if (n != (1<<6)-1) {
 		error("-F when reading file, some of the required program parameters were missing\n   must have {ws_infile, ws_outfile, ws_depthStart, ws_depthEnd, ws_depthResolution, ws_detectorNumber}\n");
 		goto exitPoint;
@@ -95,8 +95,8 @@ char distortionFilePath[FILENAME_MAX])
 
 	/* read geometry parameters from input file */
 	n = 0;
-	sprintf(tag,"d%d_Nx",*detector);		if (!strFromTagBuf(buf,tag,line,250))	{ geoIn.d[*detector].Nx = atoi(line); n=n|1<<0; }	/* detector description */
-	sprintf(tag,"d%d_Ny",*detector);		if (!strFromTagBuf(buf,tag,line,250))	{ geoIn.d[*detector].Ny = atoi(line); n=n|1<<1; }
+	sprintf(tag,"d%d_Nx",*detector);		if (!strFromTagBuf(buf,tag,line,250))	{ geoIn.d[*detector].Nx = atol(line); n=n|1<<0; }	/* detector description */
+	sprintf(tag,"d%d_Ny",*detector);		if (!strFromTagBuf(buf,tag,line,250))	{ geoIn.d[*detector].Ny = atol(line); n=n|1<<1; }
 	sprintf(tag,"d%d_sizeX",*detector);		if (!strFromTagBuf(buf,tag,line,250))	{ geoIn.d[*detector].sizeX = atof(line); n=n|1<<2; }
 	sprintf(tag,"d%d_sizeY",*detector);		if (!strFromTagBuf(buf,tag,line,250))	{ geoIn.d[*detector].sizeY = atof(line); n=n|1<<3; }
 	sprintf(tag,"d%d_R",*detector);
@@ -118,7 +118,7 @@ char distortionFilePath[FILENAME_MAX])
 		}
 	}
 	if (!strFromTagBuf(buf,"wireDia",line,250))		{ geoIn.wire.dia = atof(line); n=n|1<<6; }	/* wire positions */
-	if (!strFromTagBuf(buf,"wireKnife",line,250))	{ geoIn.wire.knife = atoi(line); n=n|1<<7; }/* wire type (knife_edge=1, or stand_alone_wire=0) */
+	if (!strFromTagBuf(buf,"wireKnife",line,250))	{ geoIn.wire.knife = (int)atol(line); n=n|1<<7; }/* wire type (knife_edge=1, or stand_alone_wire=0) */
 	if (!strFromTagBuf(buf,"wireOrigin",line,250)) {
 		if (sscanf(line,"{%lg,%lg,%lg}",&x,&y,&z)==3) {
 			geoIn.wire.origin[0] = x;
@@ -274,8 +274,7 @@ int first_image,					/* index to first input image file */
 int last_image,						/* index to last input image file */
 int out_pixel_type,					/* type to use for the output pixel */
 int wireEdge,						/* 1=leading edge of wire, 0=trailing edge of wire, -1=both edges */
-char *normalization,				/* optional tag for normalization */
-char *depthCorrectStr)					/* optional name of file with depth corrections for each pixel */
+char *normalization)				/* optional tag for normalization */
 {
 	/* globals printed here:	percent, AVAILABLE_RAM_MiB, verbose, distortionPath */
 	if (!f) return;
@@ -298,10 +297,13 @@ char *depthCorrectStr)					/* optional name of file with depth corrections for e
 	if (normalization[0]) fprintf(f,"$ws_normalization		%s				// tag used to normalize incident intensity\n",normalization);
 	fprintf(f,"$ws_wireEdge			%d				// edge of wire to use, 1=leading, 0=trailing, -1=both\n",wireEdge);
 	if (out_pixel_type>=0) fprintf(f,"$ws_outputPixelType		%d				// nunmber type of output pixels (1=long)\n",out_pixel_type);
-	if (strlen(depthCorrectStr)) fprintf(f,"$ws_depthCorrectMap		%s\n",depthCorrectStr);
 	fprintf(f,"$ws_percentOfPixels		%g				// %% of pixels used\n",percent);
-	fprintf(f,"$ws_MiB_RAM				%d				// MiB of RAM used\n",AVAILABLE_RAM_MiB);
+	fprintf(f,"$ws_MiB_RAM				%d			// MiB of RAM used\n",AVAILABLE_RAM_MiB);
+	fprintf(f,"$cosmic_filter			%d				// removed high pixels that look like cosmics\n", cosmic);
 	fprintf(f,"$ws_verbose				%d				// verbose flag\n",verbose);
+#ifdef TARGET_NAME
+	if (strlen(TARGET_NAME)) fprintf(f,"$program_name		%s	// name of reconstruction program\n",TARGET_NAME);
+#endif
 }
 
 /* write last part of summary file */
@@ -315,37 +317,55 @@ double	seconds)					/* execution time (seconds) */
 	long	scanNum;
 
 	if (!f) return;
+#ifdef MULTI_IMAGE_FILE
+	if (in_header.xSample.N==1) X1 = in_header.xSample.v[0];
+	if (in_header.ySample.N==1) Y1 = in_header.ySample.v[0];
+	if (in_header.zSample.N==1) Z1 = in_header.zSample.v[0];
+	if (in_header.energy.N==1) keV = in_header.energy.v[0];
+#else
 	X1 = in_header.xSample;
 	Y1 = in_header.ySample;
 	Z1 = in_header.zSample;
 	keV = in_header.energy;
+#endif
 	H1 = (Z1+Y1)/sqrt(2.0);
 	F1 = (Z1-Y1)/sqrt(2.0);
 
+	if (norm_exponent>0.0) {
+		fprintf(f,"$norm_exponent			%g				// normalization exponent\n",norm_exponent);
+		fprintf(f,"$norm_threshold			%g				// normalization lower threshold\n",norm_threshold);
+		fprintf(f,"$norm_rescale			%g				// normalization rescale after calculation\n",norm_rescale);
+	}
+	else {
+		fprintf(f,"$norm_exponent			0				// normalization exponent\n");
+		fprintf(f,"$norm_threshold			nan				// normalization lower threshold\n");
+		fprintf(f,"$norm_rescale			1				// normalization rescale after calculation\n");
+	}
+
 	value = in_header.scanNum;
 	if (value==value) {
-		scanNum = (int)round(value);
+		scanNum = round(value);
 		fprintf(f,"$scanNum				%ld			// scan number used to take this data\n",scanNum);
 	}
-	fprintf(f,"$startx					%ld				// x start of ROI (unbinned pixels)\n",in_header.startx);
-	fprintf(f,"$endx					%ld			// x end of ROI (unbinned pixels)\n",in_header.endx);
-	fprintf(f,"$groupx					%ld				// binning in x\n",in_header.groupx);
-	fprintf(f,"$starty					%ld				// y start of ROI (unbinned pixels)\n",in_header.starty);
-	fprintf(f,"$endy					%ld			// y end of ROI (unbinned pixels)\n",in_header.endy);
-	fprintf(f,"$groupy					%ld				// binning in y\n",in_header.groupy);
+	fprintf(f,"$startx					%d				// x start of ROI (unbinned pixels)\n",(int)in_header.startx);
+	fprintf(f,"$endx					%d			// x end of ROI (unbinned pixels)\n",(int)in_header.endx);
+	fprintf(f,"$groupx					%d				// binning in x\n",(int)in_header.groupx);
+	fprintf(f,"$starty					%d				// y start of ROI (unbinned pixels)\n",(int)in_header.starty);
+	fprintf(f,"$endy					%d			// y end of ROI (unbinned pixels)\n",(int)in_header.endy);
+	fprintf(f,"$groupy					%d				// binning in y\n",(int)in_header.groupy);
 
 	if (X1 == X1) fprintf(f,"$X1						%g			// X sample position of PM500 beam line coords (micron)\n",X1);
 	if ((Y1+Z1) == (Y1+Z1)) {
 		fprintf(f,"$Y1						%g			// Y sample position (micron)\n",Y1);
 		fprintf(f,"$Z1						%g			// Z sample position (micron)\n",Z1);
-		fprintf(f,"$H1						%g		// H sample position (micron)\n",H1);
+		fprintf(f,"$H1						%g			// H sample position (micron)\n",H1);
 		fprintf(f,"$F1						%g			// F sample position (micron)\n",F1);
 	}
 	if (keV==keV) fprintf(f,"$keV					%g			// energy of monochromator (keV)\n",keV);
 	fprintf(f,"$rows_at_one_time		%lu			// rows to process at one time (out of %lu)\n", imaging_parameters.rows_at_one_time,in_header.ydim);
 
 	if (seconds > 2.) fprintf(f,"$executionTime			%.1f			// execution time (sec)\n",seconds);
-	else fprintf(f,"$executionTime			%.3f			// execution time (sec)\n",seconds);
+	else fprintf(f,"$executionTime		%.3f			// execution time (sec)\n",seconds);
 
 	double depth, maxIntenity=image_set.depth_intensity.v[0];
 	int i, imax=0;

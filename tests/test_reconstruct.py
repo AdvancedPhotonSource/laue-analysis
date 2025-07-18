@@ -90,15 +90,15 @@ class TestReconstruct:
         call_args = mock_subprocess.call_args[0][0]
         
         # Check basic arguments
-        assert '--infile' in call_args
+        assert '-i' in call_args
         assert 'input.h5' in call_args
-        assert '--outfile' in call_args
+        assert '-o' in call_args
         assert 'output_' in call_args
-        assert '--geofile' in call_args
+        assert '-g' in call_args
         assert 'geo.xml' in call_args
-        assert '--depth-start' in call_args
+        assert '-s' in call_args
         assert '0.0' in call_args
-        assert '--depth-end' in call_args
+        assert '-e' in call_args
         assert '10.0' in call_args
     
     def test_reconstruct_with_all_options(self, mock_subprocess, mock_executable):
@@ -125,27 +125,27 @@ class TestReconstruct:
         
         # Check all parameters in command
         call_args = mock_subprocess.call_args[0][0]
-        assert '--resolution' in call_args
+        assert '-r' in call_args
         assert '0.5' in call_args
-        assert '--first-image' in call_args
+        assert '-f' in call_args
         assert '1' in call_args
-        assert '--last-image' in call_args
+        assert '-l' in call_args
         assert '100' in call_args
-        assert '--verbose' in call_args
+        assert '-v' in call_args
         assert '2' in call_args
-        assert '--percent-to-process' in call_args
+        assert '-p' in call_args
         assert '50.0' in call_args
-        assert '--wire-edges' in call_args
+        assert '-w' in call_args
         assert 'b' in call_args  # 'both' maps to 'b'
-        assert '--memory' in call_args
+        assert '-m' in call_args
         assert '256' in call_args
-        assert '--normalization' in call_args
+        assert '-n' in call_args
         assert 'norm_tag' in call_args
-        assert '--type-output-pixel' in call_args
+        assert '-t' in call_args
         assert '3' in call_args
-        assert '--distortion_map' in call_args
+        assert '-d' in call_args
         assert 'distortion.map' in call_args
-        assert '--detector_number' in call_args
+        assert '-D' in call_args
         assert '1' in call_args
         assert '--wireDepths' in call_args
         assert 'depths.txt' in call_args
@@ -167,7 +167,7 @@ class TestReconstruct:
                 wire_edge=user_name
             )
             call_args = mock_subprocess.call_args[0][0]
-            idx = call_args.index('--wire-edges')
+            idx = call_args.index('-w')
             assert call_args[idx + 1] == expected
     
     def test_invalid_wire_edge(self, mock_executable):
@@ -300,7 +300,7 @@ class TestReconstruct:
         # Check that output names include depth info
         for i, (call_args, _) in enumerate(mock_subprocess.call_args_list[1::2]):  # Skip validation calls
             cmd = call_args[0]
-            outfile_idx = cmd.index('--outfile')
+            outfile_idx = cmd.index('-o')
             outfile = cmd[outfile_idx + 1]
             assert 'depth_' in outfile
             assert f'{i*5}.0_{(i+1)*5}.0' in outfile

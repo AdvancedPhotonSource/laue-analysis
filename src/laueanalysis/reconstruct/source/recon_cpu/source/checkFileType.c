@@ -12,7 +12,7 @@
 #include "checkFileType.h"
 #include "xmlUtility.h"
 
-int	checkForXMLtags(char *buf, char *typeListIn);
+static int	checkForXMLtags(char *buf, char *typeListIn);
 
 
 int checkFileType(	/* return 1 for old style '$', return 2 for xml, return 0 if not OK */
@@ -37,7 +37,7 @@ char *xmlTagsIn)	/* comma separated list of acceptable xml tags */
 
 
 
-int	checkForXMLtags(
+static int	checkForXMLtags(
 char *buf,									/* string to check for existance of tags */
 char *tagListIn)							/* comma separated list of acceptable tags, each tag limited to 254 charaters */
 {
