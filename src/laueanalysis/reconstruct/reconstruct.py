@@ -194,7 +194,13 @@ def reconstruct(
     output_pixel_type: Optional[int] = None,
     distortion_map: Optional[str] = None,
     detector_number: int = 0,
-    wire_depths_file: Optional[str] = None
+    wire_depths_file: Optional[str] = None,
+    # Threaded version parameters
+    num_threads: Optional[int] = None,
+    rows_per_stripe: Optional[int] = None,
+    cosmic_filter: bool = False,
+    norm_exponent: Optional[float] = None,
+    norm_threshold: Optional[float] = None
 ) -> ReconstructionResult:
     """
     Reconstruct wire scan data.
@@ -217,6 +223,11 @@ def reconstruct(
         distortion_map: Optional distortion map file
         detector_number: Detector number (default 0)
         wire_depths_file: Optional file with depth corrections
+        num_threads: Number of OpenMP threads (default: auto-detect)
+        rows_per_stripe: Rows to process per stripe (default: 256)
+        cosmic_filter: Enable cosmic ray filtering
+        norm_exponent: Exponent for image intensity scaling (e.g., 0.5)
+        norm_threshold: Threshold for image intensity scaling
         
     Returns:
         ReconstructionResult containing:
@@ -249,31 +260,43 @@ def reconstruct(
     # Build command
     cmd = [
         exe_path,
-        '--infile', str(input_file),
-        '--outfile', str(output_file),
-        '--geofile', str(geometry_file),
-        '--depth-start', str(depth_range[0]),
-        '--depth-end', str(depth_range[1]),
-        '--resolution', str(resolution),
-        '--verbose', str(verbose),
-        '--percent-to-process', str(percent_brightest),
-        '--wire-edges', _map_wire_edge(wire_edge),
-        '--memory', str(memory_limit_mb),
-        '--detector_number', str(detector_number)
+        '-i', str(input_file),
+        '-o', str(output_file),
+        '-g', str(geometry_file),
+        '-s', str(depth_range[0]),
+        '-e', str(depth_range[1]),
+        '-r', str(resolution),
+        '-v', str(verbose),
+        '-p', str(percent_brightest),
+        '-w', _map_wire_edge(wire_edge),
+        '-m', str(memory_limit_mb),
+        '-D', str(detector_number)
     ]
     
     # Add optional parameters
     if image_range is not None:
-        cmd.extend(['--first-image', str(image_range[0])])
-        cmd.extend(['--last-image', str(image_range[1])])
+        cmd.extend(['-f', str(image_range[0])])
+        cmd.extend(['-l', str(image_range[1])])
     if normalization:
-        cmd.extend(['--normalization', normalization])
+        cmd.extend(['-n', normalization])
     if output_pixel_type is not None:
-        cmd.extend(['--type-output-pixel', str(output_pixel_type)])
+        cmd.extend(['-t', str(output_pixel_type)])
     if distortion_map:
-        cmd.extend(['--distortion_map', distortion_map])
+        cmd.extend(['-d', distortion_map])
     if wire_depths_file:
         cmd.extend(['--wireDepths', wire_depths_file])
+    
+    # Add threaded version parameters
+    if num_threads is not None:
+        cmd.extend(['-N', str(num_threads)])
+    if rows_per_stripe is not None:
+        cmd.extend(['-R', str(rows_per_stripe)])
+    if cosmic_filter:
+        cmd.append('-C')
+    if norm_exponent is not None:
+        cmd.extend(['-E', str(norm_exponent)])
+    if norm_threshold is not None:
+        cmd.extend(['-T', str(norm_threshold)])
     
     return _execute_reconstruction(cmd, str(output_file), timeout)
 
