@@ -273,7 +273,7 @@ def test_index_function_with_errors_continues_processing(test_config, temp_image
                 config=test_config
             )
         
-        # Should still succeed (matches pyLaueGo behavior)
+        # Should still succeed (graceful degradation)
         assert result.success is True
         assert result.n_peaks_found == 5
         assert result.n_indexed == 0

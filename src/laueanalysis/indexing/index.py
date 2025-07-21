@@ -73,7 +73,7 @@ def _run_command(cmd: List[str], timeout: int) -> Tuple[bool, str, str, int]:
         A tuple of (success, stdout, stderr, return_code).
         Note: success is based on return code being 0. Some Laue tools
         have other success codes, which must be handled by the caller.
-        This matches pyLaueGo's behavior of continuing on errors.
+        This implements graceful degradation - continuing on errors.
     """
     try:
         result = subprocess.run(
@@ -83,7 +83,7 @@ def _run_command(cmd: List[str], timeout: int) -> Tuple[bool, str, str, int]:
             check=False,
             timeout=timeout
         )
-        # Match pyLaueGo behavior: log errors but don't fail immediately
+        # Log errors but don't fail immediately - graceful degradation
         return result.returncode == 0, result.stdout, result.stderr, result.returncode
     except subprocess.TimeoutExpired:
         return False, "", f"Process timed out after {timeout} seconds", -1
@@ -135,7 +135,7 @@ def _run_peaksearch(input_image: str, output_dir: str, config: LaueConfig,
     """
     executables = _find_executables()
     
-    # Create output filename (match pyLaueGo naming: remove .h5 extension)
+    # Create output filename (remove .h5 extension for consistent naming)
     input_path = Path(input_image)
     if input_path.suffix == '.h5':
         base_name = input_path.stem  # Remove .h5
@@ -143,7 +143,7 @@ def _run_peaksearch(input_image: str, output_dir: str, config: LaueConfig,
         base_name = input_path.stem
     output_file = Path(output_dir) / f'peaks_{base_name}.txt'
     
-    # Build command like the original pyLaueGo
+    # Build peaksearch command
     cmd = [
         executables['peaksearch'],
         '-b', str(config.boxsize or 5),
@@ -341,7 +341,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     if stderr:
         log_parts.append(f"Peak search stderr: {stderr}")
     
-    # Match pyLaueGo: continue even if peaksearch has errors (might still produce output)
+    # Continue even if peaksearch has errors (might still produce output)
     if not success:
         log_parts.append(f"Peak search had errors (return code {returncode}), but checking for output files...")
     
@@ -366,7 +366,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     output_files['peaks'] = peaks_file
     n_peaks_found = _parse_peaks_output(peaks_file)
     
-    # Match pyLaueGo logic: only run p2q if we have peaks
+    # Only run p2q if we have peaks
     if n_peaks_found > 0:
         # Step 2: Run p2q conversion
         log_parts.append("Running pixel-to-q conversion...")
@@ -380,7 +380,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         
         if not success:
             log_parts.append(f"P2Q conversion failed with return code {returncode}, but continuing...")
-            # Match pyLaueGo: don't fail completely, continue without p2q results
+            # Don't fail completely, continue without p2q results
             return IndexingResult(
                 success=True,  # Still success, just no p2q/indexing
                 output_files=output_files,
@@ -414,7 +414,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         p2q_file = str(p2q_files[0])
         output_files['p2q'] = p2q_file
         
-        # Match pyLaueGo logic: only run indexing if we have at least 2 peaks
+        # Only run indexing if we have at least 2 peaks
         if n_peaks_found > 1:
             # Step 3: Run indexing
             log_parts.append("Running indexing...")
@@ -428,7 +428,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             
             if not success:
                 log_parts.append(f"Indexing failed with return code {returncode}, but continuing...")
-                # Match pyLaueGo: don't fail completely, return what we have
+                # Don't fail completely, return what we have
                 return IndexingResult(
                     success=True,  # Still success, just no indexing results
                     output_files=output_files,
