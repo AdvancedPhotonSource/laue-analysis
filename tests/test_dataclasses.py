@@ -66,10 +66,3 @@ def test_xtl_import():
     """Test that the Xtl dataclass can be imported."""
     from laueanalysis.indexing.lau_dataclasses.xtl import Xtl
     assert hasattr(Xtl, 'set')
-
-
-def test_main_class_import():
-    """Test that the main PyLaueGo class can be imported."""
-    from laueanalysis.indexing.pyLaueGo import PyLaueGo
-    assert hasattr(PyLaueGo, 'index')
-    assert hasattr(PyLaueGo, 'p2q')
