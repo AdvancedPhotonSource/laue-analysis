@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+
+"""Smoke test for the new functional index interface with real data and executables."""
+
+import os
+import tempfile
+import yaml
+import pytest
+from pathlib import Path
+from unittest.mock import patch
+
+from laueanalysis.indexing import index, IndexingResult
+from laueanalysis.indexing.lau_dataclasses.config import LaueConfig
+
+
+@pytest.fixture
+def config_path():
+    """Path to the test config file."""
+    path = os.path.join("tests", "data", "test_config.yaml")
+    assert os.path.exists(path), f"Config file {path} not found"
+    return path
+
+
+@pytest.fixture
+def test_config(config_path):
+    """Load and prepare test configuration."""
+    with open(config_path, 'r') as f:
+        config_dict = yaml.safe_load(f)
+    
+    # Create temporary directory for output
+    temp_dir = tempfile.TemporaryDirectory()
+    config_dict['outputFolder'] = temp_dir.name
+    
+    # Convert to LaueConfig object
+    config = LaueConfig.from_dict(config_dict)
+    
+    yield config, temp_dir, config_dict
+    
+    # Cleanup
+    temp_dir.cleanup()
+
+
+def test_functional_index_with_real_data(test_config):
+    """Test the functional index interface with real data and executables."""
+    config, temp_dir, config_dict = test_config
+    
+    # Use the real test data file
+    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
+    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
+    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    
+    # Verify test files exist
+    assert os.path.exists(test_file), f"Test data file not found: {test_file}"
+    assert os.path.exists(geo_file), f"Geometry file not found: {geo_file}"
+    assert os.path.exists(crystal_file), f"Crystal file not found: {crystal_file}"
+    
+    # Run the functional index with real data
+    result = index(
+        input_image=test_file,
+        output_dir=temp_dir.name,
+        geo_file=geo_file,
+        crystal_file=crystal_file,
+        config=config
+    )
+    
+    # Verify the result
+    assert isinstance(result, IndexingResult)
+    print(f"Processing result: success={result.success}, peaks={result.n_peaks_found}, indexed={result.n_indexed}")
+    print(f"Log: {result.log}")
+    if result.error:
+        print(f"Error: {result.error}")
+    
+    # The result should succeed (even if no peaks/indexing found)
+    assert result.success is True
+    assert result.config is not None
+    assert len(result.command_history) > 0
+    
+    # Check that output directories were created
+    _check_output_structure(temp_dir.name)
+    
+    # Check that output files exist
+    assert 'peaks' in result.output_files
+    assert os.path.exists(result.output_files['peaks'])
+    
+    # If peaks were found, p2q should have run
+    if result.n_peaks_found > 0:
+        assert 'p2q' in result.output_files
+        assert os.path.exists(result.output_files['p2q'])
+        
+        # If enough peaks for indexing, indexing should have run
+        if result.n_peaks_found > 1:
+            assert 'index' in result.output_files
+            assert os.path.exists(result.output_files['index'])
+    
+    # Verify command history contains the right executables
+    assert any('peaksearch' in cmd for cmd in result.command_history)
+    if result.n_peaks_found > 0:
+        assert any('pix2qs' in cmd for cmd in result.command_history)
+        if result.n_peaks_found > 1:
+            assert any('euler' in cmd for cmd in result.command_history)
+
+
+def test_functional_index_batch_processing_real_data(test_config):
+    """Test processing multiple files using the functional interface with real logic."""
+    config, temp_dir, config_dict = test_config
+    
+    # Use the real test data file
+    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5") 
+    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
+    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    
+    # Create additional test files by copying the original
+    input_dir = os.path.join(temp_dir.name, 'input')
+    os.makedirs(input_dir, exist_ok=True)
+    
+    test_files = []
+    for i in range(2):
+        new_file = os.path.join(input_dir, f"test_{i}.h5")
+        # Copy the real test data
+        with open(test_file, 'rb') as src, open(new_file, 'wb') as dst:
+            dst.write(src.read())
+        test_files.append(new_file)
+    
+    # Process each file with the functional interface
+    results = []
+    for test_file_copy in test_files:
+        result = index(
+            input_image=test_file_copy,
+            output_dir=temp_dir.name,
+            geo_file=geo_file,
+            crystal_file=crystal_file,
+            config=config
+        )
+        results.append(result)
+    
+    # Verify all files were processed successfully
+    assert len(results) == len(test_files)
+    assert all(result.success for result in results)
+    
+    # All should have the same results since it's the same data
+    peak_counts = [result.n_peaks_found for result in results]
+    indexed_counts = [result.n_indexed for result in results]
+    
+    # All files should produce the same results
+    assert len(set(peak_counts)) <= 1, f"Inconsistent peak counts: {peak_counts}"
+    assert len(set(indexed_counts)) <= 1, f"Inconsistent index counts: {indexed_counts}"
+    
+    # Check output structure
+    _check_output_structure(temp_dir.name)
+
+
+def test_functional_index_error_handling_real_executables(test_config):
+    """Test error handling with real executables but invalid input."""
+    config, temp_dir, config_dict = test_config
+    
+    # Create an invalid input file
+    invalid_file = os.path.join(temp_dir.name, 'invalid.h5')
+    with open(invalid_file, 'wb') as f:
+        f.write(b'invalid h5 data that will cause processing to fail')
+    
+    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
+    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    
+    # Run with invalid data
+    result = index(
+        input_image=invalid_file,
+        output_dir=temp_dir.name,
+        geo_file=geo_file,
+        crystal_file=crystal_file,
+        config=config
+    )
+    
+    # Should handle errors gracefully
+    print(f"Error handling result: success={result.success}, error={result.error}")
+    print(f"Log: {result.log}")
+    
+    # Even with invalid data, should create output structure
+    _check_output_structure(temp_dir.name)
+    
+    # Should have attempted to run peaksearch
+    assert len(result.command_history) > 0
+    assert any('peaksearch' in cmd for cmd in result.command_history)
+
+
+def test_functional_index_maintains_compatibility():
+    """Test that the functional interface maintains compatibility with existing expectations."""
+    
+    # Test with real files but minimal configuration
+    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
+    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
+    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    
+    # Create temporary output directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Should work with just the essential parameters
+        result = index(
+            input_image=test_file,
+            output_dir=temp_dir,
+            geo_file=geo_file,
+            crystal_file=crystal_file
+        )
+        
+        # Verify compatibility
+        assert result.success is True
+        assert result.config is not None  # Config was created automatically
+        assert hasattr(result, 'command_history')  # New feature for debugging
+        assert hasattr(result, 'log')  # Detailed logging
+        
+        # Verify that IndexingResult can be used like the old Step/Indexing objects
+        assert hasattr(result, 'n_peaks_found')
+        assert hasattr(result, 'n_indexed')
+        assert hasattr(result, 'output_files')
+        
+        # Output structure should be created
+        _check_output_structure(temp_dir)
+
+
+def test_functional_index_equivalence():
+    """Test that the functional interface produces consistent and expected results."""
+    
+    # This test demonstrates the functional interface capabilities
+    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
+    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
+    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    
+    # Load real config
+    with open(os.path.join("tests", "data", "test_config.yaml"), 'r') as f:
+        config_dict = yaml.safe_load(f)
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config_dict['outputFolder'] = temp_dir
+        config = LaueConfig.from_dict(config_dict)
+        
+        # Functional interface call that provides comprehensive indexing
+        result = index(
+            input_image=test_file,
+            output_dir=temp_dir,
+            geo_file=geo_file,
+            crystal_file=crystal_file,
+            config=config
+        )
+        
+        # Verify the result contains all the expected indexing information
+        assert result.success is True
+        assert isinstance(result.n_peaks_found, int)  # Equivalent to step.detector.peaksXY.Npeaks
+        assert isinstance(result.n_indexed, int)      # Equivalent to step.indexing.Nindexed  
+        assert 'peaks' in result.output_files         # Equivalent to peakSearchOut
+        
+        # If processing succeeded, should have p2q output for peaks > 0
+        if result.n_peaks_found > 0:
+            assert 'p2q' in result.output_files       # Equivalent to p2qOut
+            
+        # If enough peaks, should have indexing output 
+        if result.n_peaks_found > 1:
+            assert 'index' in result.output_files     # Equivalent to indexOut
+        
+        # Benefits of the functional interface
+        assert len(result.command_history) > 0        # Command history for debugging
+        assert len(result.log) > 0                    # Detailed execution log
+        assert result.config is not None             # Full config used for the run
+        
+        print(f"Functional interface test result: peaks={result.n_peaks_found}, indexed={result.n_indexed}")
+        print(f"Output files: {list(result.output_files.keys())}")
+
+
+def _check_output_structure(temp_dir_name):
+    """Verify that the output directory structure was created correctly."""
+    # Check that the output directory structure was created
+    output_dirs = ['peaks', 'p2q', 'index', 'error']
+    for dir_name in output_dirs:
+        dir_path = os.path.join(temp_dir_name, dir_name)
+        assert os.path.exists(dir_path), f"Output directory {dir_name} not created"
+        assert os.path.isdir(dir_path), f"Output path {dir_name} is not a directory"
