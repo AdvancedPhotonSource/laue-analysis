@@ -215,10 +215,10 @@ def test_functional_index_maintains_compatibility():
         _check_output_structure(temp_dir)
 
 
-def test_functional_index_vs_pylauego_equivalence():
-    """Test that the functional interface produces equivalent results to PyLaueGo."""
+def test_functional_index_equivalence():
+    """Test that the functional interface produces consistent and expected results."""
     
-    # This test demonstrates that the new interface can replace PyLaueGo calls
+    # This test demonstrates the functional interface capabilities
     test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
     geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
     crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
@@ -231,7 +231,7 @@ def test_functional_index_vs_pylauego_equivalence():
         config_dict['outputFolder'] = temp_dir
         config = LaueConfig.from_dict(config_dict)
         
-        # New functional call that replaces PyLaueGo.processFile()
+        # Functional interface call that provides comprehensive indexing
         result = index(
             input_image=test_file,
             output_dir=temp_dir,
@@ -240,7 +240,7 @@ def test_functional_index_vs_pylauego_equivalence():
             config=config
         )
         
-        # Verify the result contains all the information that PyLaueGo.processFile() would provide
+        # Verify the result contains all the expected indexing information
         assert result.success is True
         assert isinstance(result.n_peaks_found, int)  # Equivalent to step.detector.peaksXY.Npeaks
         assert isinstance(result.n_indexed, int)      # Equivalent to step.indexing.Nindexed  
@@ -254,12 +254,12 @@ def test_functional_index_vs_pylauego_equivalence():
         if result.n_peaks_found > 1:
             assert 'index' in result.output_files     # Equivalent to indexOut
         
-        # New benefits not available in PyLaueGo
+        # Benefits of the functional interface
         assert len(result.command_history) > 0        # Command history for debugging
         assert len(result.log) > 0                    # Detailed execution log
         assert result.config is not None             # Full config used for the run
         
-        print(f"Equivalence test result: peaks={result.n_peaks_found}, indexed={result.n_indexed}")
+        print(f"Functional interface test result: peaks={result.n_peaks_found}, indexed={result.n_indexed}")
         print(f"Output files: {list(result.output_files.keys())}")
 
 

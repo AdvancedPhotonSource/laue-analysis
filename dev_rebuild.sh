@@ -9,6 +9,6 @@ cd ../../../reconstruct/source/recon_cpu && make clean
 
 echo "Reinstalling package..."
 cd /net/s34data/export/s34data1/LauePortal/src/laue-analysis
-pip install .
+pip3 install .
 
 echo "Done!"
