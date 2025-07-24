@@ -43,6 +43,14 @@ class CustomBuild(build):
         except (subprocess.CalledProcessError, FileNotFoundError):
             missing_tools.append('h5cc')
         
+        # Check for nvcc (CUDA compiler) - optional, only warn if missing
+        has_cuda = False
+        try:
+            result = subprocess.run(['nvcc', '--version'], capture_output=True, check=True)
+            has_cuda = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("Warning: nvcc (CUDA compiler) not found. GPU reconstruction will be skipped.")
+        
         if missing_tools:
             print(f"Error: Missing required build tools: {', '.join(missing_tools)}")
             print("Please install the missing tools and try again.")
@@ -60,7 +68,8 @@ class CustomBuild(build):
             },
             'reconstruct': {
                 'programs': {
-                    'recon_cpu': 'reconstructN_cpu'  # reconstructN_cpu reconstruction program
+                    'recon_cpu': 'reconstructN_cpu',  # reconstructN_cpu reconstruction program
+                    'recon_gpu': 'reconstructN_gpu'    # GPU reconstruction program
                 },
                 'special_builds': {}
             }
@@ -84,6 +93,11 @@ class CustomBuild(build):
             print(f"Looking for source directories in: {src_dir}")
             
             for program_dir, exe_name in config['programs'].items():
+                # Skip GPU program if CUDA is not available
+                if program_dir == 'recon_gpu' and not has_cuda:
+                    print(f"Skipping {program_dir} (CUDA not available)")
+                    continue
+                    
                 program_path = src_dir / program_dir
                 if not program_path.exists():
                     print(f"Warning: Source directory for {program_dir} not found at {program_path}")

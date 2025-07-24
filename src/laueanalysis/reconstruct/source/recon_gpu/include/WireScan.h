@@ -28,7 +28,7 @@ typedef struct
    double CWIREDIAMETER;
 }cudaConstPara;
 
-cudaConstPara paraPassed;
+extern cudaConstPara paraPassed;
 
 // cuda parameters end here
 
@@ -43,27 +43,27 @@ typedef struct
    float CWIREDIAMETER;
 }floatcudaConstPara;
 
-floatcudaConstPara floatparaPassed;
+extern floatcudaConstPara floatparaPassed;
 
 /* data structures containing information for the wire scan */
-ws_calibration calibration;
-ws_imaging_parameters imaging_parameters;
-ws_image_set image_set;
-ws_user_preferences user_preferences;
+extern ws_calibration calibration;
+extern ws_imaging_parameters imaging_parameters;
+extern ws_image_set image_set;
+extern ws_user_preferences user_preferences;
 
-gsl_matrix * intensity_map;
+extern gsl_matrix * intensity_map;
 
 /* struct HDF5_Header first_header; */
-struct HDF5_Header in_header;
-struct HDF5_Header output_header;
-struct geoStructure geoIn;
+extern struct HDF5_Header in_header;
+extern struct HDF5_Header output_header;
+extern struct geoStructure geoIn;
 
-int		verbose;							/* default to 0 */
-float	percent;							/* default to 100 */
-int		cutoff;								/* default to 0 */
-int		AVAILABLE_RAM_MiB;					/* default to 128 */
-int		detNum;								/* detector number, default to 0 */
-char	distortionPath[FILENAME_MAX];		/* full path to the distortion map */
-char	depthCorrectStr[FILENAME_MAX];		/* full path to the depth correction map */
+extern int		verbose;							/* default to 0 */
+extern float	percent;							/* default to 100 */
+extern int		cutoff;								/* default to 0 */
+extern int		AVAILABLE_RAM_MiB;					/* default to 128 */
+extern int		detNum;								/* detector number, default to 0 */
+extern char	distortionPath[FILENAME_MAX];		/* full path to the distortion map */
+extern char	depthCorrectStr[FILENAME_MAX];		/* full path to the depth correction map */
 
 #endif

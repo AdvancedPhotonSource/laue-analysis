@@ -48,6 +48,25 @@ int DATAZSIZE = 933;  // 6-3
 
 const long MiB = (1<<20);					/* 2^20, one mega byte */
 
+/* Global variable definitions (declared as extern in WireScan.h) */
+cudaConstPara paraPassed;
+floatcudaConstPara floatparaPassed;
+ws_calibration calibration;
+ws_imaging_parameters imaging_parameters;
+ws_image_set image_set;
+ws_user_preferences user_preferences;
+gsl_matrix * intensity_map;
+struct HDF5_Header in_header;
+struct HDF5_Header output_header;
+struct geoStructure geoIn;
+int verbose;
+float percent;
+int cutoff;
+int AVAILABLE_RAM_MiB;
+int detNum;
+char distortionPath[FILENAME_MAX];
+char depthCorrectStr[FILENAME_MAX];
+int positionerType;  /* defined in hardwareSpecific.h */
 
 /*---------------------------------------------------------------------------*/
 
