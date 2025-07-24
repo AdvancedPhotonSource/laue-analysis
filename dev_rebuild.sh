@@ -6,6 +6,7 @@ cd src/laueanalysis/indexing/src/peaksearch && make clean
 cd ../euler && make clean
 cd ../pixels2qs && make clean
 cd ../../../reconstruct/source/recon_cpu && make clean
+cd ../recon_gpu && make clean
 
 echo "Reinstalling package..."
 cd /net/s34data/export/s34data1/LauePortal/src/laue-analysis

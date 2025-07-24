@@ -2,7 +2,7 @@
 # Updated to support conda environments and modern CUDA architectures
 
 # Binary name
-BIN := reconstructNGPU
+BIN := reconstructN_gpu
 
 # Build mode (debug or release)
 MODE ?= release

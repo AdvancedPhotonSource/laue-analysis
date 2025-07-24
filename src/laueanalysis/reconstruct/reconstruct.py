@@ -24,7 +24,7 @@ class ReconstructionResult(NamedTuple):
 # Finding the executable involves checking package resources and PATH,
 # which can be slow. Since the executable location doesn't change during
 # program execution, we cache it after the first lookup.
-@functools.lru_cache(maxsize=1)
+@functools.lru_cache(maxsize=2)
 def _find_executable(name: str = 'reconstructN_cpu') -> str:
     """
     Find and cache the reconstruction executable path.
@@ -444,10 +444,266 @@ def depth_scan(
     return batch(configs, parallel=parallel)
 
 
+# GPU reconstruction function
+def reconstruct_gpu(
+    input_file: Union[str, Path],
+    output_file: Union[str, Path],
+    geometry_file: Union[str, Path],
+    depth_range: Tuple[float, float],
+    resolution: float = 1.0,
+    *,
+    image_range: Optional[Tuple[int, int]] = None,
+    verbose: int = 1,
+    percent_brightest: float = 100.0,
+    wire_edge: str = 'leading',
+    memory_limit_mb: int = 128,
+    executable: Optional[str] = None,
+    timeout: int = 7200,
+    # Advanced options
+    normalization: Optional[str] = None,
+    output_pixel_type: Optional[int] = None,
+    distortion_map: Optional[str] = None,
+    detector_number: int = 0,
+    # GPU-specific parameters
+    wire_depths_file: Optional[str] = None,
+    cuda_rows: int = 8
+) -> ReconstructionResult:
+    """
+    Reconstruct wire scan data using GPU (CUDA) implementation.
+    
+    Note: This GPU version does not support cosmic ray filtering or 
+    advanced normalization (norm_exponent/threshold). Use the CPU version
+    if these features are required.
+    
+    Args:
+        input_file: Path to input HDF5 file
+        output_file: Base path for output files (without extension)
+        geometry_file: Path to geometry XML file
+        depth_range: Tuple of (start, end) depths in microns
+        resolution: Depth resolution in microns (default 1.0)
+        image_range: Optional tuple of (first, last) image indices
+        verbose: Verbosity level 0-3 (default 1)
+        percent_brightest: Process only N% brightest pixels (default 100)
+        wire_edge: Wire edge to use - 'leading', 'trailing', or 'both' (default 'leading')
+        memory_limit_mb: Memory limit in MB (default 128)
+        executable: Optional path to executable (default: auto-detect)
+        timeout: Timeout in seconds (default 7200 = 2 hours)
+        normalization: Optional normalization tag
+        output_pixel_type: Optional output pixel type (0-7, WinView numbers)
+        distortion_map: Optional distortion map file
+        detector_number: Detector number (default 0)
+        wire_depths_file: Optional file with depth corrections for each pixel
+        cuda_rows: Number of CUDA rows to process (default 8)
+        
+    Returns:
+        ReconstructionResult containing:
+            - success: Whether reconstruction succeeded
+            - output_files: List of generated files
+            - log: Execution log
+            - error: Error message if failed
+            - command: Command that was executed
+            - return_code: Process return code
+            
+    Raises:
+        FileNotFoundError: If GPU executable cannot be found
+        ValueError: If parameters are invalid
+    """
+    # Find GPU executable
+    if executable:
+        exe_path = executable
+    else:
+        exe_path = _find_executable('reconstructN_gpu')
+    
+    # Validate executable on first use
+    _validate_executable(exe_path)
+    
+    # Validate parameters
+    if depth_range[0] >= depth_range[1]:
+        raise ValueError(
+            f"Invalid depth range: start ({depth_range[0]}) must be less than end ({depth_range[1]})"
+        )
+    
+    # Build command
+    cmd = [
+        exe_path,
+        '-i', str(input_file),
+        '-o', str(output_file),
+        '-g', str(geometry_file),
+        '-s', str(depth_range[0]),
+        '-e', str(depth_range[1]),
+        '-r', str(resolution),
+        '-v', str(verbose),
+        '-p', str(percent_brightest),
+        '-w', _map_wire_edge(wire_edge),
+        '-m', str(memory_limit_mb),
+        '-D', str(detector_number),
+        '-R', str(cuda_rows)  # GPU uses -R for CUDA rows
+    ]
+    
+    # Add optional parameters
+    if image_range is not None:
+        cmd.extend(['-f', str(image_range[0])])
+        cmd.extend(['-l', str(image_range[1])])
+    if normalization:
+        cmd.extend(['-n', normalization])
+    if output_pixel_type is not None:
+        cmd.extend(['-t', str(output_pixel_type)])
+    if distortion_map:
+        cmd.extend(['-d', distortion_map])
+    if wire_depths_file:
+        cmd.extend(['-W', wire_depths_file])  # Note: GPU uses -W, not --wireDepths
+    
+    return _execute_reconstruction(cmd, str(output_file), timeout)
+
+
+def batch_gpu(
+    reconstructions: List[Dict],
+    parallel: bool = False,
+    max_workers: Optional[int] = None,
+    stop_on_error: bool = False,
+    progress_callback: Optional[callable] = None
+) -> List[ReconstructionResult]:
+    """
+    Run multiple GPU reconstructions.
+    
+    Args:
+        reconstructions: List of keyword argument dictionaries for reconstruct_gpu()
+        parallel: Whether to run reconstructions in parallel
+        max_workers: Number of parallel workers (None = CPU count)
+        stop_on_error: Stop batch processing if any reconstruction fails
+        progress_callback: Optional callback function(completed, total) for progress updates
+        
+    Returns:
+        List of ReconstructionResult objects
+        
+    Example:
+        >>> configs = [
+        ...     {'input_file': 'scan1.h5', 'output_file': 'out1_', 
+        ...      'geometry_file': 'geo.xml', 'depth_range': (0, 10)},
+        ...     {'input_file': 'scan2.h5', 'output_file': 'out2_',
+        ...      'geometry_file': 'geo.xml', 'depth_range': (0, 10)}
+        ... ]
+        >>> results = batch_gpu(configs, parallel=True, max_workers=4)
+    """
+    if not reconstructions:
+        return []
+    
+    results = []
+    
+    if parallel:
+        # Use a top-level function for parallel processing
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_run_single_gpu_reconstruction, config) 
+                      for config in reconstructions]
+            
+            for i, future in enumerate(futures):
+                result = future.result()
+                results.append(result)
+                
+                if progress_callback:
+                    progress_callback(i + 1, len(reconstructions))
+                
+                if stop_on_error and not result.success:
+                    # Cancel remaining futures
+                    for f in futures[i+1:]:
+                        f.cancel()
+                    break
+    else:
+        # Sequential processing
+        for i, config in enumerate(reconstructions):
+            result = _run_single_gpu_reconstruction(config)
+            results.append(result)
+            
+            if progress_callback:
+                progress_callback(i + 1, len(reconstructions))
+            
+            if stop_on_error and not result.success:
+                break
+    
+    return results
+
+
+def _run_single_gpu_reconstruction(config: Dict) -> ReconstructionResult:
+    """
+    Run a single GPU reconstruction with error handling.
+    
+    This is a module-level function to support multiprocessing.
+    """
+    try:
+        return reconstruct_gpu(**config)
+    except Exception as e:
+        # Return error result instead of raising
+        return ReconstructionResult(
+            success=False,
+            output_files=[],
+            log='',
+            error=f"Exception during GPU reconstruction: {str(e)}",
+            command='',
+            return_code=-1
+        )
+
+
+def depth_scan_gpu(
+    input_file: Union[str, Path],
+    output_base: Union[str, Path],
+    geometry_file: Union[str, Path],
+    depth_ranges: List[Tuple[float, float]],
+    resolution: float = 1.0,
+    parallel: bool = True,
+    **kwargs
+) -> List[ReconstructionResult]:
+    """
+    Scan multiple depth ranges with automatic output naming using GPU.
+    
+    This is a convenience function that creates appropriate output filenames
+    for each depth range and runs the GPU reconstructions.
+    
+    Args:
+        input_file: Input HDF5 file path
+        output_base: Base path for output files (depth info will be appended)
+        geometry_file: Geometry XML file path
+        depth_ranges: List of (start, end) depth tuples in microns
+        resolution: Depth resolution in microns
+        parallel: Whether to run scans in parallel
+        **kwargs: Additional arguments passed to reconstruct_gpu()
+        
+    Returns:
+        List of ReconstructionResult objects
+        
+    Example:
+        >>> results = depth_scan_gpu(
+        ...     'wirescan.h5',
+        ...     'output/scan_',
+        ...     'geometry.xml',
+        ...     [(0, 10), (10, 20), (20, 30)],
+        ...     resolution=0.5,
+        ...     percent_brightest=50.0,
+        ...     cuda_rows=16
+        ... )
+    """
+    configs = []
+    
+    for start, end in depth_ranges:
+        # Create unique output name for each depth range
+        output_file = f"{output_base}depth_{start:.1f}_{end:.1f}_"
+        
+        config = {
+            'input_file': input_file,
+            'output_file': output_file,
+            'geometry_file': geometry_file,
+            'depth_range': (start, end),
+            'resolution': resolution,
+            **kwargs
+        }
+        configs.append(config)
+    
+    return batch_gpu(configs, parallel=parallel)
+
+
 # Utility functions for common use cases
 def find_executable() -> str:
     """
-    Find the reconstruction executable.
+    Find the CPU reconstruction executable.
     
     Returns:
         Path to the executable
@@ -456,3 +712,31 @@ def find_executable() -> str:
         FileNotFoundError: If executable cannot be found
     """
     return _find_executable()
+
+
+def find_gpu_executable() -> str:
+    """
+    Find the GPU reconstruction executable.
+    
+    Returns:
+        Path to the GPU executable
+        
+    Raises:
+        FileNotFoundError: If GPU executable cannot be found
+    """
+    return _find_executable('reconstructN_gpu')
+
+
+def gpu_available() -> bool:
+    """
+    Check if GPU reconstruction is available.
+    
+    Returns:
+        True if GPU reconstruction executable is found and works, False otherwise
+    """
+    try:
+        exe_path = _find_executable('reconstructN_gpu')
+        _validate_executable(exe_path)
+        return True
+    except (FileNotFoundError, RuntimeError):
+        return False
