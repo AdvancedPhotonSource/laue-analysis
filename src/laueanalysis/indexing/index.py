@@ -10,7 +10,6 @@ from importlib import resources
 
 from laueanalysis.indexing.lau_dataclasses.step import Step
 from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
-from laueanalysis.indexing.lau_dataclasses.config import LaueConfig
 
 
 class IndexingResult(NamedTuple):
@@ -21,7 +20,7 @@ class IndexingResult(NamedTuple):
     n_indexed: int
     indexing_data: Optional[Indexing]
     step_data: Optional[Step]
-    config: Optional[LaueConfig]
+    config: Optional[object]  # Keep for compatibility but will be None
     log: str
     error: Optional[str] = None
     command_history: List[str] = []
@@ -119,7 +118,11 @@ def _setup_output_dirs(output_dir: Union[str, Path]) -> Dict[str, Path]:
     return subdirs
 
 
-def _run_peaksearch(input_image: str, output_dir: str, config: LaueConfig, 
+def _run_peaksearch(input_image: str, output_dir: str,
+                   boxsize: int, max_rfactor: float, min_size: int,
+                   min_separation: int, threshold: int, peak_shape: str,
+                   max_peaks: int, mask_file: Optional[str],
+                   threshold_ratio: float, smooth: bool,
                    timeout: int = 300) -> Tuple[bool, str, str, int]:
     """
     Run the peaksearch executable.
@@ -127,7 +130,16 @@ def _run_peaksearch(input_image: str, output_dir: str, config: LaueConfig,
     Args:
         input_image: Path to input image file.
         output_dir: Directory for output files.
-        config: Configuration containing peaksearch parameters.
+        boxsize: Box size for peak search.
+        max_rfactor: Maximum R-factor.
+        min_size: Minimum peak size.
+        min_separation: Minimum separation between peaks.
+        threshold: Threshold value.
+        peak_shape: Peak shape ('L', 'G', etc.).
+        max_peaks: Maximum number of peaks.
+        mask_file: Optional mask file path.
+        threshold_ratio: Threshold ratio (-1 to disable).
+        smooth: Whether to apply smoothing.
         timeout: Command timeout in seconds.
         
     Returns:
@@ -146,21 +158,21 @@ def _run_peaksearch(input_image: str, output_dir: str, config: LaueConfig,
     # Build peaksearch command
     cmd = [
         executables['peaksearch'],
-        '-b', str(config.boxsize or 5),
-        '-R', str(config.maxRfactor or 2.0),
-        '-m', str(config.min_size or 3),
-        '-s', str(config.min_separation or 10),
-        '-t', str(config.threshold or 100),
-        '-p', config.peakShape or 'L',
-        '-M', str(config.max_peaks or 50)
+        '-b', str(boxsize),
+        '-R', str(max_rfactor),
+        '-m', str(min_size),
+        '-s', str(min_separation),
+        '-t', str(threshold),
+        '-p', peak_shape,
+        '-M', str(max_peaks)
     ]
     
     # Add optional parameters
-    if config.maskFile:
-        cmd.extend(['-K', config.maskFile])
-    if config.thresholdRatio != -1:
-        cmd.extend(['-T', str(config.thresholdRatio)])
-    if config.smooth:
+    if mask_file:
+        cmd.extend(['-K', mask_file])
+    if threshold_ratio != -1:
+        cmd.extend(['-T', str(threshold_ratio)])
+    if smooth:
         cmd.extend(['-S'])  # Note: -S doesn't take a parameter
     
     # Add input and output files
@@ -200,7 +212,10 @@ def _run_p2q(peaks_file: str, output_dir: str, geo_file: str, crystal_file: str,
     return _run_command(cmd, timeout)
 
 
-def _run_indexing(p2q_file: str, output_dir: str, config: LaueConfig,
+def _run_indexing(p2q_file: str, output_dir: str,
+                  index_kev_max_calc: float, index_kev_max_test: float,
+                  index_angle_tolerance: float, index_cone: float,
+                  index_h: int, index_k: int, index_l: int,
                   timeout: int = 300) -> Tuple[bool, str, str, int]:
     """
     Run the euler (indexing) executable.
@@ -208,7 +223,13 @@ def _run_indexing(p2q_file: str, output_dir: str, config: LaueConfig,
     Args:
         p2q_file: Path to p2q file.
         output_dir: Directory for output files.
-        config: Configuration containing indexing parameters.
+        index_kev_max_calc: Maximum keV for calculation.
+        index_kev_max_test: Maximum keV for testing.
+        index_angle_tolerance: Angle tolerance for indexing.
+        index_cone: Cone angle for indexing.
+        index_h: H index.
+        index_k: K index.
+        index_l: L index.
         timeout: Command timeout in seconds.
         
     Returns:
@@ -223,12 +244,12 @@ def _run_indexing(p2q_file: str, output_dir: str, config: LaueConfig,
     cmd = [
         executables['euler'],
         '-q',  # quiet mode
-        '-k', str(config.indexKeVmaxCalc or 30.0),
-        '-t', str(config.indexKeVmaxTest or 35.0),
-        '-a', str(config.indexAngleTolerance or 0.12),
-        '-c', str(config.indexCone or 72.0),
+        '-k', str(index_kev_max_calc),
+        '-t', str(index_kev_max_test),
+        '-a', str(index_angle_tolerance),
+        '-c', str(index_cone),
         '-f', p2q_file,
-        '-h', str(config.indexH or 0), str(config.indexK or 0), str(config.indexL or 1),
+        '-h', str(index_h), str(index_k), str(index_l),
         '-o', str(output_file)
     ]
     return _run_command(cmd, timeout)
@@ -281,8 +302,28 @@ def _parse_indexing_output(index_file: str) -> int:
 
 
 def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
-          config: Optional[LaueConfig] = None, step_data: Optional[Step] = None, 
-          indexing_data: Optional[Indexing] = None, timeout: int = 300) -> IndexingResult:
+          *,
+          # Peak search parameters
+          boxsize: int = 5,
+          max_rfactor: float = 2.0,
+          min_size: int = 3,
+          min_separation: int = 10,
+          threshold: int = 100,
+          peak_shape: str = 'L',
+          max_peaks: int = 50,
+          mask_file: Optional[str] = None,
+          threshold_ratio: float = -1,
+          smooth: bool = False,
+          # Indexing parameters
+          index_kev_max_calc: float = 30.0,
+          index_kev_max_test: float = 35.0,
+          index_angle_tolerance: float = 0.12,
+          index_cone: float = 72.0,
+          index_h: int = 0,
+          index_k: int = 0,
+          index_l: int = 1,
+          # General parameters
+          timeout: int = 300) -> IndexingResult:
     """
     Perform complete Laue indexing on an input image.
     
@@ -296,19 +337,28 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         output_dir: Directory for all output files.
         geo_file: Path to geometry file.
         crystal_file: Path to crystal structure file.
-        config: LaueConfig with processing parameters (defaults will be used if None).
-        step_data: Step configuration (for compatibility, currently unused).
-        indexing_data: Indexing configuration (for compatibility, currently unused).
-        timeout: Timeout for each subprocess in seconds.
+        boxsize: Box size for peak search (default: 5).
+        max_rfactor: Maximum R-factor for peak validation (default: 2.0).
+        min_size: Minimum peak size in pixels (default: 3).
+        min_separation: Minimum separation between peaks (default: 10).
+        threshold: Intensity threshold for peak detection (default: 100).
+        peak_shape: Peak shape model - 'L' for Lorentzian, 'G' for Gaussian (default: 'L').
+        max_peaks: Maximum number of peaks to find (default: 50).
+        mask_file: Optional path to mask file.
+        threshold_ratio: Threshold ratio, -1 to disable (default: -1).
+        smooth: Apply smoothing before peak search (default: False).
+        index_kev_max_calc: Maximum keV for indexing calculation (default: 30.0).
+        index_kev_max_test: Maximum keV for indexing test (default: 35.0).
+        index_angle_tolerance: Angle tolerance in degrees for indexing (default: 0.12).
+        index_cone: Cone angle in degrees for indexing (default: 72.0).
+        index_h: H component of reference vector (default: 0).
+        index_k: K component of reference vector (default: 0).
+        index_l: L component of reference vector (default: 1).
+        timeout: Timeout for each subprocess in seconds (default: 300).
         
     Returns:
         IndexingResult containing success status, output files, and statistics.
     """
-    # Set up default config if not provided
-    if config is None:
-        config = LaueConfig()
-        config.geoFile = geo_file
-        config.crystFile = crystal_file
     
     # Set up output directories
     try:
@@ -319,9 +369,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             output_files={},
             n_peaks_found=0,
             n_indexed=0,
-            indexing_data=indexing_data,
-            step_data=step_data,
-            config=config,
+            indexing_data=None,
+            step_data=None,
+            config=None,
             log="",
             error=f"Failed to create output directories: {e}",
             command_history=[]
@@ -334,7 +384,12 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     # Step 1: Run peaksearch
     log_parts.append("Running peak search...")
     success, stdout, stderr, returncode = _run_peaksearch(
-        input_image, str(subdirs['peaks']), config, timeout
+        input_image, str(subdirs['peaks']),
+        boxsize, max_rfactor, min_size,
+        min_separation, threshold, peak_shape,
+        max_peaks, mask_file,
+        threshold_ratio, smooth,
+        timeout
     )
     command_history.append(f"peaksearch {input_image} -> {subdirs['peaks']}")
     log_parts.append(f"Peak search stdout: {stdout}")
@@ -354,9 +409,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             output_files=output_files,
             n_peaks_found=0,
             n_indexed=0,
-            indexing_data=indexing_data,
-            step_data=step_data,
-            config=config,
+            indexing_data=None,
+            step_data=None,
+            config=None,
             log="\n".join(log_parts),
             error="No peaks output file found - peak search completely failed",
             command_history=command_history
@@ -386,9 +441,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 output_files=output_files,
                 n_peaks_found=n_peaks_found,
                 n_indexed=0,
-                indexing_data=indexing_data,
-                step_data=step_data,
-                config=config,
+                indexing_data=None,
+                step_data=None,
+                config=None,
                 log="\n".join(log_parts),
                 error=None,
                 command_history=command_history
@@ -403,9 +458,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 output_files=output_files,
                 n_peaks_found=n_peaks_found,
                 n_indexed=0,
-                indexing_data=indexing_data,
-                step_data=step_data,
-                config=config,
+                indexing_data=None,
+                step_data=None,
+                config=None,
                 log="\n".join(log_parts),
                 error=None,
                 command_history=command_history
@@ -419,7 +474,11 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             # Step 3: Run indexing
             log_parts.append("Running indexing...")
             success, stdout, stderr, returncode = _run_indexing(
-                p2q_file, str(subdirs['index']), config, timeout
+                p2q_file, str(subdirs['index']),
+                index_kev_max_calc, index_kev_max_test,
+                index_angle_tolerance, index_cone,
+                index_h, index_k, index_l,
+                timeout
             )
             command_history.append(f"euler {p2q_file} -> {subdirs['index']}")
             log_parts.append(f"Indexing stdout: {stdout}")
@@ -434,9 +493,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                     output_files=output_files,
                     n_peaks_found=n_peaks_found,
                     n_indexed=0,
-                    indexing_data=indexing_data,
-                    step_data=step_data,
-                    config=config,
+                    indexing_data=None,
+                    step_data=None,
+                    config=None,
                     log="\n".join(log_parts),
                     error=None,
                     command_history=command_history
@@ -465,9 +524,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         output_files=output_files,
         n_peaks_found=n_peaks_found,
         n_indexed=n_indexed,
-        indexing_data=indexing_data,
-        step_data=step_data,
-        config=config,
+        indexing_data=None,
+        step_data=None,
+        config=None,
         log="\n".join(log_parts),
         error=None,
         command_history=command_history

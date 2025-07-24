@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from laueanalysis.indexing import index, IndexingResult
-from laueanalysis.indexing.lau_dataclasses.config import LaueConfig
 
 
 @pytest.fixture
@@ -31,10 +30,7 @@ def test_config(config_path):
     temp_dir = tempfile.TemporaryDirectory()
     config_dict['outputFolder'] = temp_dir.name
     
-    # Convert to LaueConfig object
-    config = LaueConfig.from_dict(config_dict)
-    
-    yield config, temp_dir, config_dict
+    yield temp_dir, config_dict
     
     # Cleanup
     temp_dir.cleanup()
@@ -42,7 +38,7 @@ def test_config(config_path):
 
 def test_functional_index_with_real_data(test_config):
     """Test the functional index interface with real data and executables."""
-    config, temp_dir, config_dict = test_config
+    temp_dir, config_dict = test_config
     
     # Use the real test data file
     test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
@@ -54,13 +50,27 @@ def test_functional_index_with_real_data(test_config):
     assert os.path.exists(geo_file), f"Geometry file not found: {geo_file}"
     assert os.path.exists(crystal_file), f"Crystal file not found: {crystal_file}"
     
-    # Run the functional index with real data
+    # Run the functional index with real data using parameters from config
     result = index(
         input_image=test_file,
         output_dir=temp_dir.name,
         geo_file=geo_file,
         crystal_file=crystal_file,
-        config=config
+        boxsize=config_dict.get('boxsize', 5),
+        max_rfactor=config_dict.get('maxRfactor', 2.0),
+        min_size=config_dict.get('min_size', 3),
+        min_separation=config_dict.get('min_separation', 10),
+        threshold=config_dict.get('threshold', 100),
+        peak_shape=config_dict.get('peakShape', 'L'),
+        max_peaks=config_dict.get('max_peaks', 50),
+        smooth=config_dict.get('smooth', False),
+        index_kev_max_calc=config_dict.get('indexKeVmaxCalc', 30.0),
+        index_kev_max_test=config_dict.get('indexKeVmaxTest', 35.0),
+        index_angle_tolerance=config_dict.get('indexAngleTolerance', 0.12),
+        index_cone=config_dict.get('indexCone', 72.0),
+        index_h=config_dict.get('indexH', 0),
+        index_k=config_dict.get('indexK', 0),
+        index_l=config_dict.get('indexL', 1)
     )
     
     # Verify the result
@@ -72,7 +82,7 @@ def test_functional_index_with_real_data(test_config):
     
     # The result should succeed (even if no peaks/indexing found)
     assert result.success is True
-    assert result.config is not None
+    assert result.config is None  # No config object in new API
     assert len(result.command_history) > 0
     
     # Check that output directories were created
@@ -102,7 +112,7 @@ def test_functional_index_with_real_data(test_config):
 
 def test_functional_index_batch_processing_real_data(test_config):
     """Test processing multiple files using the functional interface with real logic."""
-    config, temp_dir, config_dict = test_config
+    temp_dir, config_dict = test_config
     
     # Use the real test data file
     test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5") 
@@ -129,7 +139,21 @@ def test_functional_index_batch_processing_real_data(test_config):
             output_dir=temp_dir.name,
             geo_file=geo_file,
             crystal_file=crystal_file,
-            config=config
+            boxsize=config_dict.get('boxsize', 5),
+            max_rfactor=config_dict.get('maxRfactor', 2.0),
+            min_size=config_dict.get('min_size', 3),
+            min_separation=config_dict.get('min_separation', 10),
+            threshold=config_dict.get('threshold', 100),
+            peak_shape=config_dict.get('peakShape', 'L'),
+            max_peaks=config_dict.get('max_peaks', 50),
+            smooth=config_dict.get('smooth', False),
+            index_kev_max_calc=config_dict.get('indexKeVmaxCalc', 30.0),
+            index_kev_max_test=config_dict.get('indexKeVmaxTest', 35.0),
+            index_angle_tolerance=config_dict.get('indexAngleTolerance', 0.12),
+            index_cone=config_dict.get('indexCone', 72.0),
+            index_h=config_dict.get('indexH', 0),
+            index_k=config_dict.get('indexK', 0),
+            index_l=config_dict.get('indexL', 1)
         )
         results.append(result)
     
@@ -151,7 +175,7 @@ def test_functional_index_batch_processing_real_data(test_config):
 
 def test_functional_index_error_handling_real_executables(test_config):
     """Test error handling with real executables but invalid input."""
-    config, temp_dir, config_dict = test_config
+    temp_dir, config_dict = test_config
     
     # Create an invalid input file
     invalid_file = os.path.join(temp_dir.name, 'invalid.h5')
@@ -167,7 +191,21 @@ def test_functional_index_error_handling_real_executables(test_config):
         output_dir=temp_dir.name,
         geo_file=geo_file,
         crystal_file=crystal_file,
-        config=config
+        boxsize=config_dict.get('boxsize', 5),
+        max_rfactor=config_dict.get('maxRfactor', 2.0),
+        min_size=config_dict.get('min_size', 3),
+        min_separation=config_dict.get('min_separation', 10),
+        threshold=config_dict.get('threshold', 100),
+        peak_shape=config_dict.get('peakShape', 'L'),
+        max_peaks=config_dict.get('max_peaks', 50),
+        smooth=config_dict.get('smooth', False),
+        index_kev_max_calc=config_dict.get('indexKeVmaxCalc', 30.0),
+        index_kev_max_test=config_dict.get('indexKeVmaxTest', 35.0),
+        index_angle_tolerance=config_dict.get('indexAngleTolerance', 0.12),
+        index_cone=config_dict.get('indexCone', 72.0),
+        index_h=config_dict.get('indexH', 0),
+        index_k=config_dict.get('indexK', 0),
+        index_l=config_dict.get('indexL', 1)
     )
     
     # Should handle errors gracefully
@@ -202,7 +240,7 @@ def test_functional_index_maintains_compatibility():
         
         # Verify compatibility
         assert result.success is True
-        assert result.config is not None  # Config was created automatically
+        assert result.config is None  # No config object in new API
         assert hasattr(result, 'command_history')  # New feature for debugging
         assert hasattr(result, 'log')  # Detailed logging
         
@@ -229,7 +267,6 @@ def test_functional_index_equivalence():
     
     with tempfile.TemporaryDirectory() as temp_dir:
         config_dict['outputFolder'] = temp_dir
-        config = LaueConfig.from_dict(config_dict)
         
         # Functional interface call that provides comprehensive indexing
         result = index(
@@ -237,7 +274,21 @@ def test_functional_index_equivalence():
             output_dir=temp_dir,
             geo_file=geo_file,
             crystal_file=crystal_file,
-            config=config
+            boxsize=config_dict.get('boxsize', 5),
+            max_rfactor=config_dict.get('maxRfactor', 2.0),
+            min_size=config_dict.get('min_size', 3),
+            min_separation=config_dict.get('min_separation', 10),
+            threshold=config_dict.get('threshold', 100),
+            peak_shape=config_dict.get('peakShape', 'L'),
+            max_peaks=config_dict.get('max_peaks', 50),
+            smooth=config_dict.get('smooth', False),
+            index_kev_max_calc=config_dict.get('indexKeVmaxCalc', 30.0),
+            index_kev_max_test=config_dict.get('indexKeVmaxTest', 35.0),
+            index_angle_tolerance=config_dict.get('indexAngleTolerance', 0.12),
+            index_cone=config_dict.get('indexCone', 72.0),
+            index_h=config_dict.get('indexH', 0),
+            index_k=config_dict.get('indexK', 0),
+            index_l=config_dict.get('indexL', 1)
         )
         
         # Verify the result contains all the expected indexing information
@@ -257,7 +308,7 @@ def test_functional_index_equivalence():
         # Benefits of the functional interface
         assert len(result.command_history) > 0        # Command history for debugging
         assert len(result.log) > 0                    # Detailed execution log
-        assert result.config is not None             # Full config used for the run
+        assert result.config is None                  # No config object in new API
         
         print(f"Functional interface test result: peaks={result.n_peaks_found}, indexed={result.n_indexed}")
         print(f"Output files: {list(result.output_files.keys())}")

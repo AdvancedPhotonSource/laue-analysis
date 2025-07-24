@@ -11,7 +11,6 @@ import yaml
 from pathlib import Path
 
 from laueanalysis.indexing import index, IndexingResult
-from laueanalysis.indexing.lau_dataclasses.config import LaueConfig
 
 
 @pytest.fixture
@@ -43,10 +42,6 @@ def test_config_data():
     }
 
 
-@pytest.fixture
-def test_config(test_config_data):
-    """LaueConfig instance fixture."""
-    return LaueConfig.from_dict(test_config_data)
 
 
 @pytest.fixture
@@ -74,7 +69,7 @@ def temp_output_dir():
         temp_dir.cleanup()
 
 
-def test_index_function_with_mocked_executables(test_config, temp_image_file, temp_output_dir):
+def test_index_function_with_mocked_executables(test_config_data, temp_image_file, temp_output_dir):
     """Test the index function with mocked executable calls."""
     
     # Mock the executable finding and running
@@ -106,13 +101,27 @@ def test_index_function_with_mocked_executables(test_config, temp_image_file, te
             return []
         
         with patch('pathlib.Path.glob', side_effect=mock_glob):
-            # Run the index function
+            # Run the index function with parameters
             result = index(
                 input_image=temp_image_file,
                 output_dir=temp_output_dir,
-                geo_file=test_config.geoFile,
-                crystal_file=test_config.crystFile,
-                config=test_config
+                geo_file=test_config_data['geoFile'],
+                crystal_file=test_config_data['crystFile'],
+                boxsize=test_config_data['boxsize'],
+                max_rfactor=test_config_data['maxRfactor'],
+                min_size=test_config_data['min_size'],
+                min_separation=test_config_data['min_separation'],
+                threshold=test_config_data['threshold'],
+                peak_shape=test_config_data['peakShape'],
+                max_peaks=test_config_data['max_peaks'],
+                smooth=test_config_data['smooth'],
+                index_kev_max_calc=test_config_data['indexKeVmaxCalc'],
+                index_kev_max_test=test_config_data['indexKeVmaxTest'],
+                index_angle_tolerance=test_config_data['indexAngleTolerance'],
+                index_cone=test_config_data['indexCone'],
+                index_h=test_config_data['indexH'],
+                index_k=test_config_data['indexK'],
+                index_l=test_config_data['indexL']
             )
         
         # Verify the result
@@ -131,25 +140,25 @@ def test_index_function_with_mocked_executables(test_config, temp_image_file, te
         # Check peaksearch command
         peaksearch_call = mock_run_cmd.call_args_list[0][0][0]
         assert peaksearch_call[0] == '/mock/peaksearch'
-        assert '-b' in peaksearch_call and str(test_config.boxsize) in peaksearch_call
-        assert '-R' in peaksearch_call and str(test_config.maxRfactor) in peaksearch_call
-        assert '-p' in peaksearch_call and test_config.peakShape in peaksearch_call
+        assert '-b' in peaksearch_call and str(test_config_data['boxsize']) in peaksearch_call
+        assert '-R' in peaksearch_call and str(test_config_data['maxRfactor']) in peaksearch_call
+        assert '-p' in peaksearch_call and test_config_data['peakShape'] in peaksearch_call
         
         # Check p2q command  
         p2q_call = mock_run_cmd.call_args_list[1][0][0]
         assert p2q_call[0] == '/mock/pix2qs'
-        assert '-g' in p2q_call and test_config.geoFile in p2q_call
-        assert '-x' in p2q_call and test_config.crystFile in p2q_call
+        assert '-g' in p2q_call and test_config_data['geoFile'] in p2q_call
+        assert '-x' in p2q_call and test_config_data['crystFile'] in p2q_call
         
         # Check indexing command
         index_call = mock_run_cmd.call_args_list[2][0][0]
         assert index_call[0] == '/mock/euler'
         assert '-q' in index_call
-        assert '-k' in index_call and str(test_config.indexKeVmaxCalc) in index_call
-        assert '-t' in index_call and str(test_config.indexKeVmaxTest) in index_call
+        assert '-k' in index_call and str(test_config_data['indexKeVmaxCalc']) in index_call
+        assert '-t' in index_call and str(test_config_data['indexKeVmaxTest']) in index_call
 
 
-def test_index_function_no_peaks_found(test_config, temp_image_file, temp_output_dir):
+def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
     """Test the index function when no peaks are found."""
     
     with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
@@ -176,9 +185,8 @@ def test_index_function_no_peaks_found(test_config, temp_image_file, temp_output
             result = index(
                 input_image=temp_image_file,
                 output_dir=temp_output_dir,
-                geo_file=test_config.geoFile,
-                crystal_file=test_config.crystFile,
-                config=test_config
+                geo_file='/tmp/test_geo.xml',
+                crystal_file='/tmp/test_cryst.xml'
             )
         
         # Should still succeed but skip p2q and indexing
@@ -192,7 +200,7 @@ def test_index_function_no_peaks_found(test_config, temp_image_file, temp_output
         assert "No peaks found, skipping p2q and indexing steps" in result.log
 
 
-def test_index_function_insufficient_peaks_for_indexing(test_config, temp_image_file, temp_output_dir):
+def test_index_function_insufficient_peaks_for_indexing(temp_image_file, temp_output_dir):
     """Test the index function when only 1 peak is found (insufficient for indexing)."""
     
     with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
@@ -221,9 +229,8 @@ def test_index_function_insufficient_peaks_for_indexing(test_config, temp_image_
             result = index(
                 input_image=temp_image_file,
                 output_dir=temp_output_dir,
-                geo_file=test_config.geoFile,
-                crystal_file=test_config.crystFile,
-                config=test_config
+                geo_file='/tmp/test_geo.xml',
+                crystal_file='/tmp/test_cryst.xml'
             )
         
         # Should succeed, run p2q, but skip indexing
@@ -237,7 +244,7 @@ def test_index_function_insufficient_peaks_for_indexing(test_config, temp_image_
         assert "need at least 2 for indexing" in result.log
 
 
-def test_index_function_with_errors_continues_processing(test_config, temp_image_file, temp_output_dir):
+def test_index_function_with_errors_continues_processing(temp_image_file, temp_output_dir):
     """Test that the index function continues processing even when subprocess have errors."""
     
     with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
@@ -268,9 +275,8 @@ def test_index_function_with_errors_continues_processing(test_config, temp_image
             result = index(
                 input_image=temp_image_file,
                 output_dir=temp_output_dir,
-                geo_file=test_config.geoFile,
-                crystal_file=test_config.crystFile,
-                config=test_config
+                geo_file='/tmp/test_geo.xml',
+                crystal_file='/tmp/test_cryst.xml'
             )
         
         # Should still succeed (graceful degradation)
@@ -315,11 +321,9 @@ def test_index_function_default_config():
                 # No config provided - should use defaults
             )
         
-        # Should succeed with default config
+        # Should succeed with defaults
         assert result.success is True
-        assert result.config is not None
-        assert result.config.geoFile == '/tmp/geo.xml'
-        assert result.config.crystFile == '/tmp/crystal.xml'
+        assert result.config is None  # No config object anymore
         
         # Check that default values were used in the command
         peaksearch_call = mock_run_cmd.call_args_list[0][0][0]
