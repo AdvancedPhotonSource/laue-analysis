@@ -33,7 +33,10 @@ src/laueanalysis/indexing/bin/*
 !src/laueanalysis/indexing/bin/__init__.py
 
 src/laueanalysis/reconstruct/bin/reconstructN_cpu
+src/laueanalysis/reconstruct/bin/reconstructN_gpu
 src/laueanalysis/reconstruct/source/recon_cpu/bin/*
+src/laueanalysis/reconstruct/source/recon_gpu/bin/reconstructN_gpu
+src/laueanalysis/reconstruct/source/recon_gpu/bin/*
 
 .svn
 

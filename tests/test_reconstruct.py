@@ -15,7 +15,13 @@ from laueanalysis.reconstruct import (
     batch,
     depth_scan,
     find_executable,
-    ReconstructionResult
+    ReconstructionResult,
+    # GPU functions
+    reconstruct_gpu,
+    batch_gpu,
+    depth_scan_gpu,
+    find_gpu_executable,
+    gpu_available
 )
 
 
@@ -440,3 +446,265 @@ class TestReconstruct:
                 print(f"Command: {result.command}")
                 print(f"Error: {result.error}")
                 print(f"Log: {result.log[:500]}")
+
+
+class TestReconstructGPU:
+    """Test GPU reconstruction functions."""
+    
+    @pytest.fixture
+    def mock_subprocess(self):
+        """Mock subprocess.run for unit tests."""
+        with patch('subprocess.run') as mock:
+            # Default return value for validation calls (--help)
+            help_response = MagicMock(
+                returncode=1,  # WireScan returns 1 for help
+                stdout="Usage: WireScan -i <file> -o <file> -g <file>",
+                stderr="",
+                timeout=None
+            )
+            # Default return value for actual reconstruction calls
+            run_response = MagicMock(
+                returncode=0,
+                stdout="GPU Reconstruction complete",
+                stderr="",
+                timeout=None
+            )
+            
+            # Return help response for validation, run response for actual execution
+            def side_effect(*args, **kwargs):
+                if '--help' in args[0]:
+                    return help_response
+                return run_response
+            
+            mock.side_effect = side_effect
+            yield mock
+    
+    @pytest.fixture
+    def mock_gpu_executable(self):
+        """Mock the GPU executable finder."""
+        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:
+            def side_effect(name='reconstructN_cpu'):
+                if name == 'reconstructN_gpu':
+                    return '/path/to/reconstructN_gpu'
+                return '/path/to/reconstructN_cpu'
+            mock.side_effect = side_effect
+            yield mock
+    
+    def test_reconstruct_gpu_basic(self, mock_subprocess, mock_gpu_executable):
+        """Test basic GPU reconstruction call."""
+        result = reconstruct_gpu(
+            'input.h5',
+            'output_',
+            'geo.xml',
+            (0.0, 10.0),
+            resolution=1.0
+        )
+        
+        assert isinstance(result, ReconstructionResult)
+        assert result.success is True
+        assert result.return_code == 0
+        
+        # Verify subprocess was called with GPU executable
+        mock_subprocess.assert_called()
+        call_args = mock_subprocess.call_args[0][0]
+        
+        # Check basic arguments
+        assert call_args[0] == '/path/to/reconstructN_gpu'
+        assert '-i' in call_args
+        assert 'input.h5' in call_args
+        assert '-o' in call_args
+        assert 'output_' in call_args
+        assert '-g' in call_args
+        assert 'geo.xml' in call_args
+        assert '-s' in call_args
+        assert '0.0' in call_args
+        assert '-e' in call_args
+        assert '10.0' in call_args
+        assert '-R' in call_args
+        assert '8' in call_args  # Default cuda_rows
+    
+    def test_reconstruct_gpu_with_options(self, mock_subprocess, mock_gpu_executable):
+        """Test GPU reconstruction with optional parameters."""
+        result = reconstruct_gpu(
+            'input.h5',
+            'output_',
+            'geo.xml',
+            (-5.0, 5.0),
+            resolution=0.5,
+            image_range=(1, 100),
+            verbose=2,
+            percent_brightest=50.0,
+            wire_edge='both',
+            memory_limit_mb=256,
+            normalization='norm_tag',
+            output_pixel_type=3,
+            distortion_map='distortion.map',
+            detector_number=1,
+            wire_depths_file='depths.txt',
+            cuda_rows=16
+        )
+        
+        assert result.success is True
+        
+        # Check all parameters in command
+        call_args = mock_subprocess.call_args[0][0]
+        assert '-r' in call_args
+        assert '0.5' in call_args
+        assert '-f' in call_args
+        assert '1' in call_args
+        assert '-l' in call_args
+        assert '100' in call_args
+        assert '-v' in call_args
+        assert '2' in call_args
+        assert '-p' in call_args
+        assert '50.0' in call_args
+        assert '-w' in call_args
+        assert 'b' in call_args  # 'both' maps to 'b'
+        assert '-m' in call_args
+        assert '256' in call_args
+        assert '-n' in call_args
+        assert 'norm_tag' in call_args
+        assert '-t' in call_args
+        assert '3' in call_args
+        assert '-d' in call_args
+        assert 'distortion.map' in call_args
+        assert '-D' in call_args
+        assert '1' in call_args
+        assert '-W' in call_args  # GPU uses -W not --wireDepths
+        assert 'depths.txt' in call_args
+        assert '-R' in call_args
+        assert '16' in call_args  # Custom cuda_rows
+    
+    def test_gpu_does_not_have_cpu_only_params(self, mock_subprocess, mock_gpu_executable):
+        """Test that GPU version doesn't have CPU-only parameters."""
+        result = reconstruct_gpu(
+            'input.h5',
+            'output_',
+            'geo.xml',
+            (0.0, 10.0)
+        )
+        
+        call_args = mock_subprocess.call_args[0][0]
+        
+        # These CPU-only parameters should NOT be in GPU command
+        assert '-C' not in call_args  # cosmic_filter
+        assert '-E' not in call_args  # norm_exponent
+        assert '-T' not in call_args  # norm_threshold
+        assert '-N' not in call_args  # num_threads
+        # Note: -R is used but for cuda_rows, not rows_per_stripe
+    
+    def test_batch_gpu(self, mock_subprocess, mock_gpu_executable):
+        """Test GPU batch processing."""
+        configs = [
+            {
+                'input_file': 'in1.h5',
+                'output_file': 'out1_',
+                'geometry_file': 'geo.xml',
+                'depth_range': (0, 5),
+                'cuda_rows': 16
+            },
+            {
+                'input_file': 'in2.h5',
+                'output_file': 'out2_',
+                'geometry_file': 'geo.xml',
+                'depth_range': (5, 10),
+                'cuda_rows': 32
+            }
+        ]
+        
+        results = batch_gpu(configs, parallel=False)
+        
+        assert len(results) == 2
+        assert all(isinstance(r, ReconstructionResult) for r in results)
+        assert all(r.success for r in results)
+        
+        # Check that cuda_rows were passed correctly
+        call1 = mock_subprocess.call_args_list[1][0][0]  # Skip validation
+        call2 = mock_subprocess.call_args_list[3][0][0]  # Skip validation
+        
+        idx1 = call1.index('-R')
+        assert call1[idx1 + 1] == '16'
+        
+        idx2 = call2.index('-R')
+        assert call2[idx2 + 1] == '32'
+    
+    def test_depth_scan_gpu(self, mock_subprocess, mock_gpu_executable):
+        """Test GPU depth scanning convenience function."""
+        results = depth_scan_gpu(
+            'input.h5',
+            'output_base_',
+            'geo.xml',
+            [(0, 5), (5, 10), (10, 15)],
+            resolution=0.5,
+            parallel=False,
+            percent_brightest=75.0,
+            cuda_rows=24
+        )
+        
+        assert len(results) == 3
+        
+        # Check that output names include depth info
+        for i, (call_args, _) in enumerate(mock_subprocess.call_args_list[1::2]):  # Skip validation calls
+            cmd = call_args[0]
+            outfile_idx = cmd.index('-o')
+            outfile = cmd[outfile_idx + 1]
+            assert 'depth_' in outfile
+            assert f'{i*5}.0_{(i+1)*5}.0' in outfile
+            
+            # Check cuda_rows
+            idx = cmd.index('-R')
+            assert cmd[idx + 1] == '24'
+    
+    def test_find_gpu_executable_function(self):
+        """Test the public find_gpu_executable function."""
+        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:
+            mock.return_value = '/path/to/gpu/exe'
+            
+            path = find_gpu_executable()
+            assert path == '/path/to/gpu/exe'
+            mock.assert_called_once_with('reconstructN_gpu')
+    
+    def test_gpu_available_true(self):
+        """Test gpu_available when GPU is available."""
+        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock_find:
+            mock_find.return_value = '/path/to/reconstructN_gpu'
+            with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
+                assert gpu_available() is True
+    
+    def test_gpu_available_false_not_found(self):
+        """Test gpu_available when GPU executable not found."""
+        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock_find:
+            mock_find.side_effect = FileNotFoundError("Not found")
+            assert gpu_available() is False
+    
+    def test_gpu_available_false_validation_fails(self):
+        """Test gpu_available when GPU executable validation fails."""
+        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock_find:
+            mock_find.return_value = '/path/to/reconstructN_gpu'
+            with patch('laueanalysis.reconstruct.reconstruct._validate_executable') as mock_validate:
+                mock_validate.side_effect = RuntimeError("Validation failed")
+                assert gpu_available() is False
+    
+    def test_gpu_executable_not_found(self):
+        """Test behavior when GPU executable is not found."""
+        with patch('laueanalysis.reconstruct.reconstruct.shutil.which', return_value=None):
+            with patch('laueanalysis.reconstruct.reconstruct.resources.files', side_effect=ModuleNotFoundError):
+                with pytest.raises(FileNotFoundError, match="reconstructN_gpu"):
+                    reconstruct_gpu('in.h5', 'out_', 'geo.xml', (0, 10))
+    
+    @pytest.mark.integration
+    def test_real_gpu_executable_validation(self):
+        """Test with real GPU executable if available."""
+        if not gpu_available():
+            pytest.skip("GPU reconstruction executable not available")
+        
+        try:
+            exe_path = find_gpu_executable()
+            # If we get here, GPU executable was found
+            
+            # Test that validation doesn't raise
+            from laueanalysis.reconstruct.reconstruct import _validate_executable
+            _validate_executable(exe_path)
+            
+        except FileNotFoundError:
+            pytest.skip("GPU reconstruction executable not available")
