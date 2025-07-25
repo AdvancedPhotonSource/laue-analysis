@@ -552,7 +552,7 @@ hid_t 	file_id,							/* id of the file already openned */
 const char *dataName,						/* FULL name of data set, e.g. "entry1/data/data" */
 int		rank,								/* rank of new data */
 int		*dims,								/* inidvidual dimensions (dims must be of length rank) */
-int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
+hid_t		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
 {
 	hid_t	dataset_id, dataspace_id;		/* identifiers */
 	hid_t	attribute_id;
@@ -565,9 +565,18 @@ int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getH
 
 //	file_id = H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT);	/* Open an existing file */
 	dataspace_id = H5Screate_simple(rank,dimsHDF5,NULL);	/* create the data space */
+	if (dataspace_id < 0) {
+		fprintf(stderr, "ERROR in createNewData(): H5Screate_simple() failed.\n");
+		return -1;
+	}
 
 	/* Create the dataset. */
 	dataset_id = H5Dcreate(file_id,dataName,dataType,dataspace_id,H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
+	if (dataset_id < 0) {
+		fprintf(stderr, "ERROR in createNewData(): H5Dcreate() failed for dataset '%s'.\n", dataName);
+		H5Sclose(dataspace_id);
+		return -1;
+	}
 
 	attr_dataspace_id = H5Screate(H5S_SCALAR);
 	attribute_id = H5Acreate(dataset_id,"signal",H5T_STD_I32LE,attr_dataspace_id,H5P_DEFAULT,H5P_DEFAULT);	/* Create a dataset attribute. */
@@ -2238,13 +2247,13 @@ long	*value)				/* holds result */
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && un_signed && size==4) {	/* 4 byte unsigned int */
-		unsigned long inum;
-		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
+		unsigned int inum;
+		err = H5Dread(data_id,H5T_NATIVE_UINT,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && size==4) {				/* 4 byte signed int */
-		long inum;
-		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
+		int inum;
+		err = H5Dread(data_id,H5T_NATIVE_INT,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_FLOAT && size==4) {				/* single precision float */

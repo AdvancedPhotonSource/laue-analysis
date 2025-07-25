@@ -29,19 +29,6 @@ linux: LDFLAGS := $(shell $(H5CC) -show 2>/dev/null | grep -o -- "-L[^ ]*" || ec
                   $(LDFLAGS)
 linux: $(OUT)
 
-# Polaris target (update for OpenMP)
-polaris: CFLAGS += -I/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/include -fopenmp
-polaris: LDFLAGS := -L/opt/cray/pe/hdf5/1.12.1.3/gnu/9.1/lib \
-                    $(LDFLAGS)
-polaris: $(OUT)
-
-hpcs: CFLAGS += -I/clhome/aps_tools/shared/include \
-                -I/clhome/aps_tools/hdf5-1.8.2/hdf5/include
-hpcs: LDFLAGS := -L/clhome/aps_tools/shared/lib \
-                -L/clhome/aps_tools/hdf5-1.8.2/hdf5/lib \
-                $(LDFLAGS)
-hpcs: $(OUT)
-
 $(OUT): $(OBJ)
 	mkdir -p bin
 	@$(CC) $^ -o bin/$@ $(LDFLAGS) $(RPATH_FLAGS)

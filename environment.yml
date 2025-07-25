@@ -1,0 +1,10 @@
+name: laue-analysis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12.1
+  - numpy=2.3.1
+  - gsl=2.8
+  - hdf5=1.12.2
+  - hdf5-static=1.12.2
