@@ -1824,16 +1824,11 @@ int		file_num_end)				/* last output file number */
  *	WireScan.c:(.text+0xbfe): warning: the use of 'tmpnam' is dangerous, better use 'mkstemp'
  */	
 	
-printf("\n\n ********************************* START FIX HERE *********************************\n");
-//printf("     For Fly Scan files, this copy takes a long  time since the files are BIG\n");
-printf("filenameTemp = %s\n",filenameTemp);
-//printf("finalTemplate = %s\n",finalTemplate);
 #ifdef FIX_ME_SLOW
 	//time_t	sec0 = time(NULL);
 	//copyFile(fn_in_first,filenameTemp,1);
 	//printf("  copy took %ld sec\n", time(NULL) - sec0);
 #endif
-printf(" *********************************   END FIX HERE *********************************\n");
 
 	// make new template file without selelcted objects, adds "depth", and write new "data" to it
 	makeTemplateFile(fn_in_first,filenameTemp,buf);
@@ -1894,12 +1889,10 @@ printf(" *********************************   END FIX HERE **********************
 
 	/* delete both unused files */
 
-printf("\n ********************************* START FIX HERE *********************************\n");
 #ifdef FIX_ME_SLOW
 	deleteFile(filenameTemp);
 //	deleteFile(finalTemplate);
 #endif
-printf("\n *********************************   END FIX HERE *********************************\n");
 	CHECK_FREE(buf);
 	return;
 
@@ -1931,7 +1924,11 @@ int makeTemplateFile(
 	#endif
 
 	// re-create "data" in new file
-	createNewData(fid_dst,"entry1/data/data",2,dims,getHDFtype(output_header.itype));
+	if (createNewData(fid_dst,"entry1/data/data",2,dims,getHDFtype(output_header.itype)))
+	{
+		fprintf(stderr, "ERROR in makeTemplateFile(): createNewData() failed.\n");
+		exit(1);
+	}
 	
 	// write data from buffer
 	HDF5WriteROI(fid_dst,"entry1/data/data",buf,0,(output_header.xdim)-1,0,(output_header.ydim)-1,getHDFtype(output_header.itype),&output_header);
