@@ -483,7 +483,7 @@ const char *fileName,						/* name of file to use */
 const char *dataName,						/* FULL name of data set, e.g. "entry1/data/data" */
 int		rank,								/* rank of new data */
 int		*dims,								/* inidvidual dimensions (dims must be of length rank) */
-int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
+hid_t		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
 {
 	hid_t	file_id, dataset_id, dataspace_id;  /* identifiers */
 	hid_t	attribute_id;
@@ -1069,13 +1069,13 @@ const char *dataName)				/* full data name, e.g. "entry1/wireX" */
 		value = inum;
 	}
 	else if (H5class==H5T_INTEGER && un_signed && size==4) {/* 4 byte unsigned int */
-		unsigned long inum;
-		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
+		unsigned int inum;
+		err = H5Dread(data_id,H5T_NATIVE_UINT,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		value = inum;
 	}
-	else if (H5class==H5T_INTEGER && size==2) {				/* 4 byte signed int */
-		long inum;
-		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
+	else if (H5class==H5T_INTEGER && size==4) {				/* 4 byte signed int */
+		int inum;
+		err = H5Dread(data_id,H5T_NATIVE_INT,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		value = inum;
 	}
 	else { fprintf(stderr,"ERROR -- readHDF5oneValue(), data not a valid float or int type\n"); ERROR_PATH(-1) }
@@ -1961,13 +1961,13 @@ long	*value)				/* holds result */
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && un_signed && size==4) {	/* 4 byte unsigned int */
-		unsigned long inum;
-		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
+		unsigned int inum;
+		err = H5Dread(data_id,H5T_NATIVE_UINT,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_INTEGER && size==4) {				/* 4 byte signed int */
-		long inum;
-		err = H5Dread(data_id,dataType,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
+		int inum;
+		err = H5Dread(data_id,H5T_NATIVE_INT,scalarSpace,scalarSpace,H5P_DEFAULT,&inum);
 		*value = inum;
 	}
 	else if (H5class==H5T_FLOAT && size==4) {				/* single precision float */
