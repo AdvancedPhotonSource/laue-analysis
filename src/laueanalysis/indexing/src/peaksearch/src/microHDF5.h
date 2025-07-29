@@ -135,7 +135,7 @@ int HDF5ReadROIdouble(const char *fileName, const char *dataName, double **vbuf,
 int HDF5ReadROIdoubleSlice(const char *fileName, const char *dataName, double **vbuf, long xlo, long xhi, long ylo, long yhi, struct HDF5_Header *head, size_t slice);
 #endif
 int readHDF5oneHeaderVector(const char *fileName, char *name, Dvector *vec);
-int createNewData(const char *fileName, const char *dataName, int rank, int *dims, int dataType);
+int createNewData(const char *fileName, const char *dataName, int rank, int *dims, hid_t dataType);
 int readHDF5header(const char *fileName, struct HDF5_Header *head);
 int printHeader(struct HDF5_Header *h);
 double readHDF5oneValue(const char *fileName, const char *dataName);
