@@ -12,14 +12,10 @@ import shutil
 
 from laueanalysis.reconstruct import (
     reconstruct,
-    batch,
-    depth_scan,
     find_executable,
     ReconstructionResult,
     # GPU functions
     reconstruct_gpu,
-    batch_gpu,
-    depth_scan_gpu,
     find_gpu_executable,
     gpu_available
 )
@@ -193,123 +189,6 @@ class TestReconstruct:
                     'input.h5', 'output_', 'geo.xml', (10, 5)  # Start > end
                 )
     
-    def test_batch_sequential(self, mock_subprocess, mock_executable):
-        """Test sequential batch processing."""
-        configs = [
-            {
-                'input_file': 'in1.h5',
-                'output_file': 'out1_',
-                'geometry_file': 'geo.xml',
-                'depth_range': (0, 5)
-            },
-            {
-                'input_file': 'in2.h5',
-                'output_file': 'out2_',
-                'geometry_file': 'geo.xml',
-                'depth_range': (5, 10)
-            }
-        ]
-        
-        results = batch(configs, parallel=False)
-        
-        assert len(results) == 2
-        assert all(isinstance(r, ReconstructionResult) for r in results)
-        assert all(r.success for r in results)
-        assert mock_subprocess.call_count == 4  # 2 validations + 2 reconstructions
-    
-    def test_batch_parallel(self, mock_subprocess, mock_executable):
-        """Test parallel batch processing."""
-        configs = [
-            {
-                'input_file': f'in{i}.h5',
-                'output_file': f'out{i}_',
-                'geometry_file': 'geo.xml',
-                'depth_range': (i*10, (i+1)*10)
-            }
-            for i in range(4)
-        ]
-        
-        results = batch(configs, parallel=True, max_workers=2)
-        
-        assert len(results) == 4
-        assert all(isinstance(r, ReconstructionResult) for r in results)
-    
-    def test_batch_stop_on_error(self, mock_subprocess, mock_executable):
-        """Test batch processing stops on error when requested."""
-        # Create custom side effect that makes second reconstruction fail
-        call_count = 0
-        
-        def custom_side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            
-            if '--help' in args[0]:
-                return MagicMock(
-                    returncode=1,
-                    stdout="Usage: WireScan -i <file> -o <file> -g <file>",
-                    stderr="",
-                    timeout=None
-                )
-            
-            # Make the second actual reconstruction fail (4th call overall)
-            if call_count == 4:
-                return MagicMock(returncode=1, stdout="", stderr="Error")
-            
-            return MagicMock(returncode=0, stdout="OK", stderr="")
-        
-        mock_subprocess.side_effect = custom_side_effect
-        
-        configs = [
-            {'input_file': f'in{i}.h5', 'output_file': f'out{i}_',
-             'geometry_file': 'geo.xml', 'depth_range': (0, 10)}
-            for i in range(3)
-        ]
-        
-        results = batch(configs, parallel=False, stop_on_error=True)
-        
-        assert len(results) == 2  # Should stop after second
-        assert results[0].success is True
-        assert results[1].success is False
-    
-    def test_batch_with_progress_callback(self, mock_subprocess, mock_executable):
-        """Test batch processing with progress callback."""
-        progress_calls = []
-        
-        def progress_callback(completed, total):
-            progress_calls.append((completed, total))
-        
-        configs = [
-            {'input_file': f'in{i}.h5', 'output_file': f'out{i}_',
-             'geometry_file': 'geo.xml', 'depth_range': (0, 10)}
-            for i in range(3)
-        ]
-        
-        results = batch(configs, parallel=False, progress_callback=progress_callback)
-        
-        assert len(results) == 3
-        assert progress_calls == [(1, 3), (2, 3), (3, 3)]
-    
-    def test_depth_scan(self, mock_subprocess, mock_executable):
-        """Test depth scanning convenience function."""
-        results = depth_scan(
-            'input.h5',
-            'output_base_',
-            'geo.xml',
-            [(0, 5), (5, 10), (10, 15)],
-            resolution=0.5,
-            parallel=False,
-            percent_brightest=75.0
-        )
-        
-        assert len(results) == 3
-        
-        # Check that output names include depth info
-        for i, (call_args, _) in enumerate(mock_subprocess.call_args_list[1::2]):  # Skip validation calls
-            cmd = call_args[0]
-            outfile_idx = cmd.index('-o')
-            outfile = cmd[outfile_idx + 1]
-            assert 'depth_' in outfile
-            assert f'{i*5}.0_{(i+1)*5}.0' in outfile
     
     def test_find_executable_function(self):
         """Test the public find_executable function."""
@@ -593,67 +472,6 @@ class TestReconstructGPU:
         assert '-N' not in call_args  # num_threads
         # Note: -R is used but for cuda_rows, not rows_per_stripe
     
-    def test_batch_gpu(self, mock_subprocess, mock_gpu_executable):
-        """Test GPU batch processing."""
-        configs = [
-            {
-                'input_file': 'in1.h5',
-                'output_file': 'out1_',
-                'geometry_file': 'geo.xml',
-                'depth_range': (0, 5),
-                'cuda_rows': 16
-            },
-            {
-                'input_file': 'in2.h5',
-                'output_file': 'out2_',
-                'geometry_file': 'geo.xml',
-                'depth_range': (5, 10),
-                'cuda_rows': 32
-            }
-        ]
-        
-        results = batch_gpu(configs, parallel=False)
-        
-        assert len(results) == 2
-        assert all(isinstance(r, ReconstructionResult) for r in results)
-        assert all(r.success for r in results)
-        
-        # Check that cuda_rows were passed correctly
-        call1 = mock_subprocess.call_args_list[1][0][0]  # Skip validation
-        call2 = mock_subprocess.call_args_list[3][0][0]  # Skip validation
-        
-        idx1 = call1.index('-R')
-        assert call1[idx1 + 1] == '16'
-        
-        idx2 = call2.index('-R')
-        assert call2[idx2 + 1] == '32'
-    
-    def test_depth_scan_gpu(self, mock_subprocess, mock_gpu_executable):
-        """Test GPU depth scanning convenience function."""
-        results = depth_scan_gpu(
-            'input.h5',
-            'output_base_',
-            'geo.xml',
-            [(0, 5), (5, 10), (10, 15)],
-            resolution=0.5,
-            parallel=False,
-            percent_brightest=75.0,
-            cuda_rows=24
-        )
-        
-        assert len(results) == 3
-        
-        # Check that output names include depth info
-        for i, (call_args, _) in enumerate(mock_subprocess.call_args_list[1::2]):  # Skip validation calls
-            cmd = call_args[0]
-            outfile_idx = cmd.index('-o')
-            outfile = cmd[outfile_idx + 1]
-            assert 'depth_' in outfile
-            assert f'{i*5}.0_{(i+1)*5}.0' in outfile
-            
-            # Check cuda_rows
-            idx = cmd.index('-R')
-            assert cmd[idx + 1] == '24'
     
     def test_find_gpu_executable_function(self):
         """Test the public find_gpu_executable function."""
