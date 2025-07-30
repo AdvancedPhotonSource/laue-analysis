@@ -49,6 +49,7 @@ RPATH_FLAGS = -Xlinker -rpath -Xlinker '$$ORIGIN' -Xlinker -rpath -Xlinker '$(CO
 # Compiler flags
 CXXFLAGS := -g
 NVCCFLAGS := -arch=$(GPU_ARCH) --ptxas-options=-v
+DFLAGS = -D_GNU_SOURCE -DRECONSTRUCT_BACKWARDS -DMULTI_IMAGE_FILE
 
 # Set flags based on build mode
 ifeq ($(MODE),debug)
@@ -77,17 +78,17 @@ bin:
 # Compile C files
 %.o: %.c
 	@echo "Compiling C file: $<"
-	@$(NVCC) -c $(INCD) -o $@ $< $(LIBS)
+	@$(NVCC) $(DFLAGS) -c $(INCD) -o $@ $< $(LIIS)
 
 # Compile CUDA files
 %.o: %.cu
 	@echo "Compiling CUDA file: $<"
-	@$(NVCC) -c $(NVCCFLAGS) $(INCD) -o $@ $< $(LIBS)
+	@$(NVCC) $(DFLAGS) -c $(NVCCFLAGS) $(INCD) -o $@ $< $(LIBS)
 
 # Link everything
 $(BIN): $(CPP_OBJS) $(CU_OBJS)
 	@echo "Linking: bin/$(BIN)"
-	@$(NVCC) -o bin/$(BIN) $(CU_OBJS) $(CPP_OBJS) $(INCD) $(LIBS) $(RPATH_FLAGS)
+	@$(NVCC) $(DFLAGS) -o bin/$(BIN) $(CU_OBJS) $(CPP_OBJS) $(INCD) $(LIBS) $(RPATH_FLAGS)
 	@echo "Build complete: bin/$(BIN)"
 
 # Clean build artifacts

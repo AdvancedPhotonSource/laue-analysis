@@ -16,6 +16,23 @@ extern "C" {
 #include "misc.h"
 }
 
+cudaConstPara paraPassed;
+floatcudaConstPara floatparaPassed;
+ws_calibration calibration;
+ws_imaging_parameters imaging_parameters;
+ws_image_set image_set;
+ws_user_preferences user_preferences;
+gsl_matrix * intensity_map;
+struct HDF5_Header in_header;
+struct HDF5_Header output_header;
+struct geoStructure geoIn;
+int		verbose;
+float	percent;
+int		cutoff;
+int		AVAILABLE_RAM_MiB;
+int		detNum;
+char	distortionPath[FILENAME_MAX];
+
 #define GPUerrchk(ans) { GPUassert((ans), __FILE__, __LINE__); }
 
 #define TYPICAL_mA		102.		/* average current, used with normalization */
