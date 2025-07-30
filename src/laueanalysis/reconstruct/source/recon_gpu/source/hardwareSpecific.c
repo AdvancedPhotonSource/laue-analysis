@@ -12,6 +12,8 @@
 #include "WireScanDataTypesN.h"
 #include "hardwareSpecific.h"
 
+int	positionerType;
+
 size_t myEpoch(int year, int month, int date, int hour, int min, int sec);
 
 
