@@ -14,8 +14,6 @@ extern "C" {
 #include "WireScan.h"
 #include "readGeoN.h"
 #include "misc.h"
-#include "depth_correction.h"
-
 }
 
 #define GPUerrchk(ans) { GPUassert((ans), __FILE__, __LINE__); }
@@ -33,40 +31,28 @@ int DATAXSIZE = 2;
 int DATAYSIZE = 2048;
 int DATAZSIZE = 933;  // 6-3
 
-// Variable for CUDA
-//define the data set size (cubic volume)
-
 //#define CKIX 0.0068398476412978382
 //#define CKIY 1.6805543861485532e-07
 //#define CKIZ 0.99997660796851429
 
-//#define UPDEPTHS -15     //user_preferences.depth_start
-//#define UPDEPTHR 1    //user_preferences.depth_resolution
-//#define IMDEPTHSIXE 31   //image_set.depth_resolved.size
+//#define UPDEPTHS -15		//user_preferences.depth_start
+//#define UPDEPTHR 1		//user_preferences.depth_resolution
+//#define IMDEPTHSIXE 31	//image_set.depth_resolved.size
 
-//#define CWIREDIAMETER 52             //calibration.wire.diameter
+//#define CWIREDIAMETER 52					//calibration.wire.diameter
 
-const long MiB = (1<<20);					/* 2^20, one mega byte */
+#define FIX_ME_SLOW
+#ifdef MULTI_IMAGE_FILE
+#define MULTI_IMAGE_SKIP 1			/* number of images in multi image file to skip, to use first image set to 0 */
+#define MULTI_IMAGE_SKIPV 1			/* number of points in vector to skip, to use first vector set to 0 */
+#else
+#define MULTI_IMAGE_SKIP 0			/* for a single image in each file, set to 0 */
+#define MULTI_IMAGE_SKIPV 0
+#endif
 
-/* Global variable definitions (declared as extern in WireScan.h) */
-cudaConstPara paraPassed;
-floatcudaConstPara floatparaPassed;
-ws_calibration calibration;
-ws_imaging_parameters imaging_parameters;
-ws_image_set image_set;
-ws_user_preferences user_preferences;
-gsl_matrix * intensity_map;
-struct HDF5_Header in_header;
-struct HDF5_Header output_header;
-struct geoStructure geoIn;
-int verbose;
-float percent;
-int cutoff;
-int AVAILABLE_RAM_MiB;
-int detNum;
-char distortionPath[FILENAME_MAX];
-char depthCorrectStr[FILENAME_MAX];
-int positionerType;  /* defined in hardwareSpecific.h */
+const long MiB = (1<<20);			/* 2^20, one mega byte */
+/* const int REVERSE_X_AXIS = 0;			/*set to non-zero value to flip x axis - double-check */
+/* const double PI = 3.14159265358979323;	/* not used anymore */
 
 /*---------------------------------------------------------------------------*/
 
@@ -356,7 +342,7 @@ __global__ void setOne(float *gsl,
    unsigned idz = blockIdx.z*blockDim.z + threadIdx.z;
 
    int gsl_offset = idx+idy* DATAXSIZE + DATAYSIZE * DATAXSIZE * idz;
-   int instensity_offset = idx+idy* DATAXSIZE ;
+   int instensity_offset = idx+idy* DATAXSIZE ;	
 
    if ((idx < (DATAXSIZE)) && (idy < (DATAYSIZE)) && (idz < (DATAZSIZE))){
       if ( intensity [instensity_offset] < d_cutoff) return;
@@ -433,7 +419,7 @@ __global__ void setTwo(float *gsl,
    unsigned idz = blockIdx.z*blockDim.z + threadIdx.z;
 
    int gsl_offset = idx+idy* DATAXSIZE + DATAYSIZE * DATAXSIZE * idz;
-   int instensity_offset = idx+idy* DATAXSIZE ;
+   int instensity_offset = idx+idy* DATAXSIZE ;	
 
    if ((idx < (DATAXSIZE)) && (idy < (DATAYSIZE)) && (idz < (DATAZSIZE))){
       if ( intensity [instensity_offset] < d_cutoff) return;
@@ -494,26 +480,25 @@ __global__ void setTwo(float *gsl,
 
 /*---------------------------------------------------------------------------*/
 
-/* const int REVERSE_X_AXIS = 0;			// set to non-zero value to flip x axis - double-check */
-/* const double PI = 3.14159265358979323;	// not used anymore */
-
 #define CHECK_FREE(A)   { if(A) free(A); (A)=NULL; }
 
 /* control functions */
 int main (int argc, const char **argv);
-int start(char* infile, char* outfile, char* geofile, double depth_start, double depth_end, double resolution, int first_image, int last_image, \
-	int out_pixel_type, int wireEdge, char* normalization, char* depthCorrectStr, int cudaRowNo);
-void printHelpText(void);
-void processAll( int file_num_start, int file_num_end, char* fn_base, char* fn_out_base, char* normalization, gsl_matrix_float * depthCorrectMap, int cudaRowNo);
-void readSingleImage(char* filename, int imageIndex, int ilow, int ihi, int jlow, int jhi, char* normalization);
+int start(char* infile, char* outfile, char* geofile, double depth_start, double depth_end, double resolution, int first_image, int last_image, int out_pixel_type, int wireEdge, char* normalization, int cudaRowNo);
+void processAll( int file_num_start, int file_num_end, char* fn_base, char* fn_out_base, char* normalization, int cudaRowNo);
+//void readSingleImage(char* fn, int imageNum, int bottom_image, int ilow, int ihi, int jlow, int jhi, char* normalization);
+//void readSingleImage(char* filename, int imageIndex, int ilow, int ihi, int jlow, int jhi, char* normalization);
+//void readSingleImage(char *filename, int imageIndex, int file_num_start, int ilow, int ihi, int jlow, int jhi);
+void readSingleImage(char *filename, int imageIndex, int slice, int ilow, int ihi, int jlow, int jhi);
 int find_first_valid_i(int i1, int i2, int jlo, int jhi, point_xyz wire, BOOLEAN use_leading_wire_edge);
 int find_last_valid_i(int i1, int i2, int jlo, int jhi, point_xyz wire, BOOLEAN use_leading_wire_edge);
 point_xyz wirePosition2beamLine(point_xyz wire_pos);
 
 /* File I/O */
-void getImageInfo(char* fn_base, int file_num_start, int file_num_end);
+void getImageInfo(char* fn_base, int file_num_start, int file_num_end, char	*normalization, Dvector *normalVector);
 void get_intensity_map(char* filename_base, int file_num_start);
-void readImageSet(char* fn_base, int ilow, int ihi, int jlow, int jhi, int file_num_start, int file_num_end, char* normalization);
+//void readImageSet(char* fn_base, int ilow, int ihi, int jlow, int jhi, int file_num_start, int file_num_end, Dvector *normalVector);
+void readImageSet(char* fn_base, int ilow, int ihi, int jlow, int jhi, int file_num_start, int Nimages, Dvector *normalVector);
 void writeAllHeaders(char* fn_in_first, char* fn_out_base, int file_num_start, int file_num_end);
 void write1Header(char* finalTemplate, char* fn_base, int file_num);
 void write_depth_data(size_t start_i, size_t end_i, char* fn_base);
@@ -526,25 +511,25 @@ void delete_images(void);
 void get_difference_images(void);
 void add_pixel_intensity_at_depth(point_ccd pixel, double intensity, double depth);
 //inline void add_pixel_intensity_at_index(point_ccd pixel, double intensity, long index);
-void add_pixel_intensity_at_index(size_t i, size_t j, double intensity, long index);
+inline void add_pixel_intensity_at_index(size_t i, size_t j, double intensity, long index);
 
 /* actual calculations */
-double index_to_beam_depth(long index);
-double get_trapezoid_height(double partial_start, double partial_end, double full_start, double full_end, double depth);
+inline double index_to_beam_depth(long index);
+inline double get_trapezoid_height(double partial_start, double partial_end, double full_start, double full_end, double depth);
 point_xyz pixel_to_point_xyz(point_ccd pixel);
 double pixel_xyz_to_depth(point_xyz point_on_ccd_xyz, point_xyz wire_position, BOOLEAN use_leading_wire_edge);
 void depth_resolve(int i_start, int i_stop);
 //inline void depth_resolve_pixel(double pixel_intensity, point_ccd pixel, point_xyz point, point_xyz next_point, point_xyz wire_position_1, point_xyz wire_position_2, BOOLEAN use_leading_wire_edge);
-//inline void depth_resolve_pixel(double pixel_intensity, size_t i, size_t j, point_xyz point, point_xyz next_point, point_xyz wire_position_1, point_xyz wire_position_2, BOOLEAN use_leading_wire_edge);
-void depth_resolve_pixel(double pixel_intensity, size_t i, size_t j, point_xyz point, point_xyz next_point, point_xyz wire_position_1, point_xyz wire_position_2, BOOLEAN use_leading_wire_edge);
+inline void depth_resolve_pixel(double pixel_intensity, size_t i, size_t j, point_xyz point, point_xyz next_point, point_xyz wire_position_1, point_xyz wire_position_2, BOOLEAN use_leading_wire_edge);
 void print_imaging_parameters(ws_imaging_parameters ip);
+void print_help_text(void);
 
 
 #ifdef DEBUG_ALL					/* temp debug variable for JZT */
 int slowWay=0;						/* true if found reading stripes the slow way */
 int verbosePixel=0;
-//	#define pixelTESTi 49
-//	#define pixelTESTj 60
+	//	#define pixelTESTi 49
+	//	#define pixelTESTj 60
 //#define pixelTESTi 1092
 //#define pixelTESTj 881
 #if defined(pixelTESTi) && defined(pixelTESTj)
@@ -578,20 +563,17 @@ int main (int argc, const char *argv[]) {
 	int		last_image = 0;					/* defaults to last image in multi-image file */
 	int		out_pixel_type = -1;			/* -1 flags that output image should have same type as input image */
 	int		wireEdge = 1;					/* 1=leading edge of wire, 0=trailing edge of wire, -1=both edges */
-	unsigned long required=0, requiredFlags=((1<<5)-1);	/* (1<<5)-1 == (2^5 - 1) requiredFlags are the arguments that must be set */
-	int		ivalue;
-	
 	int		cudaRowNo = 8;					/* the cuda row number handled each time */
-	
-#ifdef DEBUG_ALL
+	unsigned long required=0, requiredFlags=((1<<5)-1);	/* (1<<5)-1 == (2^5 - 1) requiredFlags are the arguments that must be set */
+	long	lvalue;
+	#ifdef DEBUG_ALL
 	char	ApplicationsPath[FILENAME_MAX];		/* path to applications, used for h5repack */
-#endif
+	#endif
 
 	/* initialize some globals */
 	geoIn.wire.axis[0]=1; geoIn.wire.axis[0]=geoIn.wire.axis[0]=0;	/* default wire.axis is {1,0,0} */
 	geoIn.wire.R[0] = geoIn.wire.R[1] = geoIn.wire.R[2] = 0;		/* default PM500 rotation of wire is 0 */
 	distortionPath[0] = '\0';				/* start with it empty */
-	depthCorrectStr[0] = '\0';				/* start with it empty */
 	verbose = 0;
 	percent = 100;
 	cutoff = 0;
@@ -609,30 +591,29 @@ int main (int argc, const char *argv[]) {
 			{"infile",				required_argument,		0,	'i'},
 			{"outfile",				required_argument,		0,	'o'},
 			{"geofile",				required_argument,		0,	'g'},
-			{"depth-start",			required_argument,		0,	's'},
+			{"depth-start",			optional_argument,		0,	's'},
 			{"depth-end",			required_argument,		0,	'e'},
-			{"resolution",			required_argument,		0,	'r'},
-			{"verbose",				required_argument,		0,	'v'},
-			{"first-image",			required_argument,		0,	'f'},
-			{"last-image",			required_argument,		0,	'l'},
-			{"normalization",		required_argument,		0,	'n'},
-			{"percent-to-process",	required_argument,		0,	'p'},
-			{"wire-edges",			required_argument,		0,	'w'},
-			{"memory",				required_argument,		0,	'm'},
-			{"type-output-pixel",	required_argument,		0,	't'},
-			{"distortion_map",		required_argument,		0,	'd'},
-			{"detector_number",		required_argument,		0,	'D'},
-			{"wireDepths",			required_argument,		0,	'W'},
-			{"Parameters File",		required_argument,		0,	'F'},
+			{"resolution",			optional_argument,		0,	'r'},
+			{"verbose",				optional_argument, 		0,	'v'},
+			{"first-image",			optional_argument, 		0,	'f'},
+			{"last-image",			required_argument, 		0,	'l'},
+			{"normalization",		optional_argument, 		0,	'n'},
+			{"percent-to-process",	optional_argument, 		0,	'p'},
+			{"wire-edges",			optional_argument, 		0,	'w'},
+			{"memory",				required_argument, 		0,	'm'},
+			{"type-output-pixel",	optional_argument, 		0,	't'},
+			{"distortion_map",		optional_argument, 		0,	'd'},
+			{"detector_number",		optional_argument, 		0,	'D'},
+			{"Parameters File",		optional_argument, 		0,	'F'},
 			{"cuda row number",		required_argument, 		0,	'R'},
-			{"ignore",				optional_argument,		0,	'@'},
-			{"help",				no_argument,			0,	'h'},
+			{"ignore",				optional_argument, 		0,	'@'},
+			{"help",				no_argument, 			0,	'h'},
 			{0, 0, 0, 0}
 		};
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, (char * const *)argv, "i:o:g:s:e:r:v:f:l:n:p:w:m:t:d:D:W:F:R:@::h::", long_options, &option_index);
+		c = getopt_long (argc, (char * const *)argv, "i:o:g:s::e:r:v::f:l:n:p:w:m:t:d:D:F:R:@::h::", long_options, &option_index);
 
 		/* Detect the end of the options.  */
 		if (c == -1)
@@ -675,16 +656,16 @@ int main (int argc, const char *argv[]) {
 				break;
 
 			case 'v':
-				verbose = atoi(optarg);
+				verbose = atol(optarg);
 				if (verbose < 0) verbose = 0;
 				break;
 
 			case 'f':
-				first_image = atoi(optarg);
+				first_image = atol(optarg);
 				break;
 
 			case 'l':
-				last_image = atoi(optarg);
+				last_image = atol(optarg);
 				break;
 
 			case 'n':
@@ -699,20 +680,20 @@ int main (int argc, const char *argv[]) {
 				break;
 
 			case 'm':
-				AVAILABLE_RAM_MiB = atoi(optarg);
+				AVAILABLE_RAM_MiB = atol(optarg);
 				AVAILABLE_RAM_MiB = MAX(AVAILABLE_RAM_MiB,1);
 				break;
 
 			case 't':
-				ivalue = atoi(optarg);
-				if (ivalue<0 ||ivalue>7 || ivalue==4) {
+				lvalue = atol(optarg);
+				if (lvalue<0 ||lvalue>7 || lvalue==4) {
 					error("-t switch needs to be followed by 0, 1, 2, 3, 5, 6, or 7\n");
 					fprintf(stderr,"0=float(4 byte),   1=long(4 byte),  2=int(2 byte),  3=uint (2 byte)\n");
 					fprintf(stderr,"5=double(8 byte),  6=int8 (1 byte), 7=uint8(1 type)\n");
 					exit(1);
 					return 1;
 				}
-				out_pixel_type = ivalue;					/* type of output pixel uses old WinView values */
+				out_pixel_type = lvalue;					/* type of output pixel uses old WinView values */
 				break;
 
 			case 'w':
@@ -736,7 +717,7 @@ int main (int argc, const char *argv[]) {
 				break;
 
 			case 'D':
-				detNum = atoi(optarg);
+				detNum = atol(optarg);
 				required = required | (1<<4);
 				if (detNum < 0 || detNum>2) {
 					error("-D detector number must be 0, 1, or 2\n");
@@ -745,11 +726,6 @@ int main (int argc, const char *argv[]) {
 				}
 				break;
 
-			case 'W':
-				strncpy(depthCorrectStr,optarg,1022);
-				depthCorrectStr[1023-1] = '\0';				/* strncpy may not terminate */
-				break;
-				
 			case '@':				/* a do nothing, just skip */
 				break;
 
@@ -765,21 +741,19 @@ int main (int argc, const char *argv[]) {
 				cudaRowNo = atol(optarg);
 				DATAXSIZE = cudaRowNo;
 				break;
-				
+
 			default:
-				printf ("Unknown command line argument(s)\n");
+				printf ("Unknown command line argument(s)");
 
 			case 'h':
-				required = 0;								/* forces printing of help */
-				break;
+				print_help_text();
+				return 0;
 		}
 	}
-	if (required==0) {										/* nothing input, show help */
-		printHelpText();
-		exit(1);
-	}
-	else if (requiredFlags ^ (required & requiredFlags)) {	/* means NOT all required arguments have been set */
+
+	if (requiredFlags ^ (required & requiredFlags)) {		/* means all required arguments have been set */
 		error("some required -D detector number must be 0, 1, or 2\n");
+		print_help_text();
 		exit(1);
 	}
 
@@ -792,7 +766,6 @@ int main (int argc, const char *argv[]) {
 		printf("\noutfile = '%s'",outfile);
 		printf("\ngeofile = '%s'",geofile);
 		printf("\ndistortion map = '%s'",distortionPath);
-		if (depthCorrectStr[0]) printf("\ndepthCorrect = '%s'",depthCorrectStr);
 		if (paramfile[0]) printf("\nparamFile = '%s'",paramfile);
 		printf("\ndepth range = [%g, %g]micron with resolution of %g micron",depth_start,depth_end,resolution);
 		printf("\nimage index range = [%d, %d]  using %g%% of pixels",first_image,last_image,percent);
@@ -804,11 +777,13 @@ int main (int argc, const char *argv[]) {
 		else printf("\nusing oly TRAILING edge of wire");
 		if (out_pixel_type >= 0) printf("\nwriting output images as type long");
 		printf("\nusing %dMiB of RAM, and verbose = %d",AVAILABLE_RAM_MiB,verbose);
+		
+		printf("\nGPU processing rowNumber = '%d' each tiime",cudaRowNo);
 		printf("\n\n");
 	}
 	fflush(stdout);
 
-	start(infile, outfile, geofile, depth_start, depth_end, resolution, first_image, last_image, out_pixel_type, wireEdge, normalization, depthCorrectStr, cudaRowNo);
+	start(infile, outfile, geofile, depth_start, depth_end, resolution, first_image, last_image, out_pixel_type, wireEdge, normalization, cudaRowNo);
 
 	if (verbose) {
 		time_t systime;
@@ -819,53 +794,30 @@ int main (int argc, const char *argv[]) {
 }
 
 
-void printHelpText(void)
-{
-	printf("\nUsage: WireScan -i <file> -o <file> -g <file> [-s <\x23>] -e <\x23> [-r <\x23>] [-v <\x23>] [-f <\x23>] -l <\x23> [-p <\x23>]  [-t <\x23>]  [-m <\x23>] [-?] \n\n");
-	printf("\n-i <file>,\t --infile=<file>\t\tlocation and leading section of file names to process");
-	printf("\n-o <file>,\t --outfile=<file>\t\tlocation and leading section of file names to create");
-	printf("\n-g <file>,\t --geofile=<file>\t\tlocation of file containing parameters from the wirescan");
-	printf("\n-d <file>,\t --distortion map=<file>\tlocation of file with the distortion map, dXYdistortion");
-	printf("\n-s <\x23>,\t\t --depth-start=<\x23>\t\tdepth to begin recording values at - inclusive");
-	printf("\n-e <\x23>,\t\t --depth-end=<\x23>\t\tdepth to stop recording values at - inclusive");
-	printf("\n-r <\x23>,\t\t --resolution=<\x23>\t\tum depth covered by a single depth-resolved image");
-	printf("\n-v <\x23>,\t\t --verbose=<\x23>\t\t\toutput detailed output of varying degrees (0, 1, 2, 3)");
-	printf("\n-f <\x23>,\t\t --first-image=<\x23>\t\tnumber of first image to process - inclusive");
-	printf("\n-l <\x23>,\t\t --last-image=<\x23>\t\tnumber of last image to process - inclusive");
-	printf("\n-n <tag>,\t --normalization=<tag>\t\ttag of variable in header to use for normalizing incident intensity, optional");
-	printf("\n-p <\x23>,\t\t --percent-to-process=<\x23>\tonly process the p%% brightest pixels in image");
-	printf("\n-w <l,t,b>,\t --wire-edges\t\t\tuse leading, trailing, or both edges of wire, (for both, output images will then be longs)");
-	printf("\n-R <#>,\t --rowNumber=<#>\t\tnumber of rows to process --GPU parameters");
-	printf("\n-t <\x23>,\t\t --type-output-pixel=<\x23>\ttype of output pixel (uses old WinView numbers), optional");
-	printf("\n-m <\x23>,\t\t --memory=<\x23>\t\t\tdefine the amount of memory in MiB that the programme is allowed to use");
-	printf("\n-W <file>,\t --wireDepths=<file>\t\tfile with depth corrections for each pixel");
-	printf("\n-?,\t\t --help\t\t\t\tdisplay this help");
-	printf("\n\n");
-	printf("Example: WireScan -i /images/image_ -o /result/image_ -g /geo/file -s 0 -e 100 -r 1 -v 1 -f 1 -l 401 -p 1\n\n");
-	return;
-}
-
 
 int start(
-	char *infile,					/* base name of input image files */
-	char *outfile,					/* base name of output image files */
-	char *geofile,					/* full path to geometry file */
-	double depth_start,				/* first depth in reconstruction range (micron) */
-	double depth_end,				/* last depth in reconstruction range (micron) */
-	double resolution,				/* depth resolution (micron) */
-	int first_image,				/* index to first input image file */
-	int last_image,					/* index to last input image file */
-	int out_pixel_type,				/* type to use for the output pixel */
-	int wireEdge,					/* 1=leading edge of wire, 0=trailing edge of wire, -1=both edges */
-	char *normalization,			/* optional tag for normalization */
-	char* depthCorrectStr,			/* optional name of file with depth corrections for each pixel */
-	int cudaRowNo						/* cuda row number */)
+char *infile,						/* base name of input image files */
+char *outfile,						/* base name of output image files */
+char *geofile,						/* full path to geometry file */
+double depth_start,					/* first depth in reconstruction range (micron) */
+double depth_end,					/* last depth in reconstruction range (micron) */
+double resolution,					/* depth resolution (micron) */
+int first_image,					/* index to first input image file */
+int last_image,						/* index to last input image file */
+int out_pixel_type,					/* type to use for the output pixel */
+int wireEdge,						/* 1=leading edge of wire, 0=trailing edge of wire, -1=both edges */
+char *normalization,				/* optional tag for normalization */
+int cudaRowNo)						/* cuda row number */
 {
 	double	seconds;				/* seconds of CPU time used */
 	time_t	executionTime;			/* number of seconds since program started */
 	clock_t	tstart = clock();		/* clock() provides cpu usage, not total elapsed time */
 	time_t	sec0 = time(NULL);		/* time (since EPOCH) when program starts */
 	int		err=0;
+	struct stat info;				/* status of outfile path */
+	char	outFolder[FILENAME_MAX];/* holds pathname part of outfile */
+	char	*p;
+	char	errStr[FILENAME_MAX+256];
 
 	if (strlen(geofile)<1) { }								/* skip if no geo file specified, could have been entered via -F command line flag */
 	else if (!(err=readGeoFromFile(geofile, & geoIn))) {	/* readGeoFromFile returns 1=error */
@@ -884,17 +836,60 @@ int start(
 		fflush(stdout);
 	}
 
+	if (verbose > 0) printf("running this program as user %d\n",getuid());
 
-	gsl_matrix_float * depthCorrectMap=NULL;
-	depthCorrectMap = load_depth_correction_map(depthCorrectStr);
+	/* create the output directory if it does not exist */
+	strncpy(outFolder, outfile, FILENAME_MAX-2); 
+	outFolder[FILENAME_MAX-1] = '\0';						/* ensure termination */
+	p = strrchr(outFolder, '/');
+	if (p || p==outFolder) {								/* make sure I actually have a path part */
+		*p = '\0';											/* trim off file part from outFolder */
+		info.st_mode = 0;
+		stat(outFolder,&info);
+		if (info.st_mode == 0) {							/* output folder does not exist, try to create it */
+			if (verbose > 0) printf("output folder '%s' does not exist, create it\n",outFolder);
+			if (mkdir(outFolder, S_IRWXU | S_IRWXG | S_IRWXO)) {	/* create with complete access to everyone, 777 */
+				sprintf(errStr,"could not create output folder '%s'\n",outFolder);
+				error(errStr);
+				exit(1);
+			}
+		}
+		else if (!(info.st_mode & S_IFDIR)) {					/* outFolder exists, but it is not a directory, cannot write here */
+			sprintf(errStr,"output folder '%s' exists, but it is not a directory!",outFolder);
+			error(errStr);
+			exit(1);
+		}
+	}
+/*
+	struct stat info; 
+	stat("/Users/tischler/dev/reconstructC_Big/testing/build", &info);
+	printf("File mode: 0x%lX\n",info.st_mode);
+	if (info.st_mode & S_IFDIR) printf("is a dir\n");
+	else printf("NOT a dir\n");
+		//	printf("owner mask = %o\n",(info.st_mode & S_IRWXU)>>6);
+		//	printf("group mask = %o\n",(info.st_mode & S_IRWXG)>>3);
+		//	printf("other mask = %o\n",(info.st_mode & S_IRWXO));
+	printf("owner write = %o\n",!!(info.st_mode & S_IWUSR));
+	printf("group write = %o\n",!!(info.st_mode & S_IWGRP));
+	printf("other write = %o\n",!!(info.st_mode & S_IWOTH));
 
+	uid_t uid;
+	uid = getuid();
+	printf("user: 0x%lX\n",info.st_uid);
+	printf("I am: 0x%lX  =  %d\n",uid,uid);
+
+	printf("for non-existant file");
+	info.st_mode = 0;
+	stat("/Users/tischler/dev/reconstructC_Big/testing/buildXXX", &info);
+	printf("File mode: 0x%lX\n",info.st_mode);
+*/
 
 	/* write first part of summary, then close it and write last part after computing */
 	FILE *f=NULL;
 	char summaryFile[FILENAME_MAX];
 	sprintf(summaryFile,"%ssummary.txt",outfile);
 	if (!(f=fopen(summaryFile, "w"))) { printf("\nERROR -- start(), failed to open file '%s'\n\n",summaryFile); exit(1); }
-	writeSummaryHead(f, infile, outfile, geofile, depth_start, depth_end, resolution, first_image, last_image, out_pixel_type, wireEdge, normalization, depthCorrectStr);
+	writeSummaryHead(f, infile, outfile, geofile, depth_start, depth_end, resolution, first_image, last_image, out_pixel_type, wireEdge, normalization);
 	fclose(f);
 
 	/* initialize image_set.*, contains partial input images & wire positions and partial output images & total intensity */
@@ -912,7 +907,7 @@ int start(
 	depth_end = round(depth_end/resolution)*resolution;
 	user_preferences.depth_start = depth_start;
 	user_preferences.depth_end = depth_end;
-	user_preferences.NoutputDepths = round((depth_end - depth_start) / resolution + 1.0);
+	user_preferences.NoutputDepths = (int) round((depth_end - depth_start) / resolution + 1.0);
 	user_preferences.out_pixel_type = out_pixel_type;
 	user_preferences.wireEdge = wireEdge;
 	if (user_preferences.NoutputDepths < 1) {
@@ -920,14 +915,14 @@ int start(
 		exit(1);
 	}
 
-#ifdef USE_DISTORTION_CORRECTION
+	#ifdef USE_DISTORTION_CORRECTION
 	load_peak_correction_maps(distortionPath);
 	/*	load_peak_correction_maps("/Users/tischler/dev/reconstructXcode_Mar07/dXYdistortion"); */
 	/*	load_peak_correction_maps("/home/nathaniel/Desktop/Reconstruction/WireScan/dXYdistortion"); */
-#endif
+	#endif
 
 	/* *********************** this does everything *********************** */
-	processAll(first_image, last_image, infile, outfile, normalization,depthCorrectMap, cudaRowNo);
+	processAll(first_image, last_image, infile, outfile, normalization, cudaRowNo);
 
 	delete_images();
 	/* TODO: clear the depth-resolved images from memory*/
@@ -958,61 +953,70 @@ int start(
 
 
 void processAll(
-	int		file_num_start,				/* index to first input image file */
-	int		file_num_end,				/* index to last input image file */
-	char	*fn_base,					/* base name of input image files */
-	char	*fn_out_base,				/* base name of output image files */
-	char	*normalization,				/* optional tag for normalization */
-//#pragma GCC diagnostic push
-//#pragma GCC diagnostic ignored "-Wunused-parameter"			/* do not warn that depthCorrectMap, is unused */
-	gsl_matrix_float *depthCorrectMap,	/* optional map of depth corrections */
-	int	cudaRowNo						/* cuda row number */)
-//#pragma GCC diagnostic pop
+int		file_num_start,				/* index to first input image file */
+int		file_num_end,				/* index to last input image file */
+char	*infile,					/* base name of input image files */
+char	*fn_out_base,				/* base name of output image files */
+char	*normalization,				/* optional tag for normalization */
+int	cudaRowNo)						/* cuda row number */
 {
-#warning Have code for getting depthCorrectMap, but no way to use it yet.
-	/* TODO: Have code for getting depthCorrectMap, but no way to use it yet. */
-	if (verbose > 0) printf("\nloading image information");
+	Dvector normalVector;										/* normalization vector made using 'normalization' */
+
+	if (verbose > 0) printf("\nloading image information\n");
 	fflush(stdout);
 
-	getImageInfo(fn_base, file_num_start, file_num_end);		/* sets many of the values in the structure imaging_parameters which is a global */
+	init_Dvector(&normalVector);
+	initHDF5structure(&in_header);								/* initialize in_header */
+	initHDF5structure(&output_header);							/* initialize output_header */
+	getImageInfo(infile, file_num_start, file_num_end, normalization, &normalVector);	/* sets many of the values in the structure imaging_parameters which is a global */
 
-#ifdef DEBUG_1_PIXEL
+	#ifdef DEBUG_1_PIXEL
 	testing_depth();
-#endif
-	get_intensity_map(fn_base, file_num_start);					/* finds cutoff, and saves the first image of the wire scan for later comparison */
+	#endif
+	get_intensity_map(infile, file_num_start);					/* finds cutoff, and saves the first image of the wire scan for later comparison */
 
 	/* set values in the output header */
 	int	output_pixel_type;										/* WinView number type of output pixels */
 	int	pixel_size;												/* for output image, number of bytes/pixel */
 	output_pixel_type = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_type : user_preferences.out_pixel_type;
-	pixel_size = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_bytes : WinView_itype2len(user_preferences.out_pixel_type);
-	copyHDF5structure(&output_header, &in_header);			/* duplicate in_header into output_header */
+	pixel_size = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_bytes : WinView_itype2len_new(user_preferences.out_pixel_type);
+	copyHDF5structure(&output_header, &in_header);				/* duplicate in_header into output_header */
 	output_header.isize = pixel_size;							/* change size of pixels for output files */
 	output_header.itype = output_pixel_type;
+#ifdef MULTI_IMAGE_FILE
+	init_Dvector(&output_header.xWire);							/* no wire positions in output file */
+	init_Dvector(&output_header.yWire);
+	init_Dvector(&output_header.zWire);
+#else
 	output_header.xWire = output_header.yWire = output_header.zWire = NAN;	/* no wire positions in output file */
+#endif
 
 	/* create all of the output files, and write the headers, with a dummy image filled with 0 */
 	char fn_in_first[FILENAME_MAX];								/* name of first input file */
+#ifdef MULTI_IMAGE_FILE
+	strncpy(fn_in_first,infile,FILENAME_MAX-1);
+#else
 	sprintf(fn_in_first,"%s%d.h5",fn_base,file_num_start);
+#endif
 
-#ifdef DEBUG_ALL
+	#ifdef DEBUG_ALL
 	clock_t tstart = clock();
 	if (verbose > 0) { fprintf(stderr,"\nallocating disk space for results..."); fflush(stdout); }
-#endif
+	#endif
 	writeAllHeaders(fn_in_first,fn_out_base, 0, user_preferences.NoutputDepths - 1);
-#ifdef DEBUG_ALL
+	#ifdef DEBUG_ALL
 	if (verbose > 0) { fprintf(stderr,"     took %.2f sec",((double)(clock() - tstart)) /((double)CLOCKS_PER_SEC)); fflush(stdout); }
-#endif
+	#endif
 
 	/* [file_num_start, file_num_end] is the total range of files to read */
 	int		start_i, end_i;											/* first and last rows of the image to process, may be less than whole image depending upon depth range and wire range */
-	/*		actually for HDF5 files, you probably have to do the whole range */
+																	/*		actually for HDF5 files, you probably have to do the whole range */
 	size_t	rows;													/* number of rows (i's) that can be processed at once, limited by memory.  (1<<20) = 2^20 = 1MiB */
 	size_t	max_rows;												/* maximum number of rows that can be processed with this memory allocation */
 	rows = AVAILABLE_RAM_MiB * MiB;									/* total number of bytes available */
 	rows -= (imaging_parameters.nROI_i * imaging_parameters.nROI_j * sizeof(double) * 3);	/* subract space for intensity and distortion maps */
 	rows /= (imaging_parameters.nROI_j * sizeof(double));									/* divide by number of bytes per line */
-	rows /= (imaging_parameters.NinputImages + user_preferences.NoutputDepths);				/* divide by number of images to store */
+	rows /= (imaging_parameters.NinputImages + user_preferences.NoutputDepths);	/* divide by number of images to store */
 	rows = MAX(rows,1);												/* always at least one row */
 	
 	// Add for the GPU code
@@ -1025,24 +1029,24 @@ void processAll(
 	/* get starting row and stopping row positions in images (range of i) */
 	if (verbose > 0) { printf("\nsetup depth-resolved images in memory"); fflush(stdout); }
 	start_i = 0;													/* start with whole image, then trim down depending upon wire range and depth range */
-	end_i = (int)(in_header.xdim - 1);
+	end_i = in_header.xdim - 1;
 	if (verbose > 0) printf("\nprocess rows %d thru %d",start_i,end_i);
 
-	if (0) {
-		if (user_preferences.wireEdge>=0) {								/* using only one edge of the wire */
-			start_i = find_first_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_first_xyz,(BOOLEAN)(user_preferences.wireEdge));
-			end_i = find_last_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_last_xyz,(BOOLEAN)(user_preferences.wireEdge));
-		}
-		else {															/* using both edges of the wire */
-			int i1,i2;
-			i1 = find_first_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_first_xyz,0);
-			i2 = find_first_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_first_xyz,1);
-			start_i = MIN(i1,i2);
-			i1 = find_last_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_last_xyz,0);
-			i2 = find_last_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_last_xyz,1);
-			end_i = MAX(i1,i2);
-		}
+if (0) {
+	if (user_preferences.wireEdge>=0) {								/* using only one edge of the wire */
+		start_i = find_first_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_first_xyz,(BOOLEAN)(user_preferences.wireEdge));
+		end_i = find_last_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_last_xyz,(BOOLEAN)(user_preferences.wireEdge));
 	}
+	else {															/* using both edges of the wire */
+		int i1,i2;
+		i1 = find_first_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_first_xyz,0);
+		i2 = find_first_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_first_xyz,1);
+		start_i = MIN(i1,i2);
+		i1 = find_last_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_last_xyz,0);
+		i2 = find_last_valid_i(start_i,end_i,0,imaging_parameters.nROI_j-1,imaging_parameters.wire_last_xyz,1);
+		end_i = MAX(i1,i2);
+	}
+}
 	if (start_i<0 || end_i<0) {
 		char errStr[1024];
 		sprintf(errStr,"Could not find valid starting or stopping rows, got [%d, %d]",start_i,end_i);
@@ -1055,55 +1059,60 @@ void processAll(
 
 	/* current row indicies */
 	int cur_start_i = start_i;										/* start and stop row for one band of image that fits into memory */
-	int cur_stop_i = (int)(start_i + rows - 1);
+	int cur_stop_i = start_i + rows - 1;
 	cur_stop_i = MIN(end_i,cur_stop_i);
 
 	/* in input and output images need space for (imaging_parameters.rows_at_one_time = rows) rows */
 	/* allocate space for wire_scanned images of length (rows = imaging_parameters.rows_at_one_time) */
-	setup_depth_images(file_num_end-file_num_start+1);				/* allocate space and initialize the structure image_set, which contains the output */
+//	setup_depth_images(file_num_end-file_num_start+1);				/* allocate space and initialize the structure image_set, which contains the output */
+	setup_depth_images(imaging_parameters.NinputImages);			/* allocate space and initialize the structure image_set, which contains the output */
 	if (verbose > 0) print_imaging_parameters(imaging_parameters);
 
 	/* loop through ram-managable stripes of the image and process them */
 	while (cur_start_i <= end_i ) {
-		imaging_parameters.current_selection_start = cur_start_i;
-		imaging_parameters.current_selection_end = cur_stop_i;
+	    imaging_parameters.current_selection_start = cur_start_i;
+	    imaging_parameters.current_selection_end = cur_stop_i;
 
-		clear_depth_images(&image_set);				/* sets all images in image_set.depth_resolved and image_set.wire_scanned to zero, does not de-allocate the space they use, or change .size or .alloc */
-		/* NOTE, do NOT clear image_set.depth_intensity or image_set.wire_positions */
-		if (verbose > 1) printf("\n");
-		if (verbose > 0) printf("\nprocessing rows %d thru %d  (%d of %d)...",cur_start_i,cur_stop_i,cur_stop_i-cur_start_i+1,end_i-start_i+1);
-		fflush(stdout);
+	    clear_depth_images(&image_set);				/* sets all images in image_set.depth_resolved and image_set.wire_scanned to zero, does not de-allocate the space they use, or change .size or .alloc */
+													/* NOTE, do NOT clear image_set.depth_intensity or image_set.wire_positions */
+	    if (verbose > 1) printf("\n");
+	    if (verbose > 0) printf("\nprocessing rows %d thru %d  (%d of %d)...",cur_start_i,cur_stop_i,cur_stop_i-cur_start_i+1,end_i-start_i+1);
+	    fflush(stdout);
 
 		/* read stripes from the input image files */
-		readImageSet(fn_base, cur_start_i, cur_stop_i, 0, imaging_parameters.nROI_j - 1, file_num_start, file_num_end, normalization);
+		readImageSet(infile, cur_start_i, cur_stop_i, 0, imaging_parameters.nROI_j - 1, file_num_start, imaging_parameters.NinputImages, &normalVector);
 
-		if (verbose > 1) printf("\n\tdepth resolving");
-		if (verbose == 2) printf("       ");
-		fflush(stdout);
+	    if (verbose > 1) printf("\n\tdepth resolving");
+	    if (verbose == 2) printf("       ");
+	    fflush(stdout);
 
 		/* depth resolve the set of stripes just read */
-		depth_resolve(cur_start_i, cur_stop_i);
+	    depth_resolve(cur_start_i, cur_stop_i);
 
-		if (verbose > 1) printf("\n\twriting out data");
-		if (verbose == 2) printf("      ");
-		fflush(stdout);
+	    if (verbose > 1) printf("\n\twriting out data");
+	    if (verbose == 2) printf("      ");
+	    fflush(stdout);
 
 		/* write the depth resolved stripes to the output image files */
-		write_depth_data((size_t)cur_start_i, (size_t)cur_stop_i, fn_out_base);
+	    write_depth_data((size_t)cur_start_i, (size_t)cur_stop_i, fn_out_base);
 
-		cur_start_i = cur_stop_i + 1;					/* increase row limits for next stripe */
+	    cur_start_i = cur_stop_i + 1;					/* increase row limits for next stripe */
 		cur_stop_i = MIN(cur_stop_i+(int)rows,end_i);	/* make sure loop doesn't go outside of the assigned area. */
 	}
 	imaging_parameters.rows_at_one_time = max_rows;		/* save this for output to summary file */
 
-	if (verbose > 1) printf("\n\nfinishing\n");
+	if (verbose > 1) printf("\n\nfinishing...\n");
 	fflush(stdout);
 }
 
+
+
+
+
 /* depth sort out the intensity for for the pixels in one stripe */
 void depth_resolve(
-	int i_start,			/* starting row of this stripe */
-	int i_stop)				/* final row of this stripe*/
+int i_start,			/* starting row of this stripe */
+int i_stop)				/* final row of this stripe*/
 {
 	point_ccd pixel_edge;					/* pixel indicies for an edge of a pixel (e.g. [117,90.5]) */
 	point_xyz front_edge;					/* xyz coords of the front edge of a pixel */
@@ -1296,7 +1305,7 @@ void depth_resolve(
    {
       image_set.depth_intensity.v[i]+=(double)image_depth_intensity[i];
    }
-
+	
    free(c);
    free(c1);
    free(intensity);
@@ -1320,22 +1329,21 @@ void depth_resolve(
 
    return;
 
-   
 }
 
 
 /* Given the difference intensity at one pixel for two wire positions, distribute the difference intensity into the depth histogram */
 /* This routine only tests for zero pixel_intensity, it does not avoid negative intensities,  this routine can accumulate negative intensities. */
 /* This routine assumes that the wire is moving "forward" */
-void depth_resolve_pixel(
-	double pixel_intensity,				/* difference of the intensity at the two wire positions */
-	size_t	i,							/* indicies to the the pixel being processed, relative to the full stored image, range is (xdim,ydim) */
-	size_t	j,
-	point_xyz back_edge,				/* xyz postition of the trailing edge of the pixel in beam line coords relative to the Si */
-	point_xyz front_edge,				/* xyz postition of the leading edge of the pixel in beam line coords relative to the Si */
-	point_xyz wire_position_1,			/* first wire position (xyz) in beam line coords relative to the Si */
-	point_xyz wire_position_2,			/* second wire position (xyz) in beam line coords relative to the Si */
-	BOOLEAN use_leading_wire_edge)		/* true=(use leading endge of wire), false=(use trailing edge of wire) */
+inline void depth_resolve_pixel(
+double pixel_intensity,				/* difference of the intensity at the two wire positions */
+size_t	i,							/* indicies to the the pixel being processed, relative to the full stored image, range is (xdim,ydim) */
+size_t	j,
+point_xyz back_edge,				/* xyz postition of the trailing edge of the pixel in beam line coords relative to the Si */
+point_xyz front_edge,				/* xyz postition of the leading edge of the pixel in beam line coords relative to the Si */
+point_xyz wire_position_1,			/* first wire position (xyz) in beam line coords relative to the Si */
+point_xyz wire_position_2,			/* second wire position (xyz) in beam line coords relative to the Si */
+BOOLEAN use_leading_wire_edge)		/* true=(use leading endge of wire), false=(use trailing edge of wire) */
 {
 	double	partial_start;					/* trapezoid parameters, depth where partial intensity begins (micron) */
 	double	full_start;						/* depth where full pixel intensity begins (micron) */
@@ -1345,24 +1353,20 @@ void depth_resolve_pixel(
 	double	maxDepth;						/* depth of deepest reconstructed image (micron) */
 	double	dDepth;							/* local version of user_preferences.depth_resolution */
 	long	m;								/* index to depth */
-/*	double	depthOffset=0.0;				// depth correction for this pixel */
 
 	if (pixel_intensity==0) return;											/* do not process pixels without intensity */
 	pixel_intensity = use_leading_wire_edge ? pixel_intensity : -pixel_intensity;	/* invert intensity for trailing edge */
 
 	dDepth = user_preferences.depth_resolution;								/* just a local copy */
 	maxDepth = dDepth*(image_set.depth_resolved.size- 1) + user_preferences.depth_start;	/* max reconstructed depth (mciron) */
-	/* change maxDepth by depth offset DDDDDDDDDDDDDD */
-	
+
 	/* get the depths over which the intensity from this pixel could originate.  These points define the trapezoid. */
 	partial_end = pixel_xyz_to_depth(back_edge, wire_position_2, use_leading_wire_edge);
 	partial_start = pixel_xyz_to_depth(front_edge, wire_position_1, use_leading_wire_edge);
-	/* change partial_end and partial_start by depth offset DDDDDDDDDDDDDD */
 	if (partial_end < user_preferences.depth_start || partial_start > maxDepth) return;		/* trapezoid does not overlap depth-resolved region, do not process */
 
 	full_start = pixel_xyz_to_depth(back_edge, wire_position_1, use_leading_wire_edge);
 	full_end = pixel_xyz_to_depth(front_edge, wire_position_2, use_leading_wire_edge);
-	/* change full_start and full_end by depth offset DDDDDDDDDDDDDD */
 	if (full_end < full_start) {			/* in case mid points are backwards, ensure proper order by swapping */
 		double swap;
 		swap = full_end;
@@ -1381,55 +1385,55 @@ void depth_resolve_pixel(
 	end_index = MAX(start_index,end_index);									/* end_index must lie in range [start_index, imax] */
 	end_index = MIN(imax,end_index);
 
-#ifdef DEBUG_1_PIXEL
+	#ifdef DEBUG_1_PIXEL
 	if (verbosePixel) printf("\n\ttrapezoid over range (% .3f, % .3f) micron == image index[%ld, %ld],  area=%g",partial_start,partial_end,start_index,end_index,area);
-#endif
+	#endif
 
 	double area_in_range = 0;
 	double depth_1, depth_2, height_1, height_2;							/* one part of the trapezoid that overlaps the current bin */
 	double depth_i, depth_i1;												/* depth range of depth bin i */
 	for (m = start_index; m <= end_index; m++) {							/* loop over possible depth indicies (m is index to depth-resolved image) */
-		area_in_range = 0;
+	    area_in_range = 0;
 		depth_i = index_to_beam_depth(m) - (dDepth*0.5);					/* ends of current depth bin */
 		depth_i1 = depth_i + dDepth;
 
 		if (full_start > depth_i && partial_start < depth_i1) {				/* this depth bin overlaps first part of trapezoid (sloping up from zero) */
 			depth_1 = MAX(depth_i,partial_start);
 			depth_2 = MIN(depth_i1,full_start);
-			height_1 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_1);
-			height_2 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_2);
-			area_in_range += ((height_1 + height_2) / 2 * (depth_2 - depth_1));
+	    	height_1 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_1);
+	    	height_2 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_2);
+	    	area_in_range += ((height_1 + height_2) / 2 * (depth_2 - depth_1));
 		}
 
 		if (full_end > depth_i && full_start < depth_i1) {					/* this depth bin overlaps second part of trapezoid (the flat top) */
 			depth_1 = MAX(depth_i,full_start);
 			depth_2 = MIN(depth_i1,full_end);
-			area_in_range += (depth_2 - depth_1);							/* the height of both points is 1, so area is just the width */
-		}
+	    	area_in_range += (depth_2 - depth_1);							/* the height of both points is 1, so area is just the width */
+	    }
 
 		if (partial_end > depth_i && full_end < depth_i1) {					/* this depth bin overlaps third part of trapezoid (sloping down to zero) */
 			depth_1 = MAX(depth_i,full_end);
 			depth_2 = MIN(depth_i1,partial_end);
-			height_1 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_1);
-			height_2 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_2);
-			area_in_range += ((height_1 + height_2) / 2 * (depth_2 - depth_1));
+	    	height_1 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_1);
+	    	height_2 = get_trapezoid_height(partial_start, partial_end, full_start, full_end, depth_2);
+	    	area_in_range += ((height_1 + height_2) / 2 * (depth_2 - depth_1));
 		}
 
 		if (area_in_range>0) add_pixel_intensity_at_index(i,j, pixel_intensity * (area_in_range / area), m);		/* do not accumulate zeros */
 	}
 }
 
-void add_pixel_intensity_at_index(
-	size_t	i,							/* indicies to pixel, relative to the full stored image, range is (xdim,ydim) */
-	size_t	j,
-	double intensity,					/* intensity to add */
-	long index)							/* depth index */
+inline void add_pixel_intensity_at_index(
+size_t	i,								/* indicies to pixel, relative to the full stored image, range is (xdim,ydim) */
+size_t	j,
+double intensity,						/* intensity to add */
+long index)								/* depth index */
 {
 	double *d;							/* pointer to value in gsl_matrix */
 
-#ifdef DEBUG_1_PIXEL
+	#ifdef DEBUG_1_PIXEL
 	if (verbosePixel && i==pixelTESTi && j==pixelTESTj) printf("\n\t\t adding %g to pixel [%lu, %lu] at depth index %ld",intensity,i,j,index);
-#endif
+	#endif
 
 	if (index < 0 || (unsigned long)index >= image_set.depth_resolved.size) return;	/* ignore if index is outside of valid range */
 	i -= imaging_parameters.current_selection_start;	/* get pixel indicies relative to this stripe */
@@ -1443,12 +1447,12 @@ void add_pixel_intensity_at_index(
 
 /* for a trapezoid of max height 1, find the actual height at x=depth, y=0 outside of [partial_start,partial_end] & y=1 in [full_start,full_end] */
 /* the order of the conditionals was chosen by their likelihood, the most likely test should come first, the least likely last. */
-double get_trapezoid_height(
-	double	partial_start,				/* first depth where trapezoid becomes non-zero */
-	double	partial_end,				/* last depth where trapezoid is non-zero */
-	double	full_start,					/* first depth of the flat top */
-	double	full_end,					/* last depth of the flat top */
-	double	depth)						/* depth we want the value for */
+inline double get_trapezoid_height(
+double	partial_start,				/* first depth where trapezoid becomes non-zero */
+double	partial_end,				/* last depth where trapezoid is non-zero */
+double	full_start,					/* first depth of the flat top */
+double	full_end,					/* last depth of the flat top */
+double	depth)						/* depth we want the value for */
 {
 	if ( depth <= partial_start || depth >= partial_end )	return 0;								/* depth is outside trapezoid */
 	else if( depth < full_start )	return (depth - partial_start) / (full_start - partial_start);	/* depth in first sloping up part */
@@ -1476,9 +1480,9 @@ double get_trapezoid_height(
 /* to leading (or trailing) edge of the wire and intersects the incident beam.  The returned depth is relative to the Si position (origin) */
 /* depth is measured along the incident beam from the origin, not just the z value. */
 double pixel_xyz_to_depth(
-	point_xyz point_on_ccd_xyz,			/* end point of ray, an xyz location on the detector */
-	point_xyz wire_position,			/* wire center, used to find the tangent point, has been PM500 corrected, origin subtracted, rotated by rho */
-	BOOLEAN use_leading_wire_edge)		/* which edge of wire are using here, TRUE for leading edge */
+point_xyz point_on_ccd_xyz,			/* end point of ray, an xyz location on the detector */
+point_xyz wire_position,			/* wire center, used to find the tangent point, has been PM500 corrected, origin subtracted, rotated by rho */
+BOOLEAN use_leading_wire_edge)		/* which edge of wire are using here, TRUE for leading edge */
 {
 	point_xyz	pixelPos;								/* current pixel position */
 	point_xyz	ki;										/* incident beam direction */
@@ -1517,13 +1521,13 @@ double pixel_xyz_to_depth(
 	S.x = ki.x / ki.z * S.z;							/* corresponding z of point on incident beam */
 	depth = DOT3(ki,S);
 
-	/*	if (verbosePixel) {
-	 *		printf("\n    -- pixel on detector = {%.3f, %.3f, %.3f}",point_on_ccd_xyz.x,point_on_ccd_xyz.y,point_on_ccd_xyz.z);
-	 *		printf("\n       wire center = {%.3f, %.3f, %.3f} relative to Si (micron)",wire_position.x,wire_position.y,wire_position.z);
-	 *		printf("\n       pixel_to_wireCenter = {%.9lf, %.9lf}µm,  |v|=%.9f",pixel_to_wireCenter_y,pixel_to_wireCenter_z,pixel_to_wireCenter_len);
-	 *		printf("\n       phi0 = %g (rad),   dphi = %g (rad),   tanphi = %g,   depth = %.2f (micron)\n",phi0,dphi,tanphi,DOT3(ki,S));
-	 *	}
-	 */
+/*	if (verbosePixel) {
+ *		printf("\n    -- pixel on detector = {%.3f, %.3f, %.3f}",point_on_ccd_xyz.x,point_on_ccd_xyz.y,point_on_ccd_xyz.z);
+ *		printf("\n       wire center = {%.3f, %.3f, %.3f} relative to Si (micron)",wire_position.x,wire_position.y,wire_position.z);
+ *		printf("\n       pixel_to_wireCenter = {%.9lf, %.9lf}µm,  |v|=%.9f",pixel_to_wireCenter_y,pixel_to_wireCenter_z,pixel_to_wireCenter_len);
+ *		printf("\n       phi0 = %g (rad),   dphi = %g (rad),   tanphi = %g,   depth = %.2f (micron)\n",phi0,dphi,tanphi,DOT3(ki,S));
+ *	}
+ */
 	return depth;										/* depth measured along incident beam (remember that ki is normalized) */
 }
 
@@ -1537,13 +1541,13 @@ double pixel_xyz_to_depth(
  * This routine uses the same conventions a used in Igor
  */
 point_xyz pixel_to_point_xyz(
-	point_ccd pixel)					/* input, binned ROI (zero-based) pixel value on detector, can be non-integer, and can lie outside range (e.g. -05 is acceptable) */
+point_ccd pixel)					/* input, binned ROI (zero-based) pixel value on detector, can be non-integer, and can lie outside range (e.g. -05 is acceptable) */
 {
 	point_xyz coordinates;								/* point with coordinates in R3 to return */
 	point_ccd corrected_pixel;							/* pixel data to be filled by the peak_correction method */
 	double	x,y,z;										/* 3d coordinates */
 
-#warning "here is the only place where the pixel is swapped for the transpose in an HDF5 file"
+	#warning "here is the only place where the pixel is swapped for the transpose in an HDF5 file"
 	corrected_pixel.i = pixel.j;						/* the transpose swap needed with the HDF5 files */
 	corrected_pixel.j = pixel.i;
 
@@ -1553,15 +1557,15 @@ point_xyz pixel_to_point_xyz(
 	corrected_pixel.i += (imaging_parameters.bini-1)/2.;	/* move from leading edge of pixel to the pixel center(e) */
 	corrected_pixel.j += (imaging_parameters.binj-1)/2.;	/*	this is needed because the center of a pixel changes with binning */
 
-#ifdef DEBUG_1_PIXEL
+	#ifdef DEBUG_1_PIXEL
 	if (verbosePixel) printf("\nin pixel_to_point_xyz(), pixel = [%g, %g] (binned ROI, on input),   size is (%g, %g) (micron)",pixel.i,pixel.j,calibration.pixel_size_i,calibration.pixel_size_j);
 	if (verbosePixel) printf("\n   corrected_pixel = [%g, %g] (un-binned full chip pixels)",corrected_pixel.i,corrected_pixel.j);
-#endif
+	#endif
 	corrected_pixel = PEAKCORRECTION(corrected_pixel);		/* do the distortion correction */
 
-#if defined(DEBUG_ALL) && defined(USE_DISTORTION_CORRECTION)
+	#if defined(DEBUG_ALL) && defined(USE_DISTORTION_CORRECTION)
 	if (verbosePixel) printf("\n   distortion corrected_pixel = [%g, %g] (un-binned full chip pixels)",corrected_pixel.i,corrected_pixel.j);
-#endif
+	#endif
 
 	/* get 3D coordinates in detector frame of the pixel */
 	x = (corrected_pixel.i - 0.5*(calibration.ccd_pixels_i - 1)) * calibration.pixel_size_i;	/* (x', y', z') position of pixel (detector frame) */
@@ -1576,9 +1580,9 @@ point_xyz pixel_to_point_xyz(
 	coordinates.x = calibration.detector_rotation[0][0] * x + calibration.detector_rotation[0][1] * y + calibration.detector_rotation[0][2] * z;
 	coordinates.y = calibration.detector_rotation[1][0] * x + calibration.detector_rotation[1][1] * y + calibration.detector_rotation[1][2] * z;
 	coordinates.z = calibration.detector_rotation[2][0] * x + calibration.detector_rotation[2][1] * y + calibration.detector_rotation[2][2] * z;
-#ifdef DEBUG_1_PIXEL
+	#ifdef DEBUG_1_PIXEL
 	if (verbosePixel) printf("\n   pixel xyz coordinates = (%g, %g, %g)\n",coordinates.x,coordinates.y,coordinates.z);
-#endif
+	#endif
 	return coordinates;									/* return point_xyz coordinates */
 }
 
@@ -1591,11 +1595,15 @@ point_xyz pixel_to_point_xyz(
 
 /* allocate space and initialize the structure image_set, which contains the output */
 void setup_depth_images(
-	int numImages)						/* number of input images, needed for .wire_scanned and .wire_positions */
+int numImages)						/* number of input images, needed for .wire_scanned and .wire_positions */
 {
 	long	Ndepths;				/* number of depth points */
-	long	i;
-
+    long	i;
+	size_t	j;						/* index into vectors, offset by MULTI_IMAGE_SKIPV */
+	double	wireXdefault;			/* default value for wireX, wireY, wireZ, in case wire vector not present, really only for wireX */
+	double	wireYdefault;
+	double	wireZdefault;
+	
 	Ndepths = user_preferences.NoutputDepths;
 	if (Ndepths<1 || numImages<1) {											/* nothing to do */
 		image_set.depth_intensity.v =NULL;
@@ -1627,15 +1635,29 @@ void setup_depth_images(
 		image_set.depth_resolved.v[i] = gsl_matrix_calloc((size_t)(imaging_parameters.rows_at_one_time), (size_t)(imaging_parameters.nROI_j));	/* pointers to gsl_matrix containing space for the image, initialized to zero */
 	}
 
-	/* *************** */
+//	wireXdefault = isnan(in_header.wirebaseX) ? NAN : in_header.wirebaseX;	/* use wirebase as default if wire vector position not present */
+//	wireYdefault = isnan(in_header.wirebaseY) ? NAN : in_header.wirebaseY;
+//	wireZdefault = isnan(in_header.wirebaseZ) ? NAN : in_header.wirebaseZ;
+#warning "Using a default value of 0 for wire X position"
+	wireXdefault = isnan(in_header.wirebaseX) ? 0.0 : in_header.wirebaseX;	/* use wirebase as default if wire vector position not present */
+	wireYdefault = isnan(in_header.wirebaseY) ? 0.0 : in_header.wirebaseY;
+	wireZdefault = isnan(in_header.wirebaseZ) ? 0.0 : in_header.wirebaseZ;
+
+/* *************** */
 	/* allocate for .wire_scanned and .wire_positions for numImages input images */
-	point_xyz badPnt;
-	badPnt.x = badPnt.y = badPnt.z = NAN;
-	image_set.wire_positions.v = (point_xyz *)calloc((size_t)numImages,sizeof(point_xyz));/* allocate space for array of doubles in the vector */
+	point_xyz wire_pos;
+	image_set.wire_positions.v = (point_xyz *)calloc((size_t)numImages+1,sizeof(point_xyz));/* allocate space for array of doubles in the vector */
 	if (!(image_set.wire_positions.v)) { fprintf(stderr,"\ncannot allocate space for image_set.wire_positions, %d points\n",numImages); exit(1); }
-	image_set.wire_positions.alloc = numImages;							/* room allocated */
-	image_set.wire_positions.size = numImages;							/* and set length used also */
-	for (i=0; i<numImages; i++) image_set.wire_positions.v[i] = badPnt;	/* set all values to NAN */
+	image_set.wire_positions.alloc = numImages+1;						/* room allocated */
+	image_set.wire_positions.size = numImages+1;						/* and set length used also */
+	for (i=0; i<=numImages; i++) {
+		j = i + MULTI_IMAGE_SKIPV;										/* used vector positions starting with point MULTI_IMAGE_SKIPV, not 0 */
+		wire_pos.x = (in_header.xWire.N>j) ? in_header.xWire.v[j] : wireXdefault;	/* default value for wire X,Y,Z */
+		wire_pos.y = (in_header.yWire.N>j) ? in_header.yWire.v[j] : wireYdefault;
+		wire_pos.z = (in_header.zWire.N>j) ? in_header.zWire.v[j] : wireZdefault;
+		image_set.wire_positions.v[i] = wirePosition2beamLine(wire_pos);/* correct raw wire position: PM500 distortion, origin, PM500 rotation, wire axis rotation */
+		/* #warning "the wire position is corrected here when it is read in for: PM500, origin, rotation (by rho)" */
+	}
 
 	image_set.wire_scanned.v = (void **)calloc((size_t)numImages,sizeof(gsl_matrix *));	/* allocate space for array of pointers to gsl_matricies these are pieces of the input images */
 	if (!(image_set.wire_scanned.v)) { fprintf(stderr,"\ncannot allocate space for image_set.wire_scanned, %d points\n",numImages); exit(1); }
@@ -1656,7 +1678,7 @@ void setup_depth_images(
 /* this just sets the images in image_set to zero, it does NOT de-allocate the space they use */
 /* for .depth_resolved & .wire_scanned, set all the elements to zero, assumes space already allocated */
 void clear_depth_images(
-	ws_image_set *is)
+ws_image_set *is)
 {
 	size_t i;
 	for (i=0; i < is->depth_resolved.alloc; i++) gsl_matrix_set_zero((gsl_matrix *)is->depth_resolved.v[i]);
@@ -1701,16 +1723,16 @@ void delete_images(void)				/* delete the images stored in image_set, and deallo
  *		//image_set.wire_scanned.clear();
  *		image_set.wire_positions.clear();
  *	}
- */
+*/
 
 /* subtract from each image from its following image */
 void get_difference_images(void)
 {
 	size_t m;
 	for (m=0; m < (image_set.wire_scanned.size)-1; m++) {
-#ifdef DEBUG_1_PIXEL
+		#ifdef DEBUG_1_PIXEL
 		if (verbosePixel) printf("pixel[%d,%d] raw image[% 3d] = %g\n",pixelTESTi,pixelTESTj,(int)m,gsl_matrix_get(image_set.wire_scanned.v[m], pixelTESTi -  imaging_parameters.current_selection_start, pixelTESTj));
-#endif
+		#endif
 		gsl_matrix_sub((gsl_matrix *)image_set.wire_scanned.v[m], (gsl_matrix *)image_set.wire_scanned.v[m+1]);	/* gsl_matrix_sub(a,b) -->  a -= b */
 	}
 }
@@ -1724,49 +1746,80 @@ void get_difference_images(void)
 /* sets many of the values in the gobal structure imaging_parameters */
 /* get header information from first and last input images, this is called at start of program */
 void getImageInfo(
-	char	*fn_base,						/* base file input name */
-	int		file_num_start,					/* index to first input file */
-	int		file_num_end)					/* index to last input file */
+char	*infile,						/* base file input name */
+int		file_num_start,					/* index to first input file */
+int		file_num_end,					/* index to last input file */
+char	*normalization,					/* optional tag for normalization */
+Dvector *normalVector)					/* normalization vector made using 'normalization' */
 {
 	point_xyz wire_pos;
 	char	filename[FILENAME_MAX];						/* full filename */
 
-#ifndef PRINT_HDF5_MESSAGES
+	#ifndef PRINT_HDF5_MESSAGES
 	H5Eset_auto2(H5E_DEFAULT,NULL,NULL);				/* turn off printing of HDF5 errors */
-#endif
+	#endif
 
+#ifdef MULTI_IMAGE_FILE
+	strncpy(filename,infile,FILENAME_MAX-1);
+#else
 	sprintf(filename,"%s%d.h5",fn_base,file_num_start);
+#endif
 	if (readHDF5header(filename, &in_header)) goto error_path;
-	imaging_parameters.nROI_i = (int)(in_header.xdim);		/* number of binned pixels along the x direction of one image */
-	imaging_parameters.nROI_j = (int)(in_header.ydim);		/* number of binned pixels in one full stored image along detector y */
+	if (verbose > 0) {
+		printf("\n");
+		printHeader(&in_header);
+		printf("\n");
+	}
+	imaging_parameters.nROI_i = in_header.xdim;			/* number of binned pixels along the x direction of one image */
+	imaging_parameters.nROI_j = in_header.ydim;			/* number of binned pixels in one full stored image along detector y */
 	imaging_parameters.in_pixel_type = in_header.itype;	/* type (e.g. float, int, ...) of a pixel value, uses the WinView pixel types */
 	imaging_parameters.in_pixel_bytes = in_header.isize;	/* number of bytes used to specify one pixel strength (bytes) */
-	imaging_parameters.starti = (int)(in_header.startx);	/* definition of the ROI for a full image all pixel coordinates are zero based */
-	imaging_parameters.endi   = (int)(in_header.endx);
-	imaging_parameters.startj = (int)(in_header.starty);
-	imaging_parameters.endj   = (int)(in_header.endy);
-	imaging_parameters.bini   = (int)(in_header.groupx);
-	imaging_parameters.binj   = (int)(in_header.groupy);
-
-	imaging_parameters.NinputImages = file_num_end - file_num_start + 1;/* number of input images to process */
+	imaging_parameters.starti = in_header.startx;		/* definition of the ROI for a full image all pixel coordinates are zero based */
+	imaging_parameters.endi   = in_header.endx;
+	imaging_parameters.startj = in_header.starty;
+	imaging_parameters.endj   = in_header.endy;
+	imaging_parameters.bini   = in_header.groupx;
+	imaging_parameters.binj   = in_header.groupy;
 
 	positionerType = positionerTypeFromFileTime(in_header.fileTime);		/* sets global value position type, needed for wirePosition2beamLine() */
-	wire_pos.x = in_header.xWire;
-	wire_pos.y = in_header.yWire;
-	wire_pos.z = in_header.zWire;
-	imaging_parameters.wire_first_xyz = wirePosition2beamLine(wire_pos);/* correct raw wire position: PM500 distortion, origin, PM500 rotation, wire axis rotation */
+	imaging_parameters.NinputImages = file_num_end - file_num_start + 1;	/* number of input image files to process */
+/*	imaging_parameters.NinputImages *= in_header.Nimages;					/* total number of input images (number of files * imags per file) */
+	imaging_parameters.NinputImages *= (in_header.Nimages-MULTI_IMAGE_SKIP);/* total number of input images (number of files * imags per file) */
 
-	/* get wire position of the last image in the wire scan */
-	struct HDF5_Header header;
-	sprintf(filename,"%s%d.h5",fn_base,file_num_end);
-	if (readHDF5header(filename, &header)) goto error_path;
-	wire_pos.x = header.xWire;
-	wire_pos.y = header.yWire;
-	wire_pos.z = header.zWire;
-	imaging_parameters.wire_last_xyz = wirePosition2beamLine(wire_pos);	/* correct raw wire position: PM500 distortion, origin, PM500 rotation, wire axis rotation */
+#ifdef MULTI_IMAGE_FILE
+	wire_pos.x = (in_header.xWire.N>0) ? in_header.xWire.v[0] : NAN;		/* first wire position */
+	wire_pos.y = (in_header.yWire.N>0) ? in_header.yWire.v[0] : NAN;
+	wire_pos.z = (in_header.zWire.N>0) ? in_header.zWire.v[0] : NAN;
+	imaging_parameters.wire_first_xyz = wirePosition2beamLine(wire_pos);	/* correct raw wire position: PM500 distortion, origin, PM500 rotation, wire axis rotation */
+
+	/* wire position of the last image in the wire scan */
+	wire_pos.x = (in_header.xWire.N>0) ? in_header.xWire.v[in_header.xWire.N-1] : NAN;
+	wire_pos.y = (in_header.yWire.N>0) ? in_header.yWire.v[in_header.yWire.N-1] : NAN;
+	wire_pos.z = (in_header.zWire.N>0) ? in_header.zWire.v[in_header.zWire.N-1] : NAN;
+//	wire_pos.x = in_header.xWire.v[in_header.xWire.N-1];
+//	wire_pos.y = in_header.yWire.v[in_header.yWire.N-1];
+//	wire_pos.z = in_header.zWire.v[in_header.zWire.N-1];
+	imaging_parameters.wire_last_xyz = wirePosition2beamLine(wire_pos);		/* correct raw wire position: PM500 distortion, origin, PM500 rotation, wire axis rotation */
+#endif
+
+	empty_Dvector(normalVector);
+	if (normalization[0]) (*normalVector).N = readHDF5oneHeaderVector(infile, normalization, normalVector);
+
+	size_t	i;
+	#ifdef TYPICAL_mA
+	if (normalization=="mA") {							/* for beam current, divide by 104 */
+		for (i=0;i<normalVector->N;i++) normalVector->v[i] /= TYPICAL_mA;
+	}
+	#endif
+	#ifdef TYPICAL_cnt3
+	if (normalization=="cnt3") {
+		for (i=0;i<normalVector->N;i++) normalVector->v[i] /= TYPICAL_cnt3;
+	}
+	#endif
+
 	return;
 
-error_path:
+	error_path:
 	error("getImageInfo(), could not read first of last header information, imaging_parameters.* not set\n");
 	exit(1);
 }
@@ -1775,28 +1828,37 @@ error_path:
 /* loads first image into intensity_map, and finds cutoff, the intensity that decides which pixels to use (uses percent to find cutoff) */
 /* set the global 'cutoff' */
 void get_intensity_map(
-	char	*filename_base,				/* base name of image file */
-	int		file_num_start)				/* index of image file */
+char	*infile,					/* base name of image file */
+int		file_num_start)				/* index of image file */
 {
 	size_t	dimi = imaging_parameters.nROI_i;	/* full size of image */
 	size_t	dimj = imaging_parameters.nROI_j;
 	char	filename[FILENAME_MAX];		/* full filename */
-	struct HDF5_Header header;
 
-	intensity_map = gsl_matrix_alloc(dimi, dimj);	/* get memory for one whole image */
+    intensity_map = gsl_matrix_alloc(dimi, dimj);	/* get memory for one whole image */
+
+#ifdef MULTI_IMAGE_FILE
+	strncpy(filename,infile,FILENAME_MAX-1);
+	file_num_start=file_num_start;
+#else
 	sprintf(filename,"%s%d.h5",filename_base,file_num_start);
-	readHDF5header(filename, &header);
+#endif
 
 	/* read data (of any kind) into a double array */
-	if (HDF5ReadROIdouble(filename,"entry1/data/data", &(intensity_map->data), 0, (dimi-1), 0,(dimj-1), &in_header)) { error("\nFailed to open intensity map file"); exit(1); }
+//	if (HDF5ReadROIdoubleSlice(filename, "entry1/data/data", &(intensity_map->data), 0,(dimi-1), 0,(dimj-1), &in_header, (size_t)file_num_start)) {
+	if (HDF5ReadROIdoubleSlice(filename, "entry1/data/data", &(intensity_map->data), 0,(dimi-1), 0,(dimj-1), &in_header, MULTI_IMAGE_SKIP)) {
+		error("\nFailed to open intensity map file");
+		exit(1);
+	}
+
 
 
 #ifdef DEBUG_1_PIXEL
-	printf(" ***in get_intensity_map()...\n");
-	printf("pixelTESTi=%d, pixelTESTj=%d    intensity_map->data[%u*%lu+%u] = %lg\n",pixelTESTi,pixelTESTj,pixelTESTi,intensity_map->tda,pixelTESTj,intensity_map->data[pixelTESTi*intensity_map->tda+pixelTESTj]);
-	printf("pixelTESTi=%d, pixelTESTj+1=%d    intensity_map->data[%u*%lu+%u] = %lg\n",pixelTESTi,pixelTESTj+1,pixelTESTi,intensity_map->tda,pixelTESTj+1,intensity_map->data[pixelTESTi*intensity_map->tda+pixelTESTj+1]);
-	printPieceOf_gsl_matrix(pixelTESTi-2, pixelTESTi+2, pixelTESTj-2, pixelTESTj+2, intensity_map);
-	printf(" ***done with get_intensity_map()\n");
+printf(" ***in get_intensity_map()...\n");
+printf("pixelTESTi=%d, pixelTESTj=%d    intensity_map->data[%u*%lu+%u] = %lg\n",pixelTESTi,pixelTESTj,pixelTESTi,intensity_map->tda,pixelTESTj,intensity_map->data[pixelTESTi*intensity_map->tda+pixelTESTj]);
+printf("pixelTESTi=%d, pixelTESTj+1=%d    intensity_map->data[%u*%lu+%u] = %lg\n",pixelTESTi,pixelTESTj+1,pixelTESTi,intensity_map->tda,pixelTESTj+1,intensity_map->data[pixelTESTi*intensity_map->tda+pixelTESTj+1]);
+printPieceOf_gsl_matrix(pixelTESTi-2, pixelTESTi+2, pixelTESTj-2, pixelTESTj+2, intensity_map);
+printf(" ***done with get_intensity_map()\n");
 #endif
 
 
@@ -1806,18 +1868,18 @@ void get_intensity_map(
 	intensity_sorted = (double*)calloc(sort_len,sizeof(double));
 	if (!intensity_sorted) { fprintf(stderr,"\nCould not allocate intensity_sorted %ld bytes in get_intensity_map()\n",sort_len); exit(1); }
 
-	//	size_t	i, j, m;
-	//	for (m=j=0; j < dimj; j++) { for (i=0; i < dimi; i++) intensity_sorted[m++] = gsl_matrix_get(intensity_map, i, j); }
-	//	// #warning "is this memcpy correct?"
-	//	memcpy(intensity_sorted,intensity_map->data,dimi*dimj*sizeof(double));
-	//	printf("gsl_matrix_get(intensity_map,%d, %d) = %g\n",pixelTESTi,pixelTESTj,gsl_matrix_get(intensity_map,pixelTESTi,pixelTESTj));
-	//	printf("intensity_map->tda = %lu\n",intensity_map->tda);
-	//	printf("intensity_sorted[%d*%lu + %d] = %g\n",pixelTESTi,dimj,pixelTESTj,intensity_sorted[pixelTESTi*dimj+pixelTESTj]);
+//	size_t	i, j, m;
+//	for (m=j=0; j < dimj; j++) { for (i=0; i < dimi; i++) intensity_sorted[m++] = gsl_matrix_get(intensity_map, i, j); }
+//	// #warning "is this memcpy correct?"
+//	memcpy(intensity_sorted,intensity_map->data,dimi*dimj*sizeof(double));
+//	printf("gsl_matrix_get(intensity_map,%d, %d) = %g\n",pixelTESTi,pixelTESTj,gsl_matrix_get(intensity_map,pixelTESTi,pixelTESTj));
+//	printf("intensity_map->tda = %lu\n",intensity_map->tda);
+//	printf("intensity_sorted[%d*%lu + %d] = %g\n",pixelTESTi,dimj,pixelTESTj,intensity_sorted[pixelTESTi*dimj+pixelTESTj]);
 
 	memcpy(intensity_sorted,intensity_map->data,dimi*dimj*sizeof(double));
 	qsort(intensity_sorted,(dimj*dimi), sizeof(double), (__compar_fn_t)compare_double);
 
-	cutoff = intensity_sorted[ (size_t)floor((double)sort_len * MIN((100. - percent)/100.,1.)) ];
+	cutoff = (int)intensity_sorted[ (size_t)floor((double)sort_len * MIN((100. - percent)/100.,1.)) ];
 	cutoff = MAX(cutoff,1);
 	CHECK_FREE(intensity_sorted);
 
@@ -1827,50 +1889,64 @@ void get_intensity_map(
 }
 
 
+#warning "This routine may be WRONG, is now fixed?"
 void readImageSet(
-	char	*fn_base,					/* base name of input image files */
-	int		ilow,						/* range of ROI to read from file */
-	int		ihi,
-	int		jlow,						/* for best speed, jhi-jlow+1 == ydim */
-	int		jhi,
-	int		file_num_start,				/* index of first input image */
-	int		file_num_end,				/* infex of last input image */
-	char	*normalization)				/* optional tag for normalization */
+char	*fn_base,					/* base name of input image files */
+int		ilow,						/* range of ROI to read from file */
+int		ihi,
+int		jlow,						/* for best speed, jhi-jlow+1 == ydim */
+int		jhi,
+int		file_num_start,				/* index of first input image */
+int		Nimages,					/* number of images to read */
+Dvector *normalVector)				/* normalization vector made using 'normalization' */
 {
 	int		f;
 	char	filename[FILENAME_MAX];			/* full filename */
-	if (verbose > 1) printf("\n\tabout to load %d new images...",(file_num_end - file_num_start) + 1);
+
+	if (verbose > 1) printf("\n\tabout to load %d new images...",Nimages);
 	fflush(stdout);
+	file_num_start=file_num_start;	/* do this to shut up compiler message */
 
-	for (f = file_num_start; f <= file_num_end; f++) {
-#ifdef DEBUG_1_PIXEL
-		if (f==file_num_start) verbosePixel=1;
+
+#ifdef MULTI_IMAGE_FILE
+	strncpy(filename,fn_base,FILENAME_MAX-1);
+#endif
+	for (f=0; f<Nimages; f++) {
+		#ifdef DEBUG_1_PIXEL
+		if (f==0) verbosePixel=1;
+		#endif
+
+#ifndef MULTI_IMAGE_FILE
+		sprintf(filename,"%s%d.h5",fn_base,f+file_num_start);
+	    readSingleImage(filename, f,0, ilow,ihi, jlow,jhi);		/* load a single image from disk, slice=0 */
+#else
+	    readSingleImage(filename, f,f+MULTI_IMAGE_SKIP, ilow,ihi, jlow,jhi);	/* load a single image from disk */
 #endif
 
-		sprintf(filename,"%s%d.h5",fn_base,f);
-		readSingleImage(filename, f-file_num_start, ilow, ihi, jlow, jhi, normalization);	/* load a single image from disk */
-
-#ifdef DEBUG_1_PIXEL
+		#ifdef DEBUG_1_PIXEL
 		verbosePixel=0;
-#endif
+		#endif
 	}
+
+	if (normalVector->N >= (size_t)Nimages) {
+		for (f=0; f<Nimages; f++) gsl_matrix_scale((gsl_matrix *)image_set.wire_scanned.v[f],normalVector->v[f]);
+	}
+
 	if (verbose > 2) printf("\n\t\tloaded images");
 	fflush(stdout);
 }
 
+#warning "This routine may be WRONG for multiimage files, now at least LOOKS right (and may be too)"
 void readSingleImage(
-	char	*filename,							/* fully qualified file name */
-	int		imageIndex,							/* index to images, image number that appears in the full file name - first image number */
-	int		ilow,								/* range of ROI to read from file */
-	int		ihi,								/* these are in terms of the image stored in the file, not raw un-binned pixels of the detector */
-	int		jlow,
-	int		jhi,
-	char	*normalization)						/* full path to meta-data to be used for normalization, if not found (i.e. empty string) nothing is done */
+char	*filename,							/* fully qualified file name */
+int		imageIndex,							/* index to images, image number that appears in the full file name - first image number */
+int		slice,								/* index to particular image in file for 3D files, for 2D images use slice=0 */
+int		ilow,								/* range of ROI to read from file */
+int		ihi,								/* these are in terms of the image stored in the file, not raw un-binned pixels of the detector */
+int		jlow,
+int		jhi)
 {
-	struct HDF5_Header header;
 	int		i,j;
-
-	point_xyz wire_pos;						/* position of wire retrieved from image */
 
 	/* matrix to store image */
 	gsl_matrix *image;
@@ -1886,17 +1962,13 @@ void readSingleImage(
 	image_set.wire_scanned.size = imageIndex+1;		/* number of input images read so far */
 	image = (gsl_matrix *)image_set.wire_scanned.v[imageIndex];
 
-	if (readHDF5header(filename, &header)){
-		error("Error reading image header");
-		exit(1);
-	}
-
 	/* read data (of any kind) into a double array */
-#ifdef DEBUG_ALL
-	slowWay = ((size_t)(jhi-jlow+1)<(header.ydim)) || slowWay;	/* check stripe orientation */
-#endif
-	if (HDF5ReadROIdouble(filename, "entry1/data/data", &buf, (size_t)ilow, (size_t)ihi, (size_t)jlow, (size_t)jhi, &header)) {
-		error("Error reading image");
+	#ifdef DEBUG_ALL
+	slowWay = ((size_t)(jhi-jlow+1)<(in_header.ydim)) || slowWay;	/* check stripe orientation */
+	#endif
+
+	if (HDF5ReadROIdoubleSlice(filename, "entry1/data/data", &buf, (long)ilow, (long)ihi, (long)jlow, (long)jhi, &in_header,(size_t)slice)) {
+		error("Error reading image from file");
 		exit(1);
 	}
 
@@ -1908,43 +1980,14 @@ void readSingleImage(
 	}
 
 #ifdef DEBUG_1_PIXEL
-	if (verbosePixel && ilow<=pixelTESTi && pixelTESTi<=ihi) {
-		printf("\n ++++++++++ in readSingleImage(), finished reading i=[%d, %d], j=[%d, %d]",ilow,ihi,jlow,jhi);
-		printf("\n ++++++++++ pixel[%d,%d] = %g,     ROI: i=[%d,%d], j=[%d, %d],  Nj=%d",pixelTESTi,pixelTESTj, buf[dimj*(pixelTESTi-ilow) + pixelTESTj],ilow,ihi,jlow,jhi,dimj);
-		printf("\n ++++++++++ gsl pixel[%d-%d,%d] = %g",pixelTESTi,ilow,pixelTESTj,gsl_matrix_get(image, pixelTESTi-ilow, pixelTESTj));
-		printf("\n            gsl_matrix.size1 = %lu,  gsl_matrix.size2 = %lu,  gsl_matrix.tda = %lu",image->size1,image->size2,image->tda);
-		fflush(stdout);
-	}
+if (verbosePixel && ilow<=pixelTESTi && pixelTESTi<=ihi) {
+	printf("\n ++++++++++ in readSingleImage(), finished reading i=[%d, %d], j=[%d, %d]",ilow,ihi,jlow,jhi);
+	printf("\n ++++++++++ pixel[%d,%d] = %g,     ROI: i=[%d,%d], j=[%d, %d],  Nj=%d",pixelTESTi,pixelTESTj, buf[dimj*(pixelTESTi-ilow) + pixelTESTj],ilow,ihi,jlow,jhi,dimj);
+	printf("\n ++++++++++ gsl pixel[%d-%d,%d] = %g",pixelTESTi,ilow,pixelTESTj,gsl_matrix_get(image, pixelTESTi-ilow, pixelTESTj));
+	printf("\n            gsl_matrix.size1 = %lu,  gsl_matrix.size2 = %lu,  gsl_matrix.tda = %lu",image->size1,image->size2,image->tda);
+	fflush(stdout);
+}
 #endif
-
-	/* resolve any normalization shortcuts here */
-	char normUse[FILENAME_MAX];							/* value after resolving shortcuts */
-	if (strcmp(normalization,"mA")==0) strncpy(normUse,"/entry1/microDiffraction/source/current",FILENAME_MAX-2);	/* shortcut for beam current */
-	/*	else if (strcmp(normalization,"Io")==0) normUse[0]='\0'; */
-	/*	else if (strcmp(normalization,"cnt3")==0) normUse[0]='\0'; */
-	else strncpy(normUse,normalization,FILENAME_MAX-2);	/* no shortcut found, use what was passed */
-	normUse[FILENAME_MAX-1] = '\0';						/* strncpy may not terminate */
-	if (normUse[0]) {									/* if I have a normalization tag, try to use it */
-		double norm;
-		norm = readHDF5oneValue(filename, normUse);
-		if (norm == norm) {								/* not true if norm is NAN */
-#ifdef TYPICAL_mA
-			if (strcmp(normUse,"mA")==0) norm /= TYPICAL_mA; /* for beam current, divide by typical beam current */
-#endif
-#ifdef TYPICAL_cnt3
-			if (strcmp(normUse,"cnt3")==0) norm /= TYPICAL_cnt3;
-#endif
-			/* printf("\nnorm = %g      %d\n",norm,norm==norm); */
-			gsl_matrix_scale(image,norm);
-		}
-	}
-
-	if ((size_t)imageIndex >= image_set.wire_positions.size) { error("readSingleImage(), image_set.wire_positions.alloc too small"); exit(3); }
-	/* #warning "the wire position is corrected here when it is read in for: PM500, origin, rotation (by rho)" */
-	wire_pos.x = header.xWire;
-	wire_pos.y = header.yWire;
-	wire_pos.z = header.zWire;
-	image_set.wire_positions.v[imageIndex] = wirePosition2beamLine(wire_pos);	/* correct raw wire position: PM500 distortion, origin, PM500 rotation, wire axis rotation */
 
 	CHECK_FREE(buf);
 }
@@ -1953,18 +1996,18 @@ void readSingleImage(
 
 /* write correct headers and blank (all zero) images for every output HDF5 file */
 void writeAllHeaders(
-	char	*fn_in_first,				/* full path (including the .h5) to the first input file */
-	char	*fn_out_base,				/* full path up to index of the reconstructed output files */
-	int		file_num_start,				/* first output file number */
-	int		file_num_end)				/* last output file number */
+char	*fn_in_first,				/* full path (including the .h5) to the first input file */
+char	*fn_out_base,				/* full path up to index of the reconstructed output files */
+int		file_num_start,				/* first output file number */
+int		file_num_end)				/* last output file number */
 {
-	size_t	pixel_size = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_bytes : WinView_itype2len(user_preferences.out_pixel_type);
+	size_t	pixel_size = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_bytes : WinView_itype2len_new(user_preferences.out_pixel_type);
 	size_t	NpixelsImage = imaging_parameters.nROI_i * imaging_parameters.nROI_j;	/* number of pixels in one whole image */
 	int		i;
 	char	filenameTemp[L_tmpnam];			/* a temp file, delete at end of this routine */
 	char	finalTemplate[L_tmpnam];		/* final template file */
 	char	*buf=NULL;
-	int		dims[2] = {(int)(output_header.xdim), (int)(output_header.ydim)};
+	int		dims[2] = {output_header.xdim, output_header.ydim};
 	hid_t	file_id=0;
 
 	/* buf is the same size of one of the output images and is initialized by calloc() to all zeros */
@@ -1972,13 +2015,24 @@ void writeAllHeaders(
 	if (!buf) {fprintf(stderr,"\nCould not allocate buf %lu bytes in writeAllHeaders()\n", NpixelsImage*imaging_parameters.in_pixel_bytes); exit(1);}
 
 	/* create the first output file using fn_in_first as a template */
-//#pragma GCC diagnostic push
-//#pragma GCC diagnostic ignored "-Wdeprecated"			/* do not warn that tmpnam is deprecated */
 	strcpy(filenameTemp,tmpnam(NULL));					/* get unique filenames */
 	strcpy(finalTemplate,tmpnam(NULL));
-//#pragma GCC diagnostic pop
-	copyFile(fn_in_first,filenameTemp,1);
 
+/*	
+ *	/tmp/ccz301rF.o: In function 'writeAllHeaders':
+ *	WireScan.c:(.text+0xbfe): warning: the use of 'tmpnam' is dangerous, better use 'mkstemp'
+ */	
+	
+printf("\n\n ********************************* START FIX HERE *********************************\n");
+printf("     For Fly Scan files, this copy takes a long  time since the files are BIG\n");
+printf("filenameTemp = %s\n",filenameTemp);
+printf("finalTemplate = %s\n",finalTemplate);
+#ifdef FIX_ME_SLOW
+	copyFile(fn_in_first,filenameTemp,1);
+#endif
+printf(" *********************************   END FIX HERE *********************************\n");
+
+#ifdef FIX_ME_SLOW
 	/* delete the main data in file, and delete the wire positions from the template otuput file */
 	if ((file_id=H5Fopen(filenameTemp,H5F_ACC_RDWR,H5P_DEFAULT))<=0) { fprintf(stderr,"error after file open, file_id = %d\n",file_id); goto error_path; }
 	if ((file_id=H5Fopen(filenameTemp,H5F_ACC_RDWR,H5P_DEFAULT))<=0) { fprintf(stderr,"error after file open, file_id = %d\n",file_id); goto error_path; }
@@ -1998,33 +2052,37 @@ void writeAllHeaders(
 	if(createNewData(finalTemplate,"entry1/data/data",2,dims,getHDFtype(output_header.itype))) fprintf(stderr,"error after calling createNewData()\n");
 
 	/* write entire image back into file, but using different data type, using HDF5WriteROI() */
-	/*	for (i=0;i<(1024*1024);i++) wholeImage[i] = wholeImage[i] & 0x7FFFFFFF;	// trim off high order bit */
+	/*	for (i=0;i<(1024*1024);i++) wholeImage[i] = wholeImage[i] & 0x7FFFFFFF;	/* trim off high order bit */
 	if ((HDF5WriteROI(finalTemplate,"entry1/data/data",buf,0,(output_header.xdim)-1,0,(output_header.ydim)-1,getHDFtype(output_header.itype),&output_header)))
-	{ fprintf(stderr,"error from HDF5WriteROI()\n"); goto error_path; }
+		{ fprintf(stderr,"error from HDF5WriteROI()\n"); goto error_path; }
+#endif
 
 	/* create each of the output files with the correct depth in it */
 	for (i = file_num_start; i <= file_num_end; i++) write1Header(finalTemplate,fn_out_base, i);
 
 	/* delete both unused files */
-	printf("\n ********************************* START FIX HERE *********************************\n");
+
+printf("\n ********************************* START FIX HERE *********************************\n");
+#ifdef FIX_ME_SLOW
 	deleteFile(filenameTemp);
 	deleteFile(finalTemplate);
-	printf("\n *********************************   END FIX HERE *********************************\n");
+#endif
+printf("\n *********************************   END FIX HERE *********************************\n");
 	CHECK_FREE(buf);
 	return;
 
-error_path:
+	error_path:
 	CHECK_FREE(buf);
 	exit(1);
 }
 /* write the correct header and a single image of all zeros for an output HDF5 file */
 void write1Header(
-	char	*finalTemplate,				/* template output file, a cleaned up version of the input file */
-	char	*fn_base,					/* full path up to index of the reconstructed output files */
-	int		file_num)					/* output file number to write */
+char	*finalTemplate,				/* template output file, a cleaned up version of the input file */
+char	*fn_base,					/* full path up to index of the reconstructed output files */
+int		file_num)					/* output file number to write */
 {
 	double	depth;						/* depth measured from Si (micron) */
-	char	fname[FILENAME_MAX];		/* full name of file to write */
+	char	fout_name[FILENAME_MAX];	/* full name of file to write */
 
 	depth = index_to_beam_depth(file_num);
 	if (fabs(depth)>1e7) {
@@ -2033,11 +2091,11 @@ void write1Header(
 	}
 
 	/* duplicate template file with correct name */
-	sprintf(fname,"%s%d.h5",fn_base,file_num);
-	copyFile(finalTemplate,fname,1);
+	sprintf(fout_name,"%s%d.h5",fn_base,file_num);
+	copyFile(finalTemplate,fout_name,1);
 
 	/* write the depth */
-	writeDepthInFile(fname,depth);		/* create & write the depth, it will overwrite if depth already present */
+	writeDepthInFile(fout_name,depth);	/* create & write the depth, it will overwrite if depth already present */
 }
 
 
@@ -2045,11 +2103,10 @@ void write1Header(
 /* write out one stripe of the reconstructed image, and the correct depth */
 /* multiple image version */
 void write_depth_data(
-	size_t	start_i,					/* start i of this stripe */
-	size_t	end_i,						/* end i of this stripe */
-	char	*fn_base)					/* base name of file, just add index and .h5 */
+size_t	start_i,					/* start i of this stripe */
+size_t	end_i,						/* end i of this stripe */
+char	*fn_base)					/* base name of file, just add index and .h5 */
 {
-	//	int file_num_end = (int)((user_preferences.depth_end - user_preferences.depth_start) / user_preferences.depth_resolution);
 	int file_num_end = user_preferences.NoutputDepths - 1;
 	int m;
 	char fileName[FILENAME_MAX];
@@ -2062,10 +2119,10 @@ void write_depth_data(
 }
 /* single image version, write both the depth and the data */
 void write_depth_datai(
-	int		file_num,					/* the file number to write also the index into the number of output images, zero based */
-	size_t	start_i,					/* start and end i of this stripe */
-	size_t	end_i,
-	char	*fileName)					/* fully qualified name of file */
+int		file_num,					/* the file number to write also the index into the number of output images, zero based */
+size_t	start_i,					/* start and end i of this stripe */
+size_t	end_i,
+char	*fileName)					/* fully qualified name of file */
 {
 	int		output_pixel_type, pixel_size;
 	size_t	m;
@@ -2076,14 +2133,14 @@ void write_depth_datai(
 		exit(1);
 	}
 
-#ifdef DEBUG_1_PIXEL
+	#ifdef DEBUG_1_PIXEL
 	if (start_i<=pixelTESTi && pixelTESTi<=end_i)
 		printf("\t%%%%\t about to write stripe[%lu, %lu] of output image % 3d, pixel[%d,%d] = %g\t\tmax pixel = %g\n", \
 			start_i,end_i,file_num,pixelTESTi,pixelTESTj,gsl_matrix_get(gslMatrix, pixelTESTi -  start_i, pixelTESTj),gsl_matrix_max(gslMatrix));
-#endif
+	#endif
 
 	output_pixel_type = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_type : user_preferences.out_pixel_type;
-	pixel_size = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_bytes : WinView_itype2len(user_preferences.out_pixel_type);
+	pixel_size = (user_preferences.out_pixel_type < 0) ? imaging_parameters.in_pixel_bytes : WinView_itype2len_new(user_preferences.out_pixel_type);
 	if (user_preferences.wireEdge>=0) {									/* using only one edge of wire, so ensure that that all values are positive (not using both edges of wire) */
 		double	*d;
 		if (gsl_matrix_max(gslMatrix)<=0.0) return;						/* do not need to write blocks of zero */
@@ -2113,8 +2170,8 @@ void write_depth_datai(
 
 /* convert index of a depth resolved image to its depth along the beam (micron) */
 /* this is the depth of the center of the bin */
-double index_to_beam_depth(
-	long	index)						/* index to depth resolved images */
+inline double index_to_beam_depth(
+long	index)						/* index to depth resolved images */
 {
 	double absolute_depth = index * user_preferences.depth_resolution;
 	absolute_depth += user_preferences.depth_start;
@@ -2125,12 +2182,12 @@ double index_to_beam_depth(
 #warning "find_first_valid_i() and find_last_valid_i() my be unusable with this detector"
 /* find the lowest possible row (i) in the image given the depth range and image size.  Only the first wire position of the scan is needed. */
 int find_first_valid_i(
-	int ilo,							/* check i in the range [ilo,ihi], thses are usually the ends of the image */
-	int ihi,
-	int j1,								/* check pixels (i,j1) and(i,j2) */
-	int j2,
-	point_xyz wire,						/* first wire position (xyz) of wire scan (in beam line coords relative to the Si) */
-	BOOLEAN use_leading_wire_edge)		/* true=used leading endge of wire, false=use trailing edge of wire */
+int ilo,							/* check i in the range [ilo,ihi], thses are usually the ends of the image */
+int ihi,
+int j1,								/* check pixels (i,j1) and(i,j2) */
+int j2,
+point_xyz wire,						/* first wire position (xyz) of wire scan (in beam line coords relative to the Si) */
+BOOLEAN use_leading_wire_edge)		/* true=used leading endge of wire, false=use trailing edge of wire */
 {
 	int i;							/* index to a row in the image */
 	double	d;						/* computed depth from either j1 or j2 */
@@ -2143,14 +2200,12 @@ int find_first_valid_i(
 		pixel_edge.j = (double)j1;
 		back_edge = pixel_to_point_xyz(pixel_edge);							/* the back (low) edge of this pixel, using j1 */
 		d = pixel_xyz_to_depth(back_edge, wire, use_leading_wire_edge);
-		/* change d by depth offset DDDDDDDDDDDDDD ?????*/
 		if (user_preferences.depth_start <= d && d <= depth_end) return i;	/* this d lies in our depth range, so i is OK */
 		if (i==ilo && user_preferences.depth_start > d && d <= depth_end) return i;	/* limiting i is negative */
 
 		pixel_edge.j = (double)j2;
 		back_edge = pixel_to_point_xyz(pixel_edge);							/* the back (low) edge of this pixel, using j2 */
 		d = pixel_xyz_to_depth(back_edge, wire, use_leading_wire_edge);
-		/* change d by depth offset DDDDDDDDDDDDDD ?????*/
 		if (user_preferences.depth_start <= d && d <= depth_end) return i;	/* this d lies in our depth range, so i is OK */
 		if (i==ilo && user_preferences.depth_start > d && d <= depth_end) return i;	/* limiting i is negative */
 	}
@@ -2160,12 +2215,12 @@ int find_first_valid_i(
 
 /* find the highest possible row (i) in the image given the depth range and image size.  Only the last wire position of the scan is needed. */
 int find_last_valid_i(
-	int ilo,							/* check i in the range [ilo,ihi] */
-	int ihi,
-	int j1,								/* check pixels (i,j1) and(i,j2) ilo & ihi are usually edges of image */
-	int j2,
-	point_xyz wire,						/* last wire position (xyz) of wire scan (in beam line coords relative to the Si) */
-	BOOLEAN use_leading_wire_edge)		/* true=used leading endge of wire, false=use trailing edge of wire */
+int ilo,							/* check i in the range [ilo,ihi] */
+int ihi,
+int j1,								/* check pixels (i,j1) and(i,j2) ilo & ihi are usually edges of image */
+int j2,
+point_xyz wire,						/* last wire position (xyz) of wire scan (in beam line coords relative to the Si) */
+BOOLEAN use_leading_wire_edge)		/* true=used leading endge of wire, false=use trailing edge of wire */
 {
 	int i;							/* index to a row in the image */
 	double	d;						/* computed depth from either j1 or j2 */
@@ -2178,14 +2233,12 @@ int find_last_valid_i(
 		pixel_edge.j = (double)j1;
 		front_edge = pixel_to_point_xyz(pixel_edge);						/* the front (low) edge of this pixel, using j1 */
 		d = pixel_xyz_to_depth(front_edge, wire, use_leading_wire_edge);
-		/* change d by depth offset DDDDDDDDDDDDDD ?????*/
 		if (user_preferences.depth_start <= d && d <= depth_end) return i;	/* this d lies in our depth range, so i is OK */
 		if (i==ihi && d > depth_end) return i;								/* limiting i is past end of detector */
 
 		pixel_edge.j = (double)j2;
 		front_edge = pixel_to_point_xyz(pixel_edge);						/* the front (low) edge of this pixel, using j2 */
 		d = pixel_xyz_to_depth(front_edge, wire, use_leading_wire_edge);
-		/* change d by depth offset DDDDDDDDDDDDDD ?????*/
 		if (user_preferences.depth_start <= d && d <= depth_end) return i;	/* this d lies in our depth range, so i is OK */
 		if (i==ihi && d > depth_end) return i;								/* limiting i is past end of detector */
 	}
@@ -2196,7 +2249,7 @@ int find_last_valid_i(
 
 /* convert PM500 {x,y,z} to beam line {x,y,z} */
 point_xyz wirePosition2beamLine(
-	point_xyz wire_pos)								/* PM500 {x,y,z} values */
+point_xyz wire_pos)								/* PM500 {x,y,z} values */
 {
 	double x,y,z;
 
@@ -2212,7 +2265,7 @@ point_xyz wirePosition2beamLine(
 	wire_pos.y = calibration.wire.rotation[1][0]*x + calibration.wire.rotation[1][1]*y + calibration.wire.rotation[1][2]*z;
 	wire_pos.z = calibration.wire.rotation[2][0]*x + calibration.wire.rotation[2][1]*y + calibration.wire.rotation[2][2]*z;
 
-	/* #warning "what should I do about the rotation to put wire axis parallel to beam line axis" */
+/* #warning "what should I do about the rotation to put wire axis parallel to beam line axis" */
 	wire_pos = MatrixMultiply31(calibration.wire.rho,wire_pos);	/* wire_centre = rho x wire_centre, rotate wire position so wire axis lies along {1,0,0} */
 
 	return wire_pos;
@@ -2225,11 +2278,11 @@ point_xyz wirePosition2beamLine(
 
 #ifdef DEBUG_ALL
 void printPieceOf_gsl_matrix(				/* print some of the gsl_matrix */
-	int		ilo,								/* i range to print is [ihi, ilo] */
-	int		ihi,
-	int		jlo,								/* j range to print is [jhi, jlo] */
-	int		jhi,
-	gsl_matrix *mat)
+int		ilo,								/* i range to print is [ihi, ilo] */
+int		ihi,
+int		jlo,								/* j range to print is [jhi, jlo] */
+int		jhi,
+gsl_matrix *mat)
 {
 	int		i,j;
 	printf("\nfor gsl_matrix_get(mat,i,j)  (j is the fast index)\nj\t i=");
@@ -2243,13 +2296,13 @@ void printPieceOf_gsl_matrix(				/* print some of the gsl_matrix */
 
 
 void printPieceOfArrayDouble(				/* print some of the double array */
-	int		ilo,								/* i range to print is [ihi, ilo] */
-	int		ihi,
-	int		jlo,								/* j range to print is [jhi, jlo] */
-	int		jhi,
-	int		Nx,									/* size of array,  buf[Nx][Ny] */
-	int		Ny,
-	double buf[Nx][Ny])
+int		ilo,								/* i range to print is [ihi, ilo] */
+int		ihi,
+int		jlo,								/* j range to print is [jhi, jlo] */
+int		jhi,
+int		Nx,									/* size of array,  buf[Nx][Ny] */
+int		Ny,
+double buf[Nx][Ny])
 {
 	int		i,j;
 	printf("\nfor double array[j][i]\nj\t i=");
@@ -2262,14 +2315,14 @@ void printPieceOfArrayDouble(				/* print some of the double array */
 }
 
 void printPieceOfArrayInt(					/* print some of the array */
-	int		ilo,								/* i range to print is [ihi, ilo] */
-	int		ihi,
-	int		jlo,								/* j range to print is [jhi, jlo] */
-	int		jhi,
-	int		Nx,									/* size of array,  buf[Nx][Ny] */
-	int		Ny,
-	unsigned short int buf[Nx][Ny],
-	int		itype)
+int		ilo,								/* i range to print is [ihi, ilo] */
+int		ihi,
+int		jlo,								/* j range to print is [jhi, jlo] */
+int		jhi,
+int		Nx,									/* size of array,  buf[Nx][Ny] */
+int		Ny,
+unsigned short int buf[Nx][Ny],
+int		itype)
 {
 	int		i,j;
 	printf("\nfor int array[j][i]\nj\t i=");
@@ -2297,10 +2350,10 @@ void printPieceOfArrayInt(					/* print some of the array */
 double slitWidth(point_xyz a, point_xyz b, point_xyz sa, point_xyz sb);
 /* calculate width of wire step perpendicular to the ray from source to wire, the width of the virtual slit */
 double slitWidth(					/* distance between wire points a and b perp to ray = { (a+b)/2 - (sa+sb)/2 } */
-	point_xyz a,						/* first wire position */
-	point_xyz b,						/* second wire position */
-	point_xyz sa,						/* first source point */
-	point_xyz sb)						/* second source point */
+point_xyz a,							/* first wire position */
+point_xyz b,							/* second wire position */
+point_xyz sa,						/* first source point */
+point_xyz sb)						/* second source point */
 {
 	double dx,dy,dz;					/* vector from b to a (between two wire positions) */
 	double dw2;							/* square of distance between two wire positions, |b-a|^2 */
@@ -2331,7 +2384,7 @@ double slitWidth(					/* distance between wire points a and b perp to ray = { (a
 
 
 void print_imaging_parameters(
-	ws_imaging_parameters ip)
+ws_imaging_parameters ip)
 {
 	printf("\n\n*************  value of ws_imaging_parameters structure  *************\n");
 	printf("\t\t[nROI_i, nROI_j] = [%d, %d]\n", ip.nROI_i,ip.nROI_j);
@@ -2348,39 +2401,63 @@ void print_imaging_parameters(
 }
 
 
+void print_help_text(void)
+{
+	printf("\nUsage: WireScan -i <file> -o <file> -g <file> [-s <#>] -e <#> [-r <#>] [-v <#>] [-f <#>] -l <#> [-p <#>]  [-t <#>]  [-m <#>] [-?] \n\n");
+	printf("\n-i <file>,\t --infile=<file>\t\tlocation and leading section of file names to process");
+	printf("\n-o <file>,\t --outfile=<file>\t\tlocation and leading section of file names to create");
+	printf("\n-g <file>,\t --geofile=<file>\t\tlocation of file containing parameters from the wirescan");
+	printf("\n-d <file>,\t --distortion map=<file>\tlocation of file with the distortion map, dXYdistortion");
+	printf("\n-s <#>,\t\t --depth-start=<#>\t\tdepth to begin recording values at - inclusive");
+	printf("\n-e <#>,\t\t --depth-end=<#>\t\tdepth to stop recording values at - inclusive");
+	printf("\n-r <#>,\t\t --resolution=<#>\t\tum depth covered by a single depth-resolved image");
+	printf("\n-v <#>,\t\t --verbose=<#>\t\t\toutput detailed output of varying degrees (0, 1, 2, 3)");
+	printf("\n-f <#>,\t\t --first-image=<#>\t\tnumber of first image to process - inclusive");
+	printf("\n-l <#>,\t\t --last-image=<#>\t\tnumber of last image to process - inclusive");
+	printf("\n-n <tag>,\t --normalization=<tag>\t\ttag of variable in header to use for normalizing incident intensity, optional");
+	printf("\n-p <#>,\t\t --percent-to-process=<#>\tonly process the p%% brightest pixels in image");
+	printf("\n-w <l,t,b>,\t --wire-edges\t\t\tuse leading, trailing, or both edges of wire, (for both, output images will then be longs)");
+	printf("\n-t <#>,\t\t --type-output-pixel=<#>\ttype of output pixel (uses old WinView numbers), optional");
+	printf("\n-m <#>,\t\t --memory=<#>\t\t\tdefine the amount of memory in MiB that the programme is allowed to use");
+	printf("\n-?,\t\t --help\t\t\t\tdisplay this help");
+	printf("\n\n");
+	printf("Example: WireScan -i /images/image_ -o /result/image_ -g /geo/file -s 0 -e 100 -r 1 -v 1 -f 1 -l 401 -p 1\n\n");
+}
+
+
 #ifdef DEBUG_1_PIXEL
 /*
- head->xDimDet	= get1HDF5data_int(file_id,"/entry1/detector/Nx",&ivalue) ? XDIMDET : ivalue;
- head->yDimDet	= get1HDF5data_int(file_id,"/entry1/detector/Ny",&ivalue) ? YDIMDET : ivalue;
- head->startx	= get1HDF5data_int(file_id,"/entry1/detector/startx",&ivalue) ? STARTX : ivalue;
- head->endx		= get1HDF5data_int(file_id,"/entry1/detector/endx",&ivalue) ? ENDX : ivalue;
- head->groupx	= get1HDF5data_int(file_id,"/entry1/detector/groupx",&ivalue) ? GROUPX : ivalue;
- head->starty	= get1HDF5data_int(file_id,"/entry1/detector/starty",&ivalue) ? STARTY : ivalue;
- head->endy		= get1HDF5data_int(file_id,"/entry1/detector/endy",&ivalue) ? ENDY : ivalue;
- head->groupy	= get1HDF5data_int(file_id,"/entry1/detector/groupy",&ivalue) ? GROUPY : ivalue;
- 
- 
- ROI: un-binned
- Xstart=820, Xsize=120		along beam
- Ystart=1045, Ysize=100		perpendicular to beam
- 
- depth = -167.396710542 µm, using leading ede
- depth = -167.396710541619
- depth = -219.436661679 µm, using trailing edge
- depth = -219.436661679071
- 
- value of [50,60] = 9660 for file 932
- value of [60,50] = 11852 for h5 file
- */
+	head->xDimDet	= get1HDF5data_int(file_id,"/entry1/detector/Nx",&ivalue) ? XDIMDET : ivalue;
+	head->yDimDet	= get1HDF5data_int(file_id,"/entry1/detector/Ny",&ivalue) ? YDIMDET : ivalue;
+	head->startx	= get1HDF5data_int(file_id,"/entry1/detector/startx",&ivalue) ? STARTX : ivalue;
+	head->endx		= get1HDF5data_int(file_id,"/entry1/detector/endx",&ivalue) ? ENDX : ivalue;
+	head->groupx	= get1HDF5data_int(file_id,"/entry1/detector/groupx",&ivalue) ? GROUPX : ivalue;
+	head->starty	= get1HDF5data_int(file_id,"/entry1/detector/starty",&ivalue) ? STARTY : ivalue;
+	head->endy		= get1HDF5data_int(file_id,"/entry1/detector/endy",&ivalue) ? ENDY : ivalue;
+	head->groupy	= get1HDF5data_int(file_id,"/entry1/detector/groupy",&ivalue) ? GROUPY : ivalue;
+
+
+ROI: un-binned
+Xstart=820, Xsize=120		along beam
+Ystart=1045, Ysize=100		perpendicular to beam
+
+  depth = -167.396710542 µm, using leading ede
+  depth = -167.396710541619
+  depth = -219.436661679 µm, using trailing edge
+  depth = -219.436661679071
+
+value of [50,60] = 9660 for file 932
+value of [60,50] = 11852 for h5 file
+*/
 void testing_depth(void)
 {
 	point_ccd	pixel;
 	point_xyz	xyzPixel;
 	point_xyz	xyzWire;
-	//	double		depth;
-	//	BOOLEAN		use_leading_wire_edge=1;		// 1==989.266,   0==989.265
-	//	double		leadingIgor = -167.396710541619;
-	//	double		trailingIgor = -219.436661679071;
+//	double		depth;
+//	BOOLEAN		use_leading_wire_edge=1;		// 1==989.266,   0==989.265
+//	double		leadingIgor = -167.396710541619;
+//	double		trailingIgor = -219.436661679071;
 
 
 	pixel.i = pixelTESTi;
@@ -2395,13 +2472,13 @@ void testing_depth(void)
 
 	printf("\n\n\n start of testing_depth()\n");
 	/*
-	 printf("\n\ndetector P = {%.6f, %.6f, %.6f}\n",calibration.P.x,calibration.P.y,calibration.P.z);
-	 printf("calibration.detector_rotation = \n");
-	 printf("%13.9f	%13.9f	%13.9f	\n",calibration.detector_rotation[0][0],calibration.detector_rotation[0][1],calibration.detector_rotation[0][2]);
-	 printf("%13.9f	%13.9f	%13.9f	\n",calibration.detector_rotation[1][0],calibration.detector_rotation[1][1],calibration.detector_rotation[1][2]);
-	 printf("%13.9f	%13.9f	%13.9f	\n",calibration.detector_rotation[2][0],calibration.detector_rotation[2][1],calibration.detector_rotation[2][2]);
-	 printf("***pixel X = %.9lf\n",calibration.detector_rotation[0][0] * 209773.0 + calibration.detector_rotation[0][1] * 14587.0 + calibration.detector_rotation[0][2] * 510991.0);
-	 */
+	printf("\n\ndetector P = {%.6f, %.6f, %.6f}\n",calibration.P.x,calibration.P.y,calibration.P.z);
+	printf("calibration.detector_rotation = \n");
+	printf("%13.9f	%13.9f	%13.9f	\n",calibration.detector_rotation[0][0],calibration.detector_rotation[0][1],calibration.detector_rotation[0][2]);
+	printf("%13.9f	%13.9f	%13.9f	\n",calibration.detector_rotation[1][0],calibration.detector_rotation[1][1],calibration.detector_rotation[1][2]);
+	printf("%13.9f	%13.9f	%13.9f	\n",calibration.detector_rotation[2][0],calibration.detector_rotation[2][1],calibration.detector_rotation[2][2]);
+	printf("***pixel X = %.9lf\n",calibration.detector_rotation[0][0] * 209773.0 + calibration.detector_rotation[0][1] * 14587.0 + calibration.detector_rotation[0][2] * 510991.0);
+	*/
 
 	xyzPixel = pixel_to_point_xyz(pixel);						/* input, binned ROI (zero-based) pixel value on detector, can be non-integer, and can lie outside range (e.g. -05 is acceptable) */
 	printf("pixel = [%g, %g] --> {%.12lf, %.12lf, %.12lf}mm\n",pixel.i,pixel.j,xyzPixel.x/1000.,xyzPixel.y/1000.,xyzPixel.z/1000.);
@@ -2411,11 +2488,11 @@ void testing_depth(void)
 	printf("corrected wire at {%.6f, %.6f, %.6f}µm\n",xyzWire.x,xyzWire.y,xyzWire.z);
 
 
-	//	depth = pixel_xyz_to_depth(xyzPixel,xyzWire,use_leading_wire_edge);
-	//	printf("depth (leading) = %.9f µm,  Igor got %.9f,  ∆=%.9f\n",depth,leadingIgor,depth-leadingIgor);
-	//
-	//	depth = pixel_xyz_to_depth(xyzPixel,xyzWire,0);
-	//	printf("depth (trailing) = %.9f µm,  Igor got %.9f,  ∆=%.9f\n",depth,trailingIgor,depth-trailingIgor);
+//	depth = pixel_xyz_to_depth(xyzPixel,xyzWire,use_leading_wire_edge);
+//	printf("depth (leading) = %.9f µm,  Igor got %.9f,  ∆=%.9f\n",depth,leadingIgor,depth-leadingIgor);
+//
+//	depth = pixel_xyz_to_depth(xyzPixel,xyzWire,0);
+//	printf("depth (trailing) = %.9f µm,  Igor got %.9f,  ∆=%.9f\n",depth,trailingIgor,depth-trailingIgor);
 
 	printf(" done with testing_depth()\n\n");
 	return;

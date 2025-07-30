@@ -1,7 +1,7 @@
 #ifndef READGEON_H
 #define READGEON_H
 
-/* #define	aoSi 5.43102088			// lattice constant of Silicon (Å) */
+/* #define	aoSi 5.43102088			/* lattice constant of Silicon (Å) */
 #define MAX_Ndetectors 3			/* maximum number of detectors to permitted */
 #define READGEON_MAXlen 100		/* max length of a string in the structures */
 
@@ -35,11 +35,11 @@ struct wireGeometry {				/* structure definition */
  *		x' = ( pixel - (Nx-1)/2 )*pitch,   where sizeX = Nx*pitch.  This puts the coordinate of pixel (i,j) at the center of the pixel.
  */
 struct detectorGeometry {			/* structure definition for a detector */
-	int		used;					/* TRUE=detector used, FALSE=detector un-used */
-	int		Nx, Ny;					/* # of un-binned pixels in full detector */
-	double	sizeX,sizeY;			/* outside size of detector (sizeX = Nx*pitchX), measured to outer edge of outer pixels (micron) */
-	double	R[3];					/* rotation vector (length is angle in radians) */
-	double	P[3];					/* translation vector (micron) */
+	int used;						/* TRUE=detector used, FALSE=detector un-used */
+	long Nx, Ny;					/* # of un-binned pixels in full detector */
+	double sizeX,sizeY;				/* outside size of detector (sizeX = Nx*pitchX), measured to outer edge of outer pixels (micron) */
+	double R[3];					/* rotation vector (length is angle in radians) */
+	double P[3];					/* translation vector (micron) */
 
 	char timeMeasured[READGEON_MAXlen+1];		/* when this geometry was calculated */
 	char geoNote[READGEON_MAXlen+1];			/* note */
@@ -59,13 +59,13 @@ struct geoStructure {				/* structure definition */
 };
 
 
-int readGeoFromFile(char *fname, struct geoStructure *geo);
+long readGeoFromFile(char *fname, struct geoStructure *geo);
 void printGeometry(FILE *f, struct geoStructure *geo);
 int checkFileTypeOLD(char *lineIn, size_t Nline, char *type);
 void GeometryStructureUpdate(struct geoStructure *geo);
 int printDetector(FILE *f, struct detectorGeometry *d);
 int MicroGeometryBad(struct geoStructure *g);
 void copyMicroGeometryStructure(struct geoStructure *dest, struct geoStructure *in);
-int strFromTagBuf(char *buffer, char *tagIn, char *value, int maxLen);
+int strFromTagBuf(char *buffer, char *tagIn, char *value, long maxLen);
 
 #endif
