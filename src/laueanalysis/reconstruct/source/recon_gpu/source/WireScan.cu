@@ -630,7 +630,7 @@ int main (int argc, const char *argv[]) {
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, (char * const *)argv, "i:o:g:s::e:r:v::f:l:n:p:w:m:t:d:D:F:R:@::h::", long_options, &option_index);
+		c = getopt_long (argc, (char * const *)argv, "i:o:g:s:e:r:v:f:l:n:p:w:m:t:d:D:F:R:@::h::", long_options, &option_index);
 
 		/* Detect the end of the options.  */
 		if (c == -1)
