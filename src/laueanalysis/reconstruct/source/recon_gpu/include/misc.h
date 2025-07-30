@@ -13,7 +13,7 @@ void error (char *error);
 void printCalibration(int more);
 void geo2calibration(struct geoStructure *geo, int detector);
 void writeSummaryHead(FILE *f, char *infile, char *outfile, char *geofile, double depth_start, double depth_end, double resolution, \
-	int first_image, int last_image, int out_pixel_type, int wireEdge, char *normalization, char *depthCorrectStr);
+	int first_image, int last_image, int out_pixel_type, int wireEdge, char *normalization);
 void writeSummaryTail(FILE *f, double seconds);
 int getParentPath(char *path);
 

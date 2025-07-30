@@ -13,7 +13,7 @@
 #include "hdf5.h"
 #include "hdf5_hl.h"					/* hdf lite, I can probably get rid of this with a little effort */
 
-/* #define MAX_DETECTOR_ID_LEN 255		// max length of string with detector ID */
+/* #define MAX_DETECTOR_ID_LEN 255		/* max length of string with detector ID */
 #define MAX_micro_STRING_LEN 1023		/* max length of a string easily read from a data */
 
 #ifndef MAX
@@ -28,13 +28,19 @@
 
 #ifndef _HDF5_Header_	/* HDF5 header values */
 #define _HDF5_Header_
+
+typedef struct {			/* a grid of doubles values */
+	size_t	N;				/* length of vector */
+	double	*v;				/* values in vector */
+} Dvector;
+
 struct HDF5_Header {
 	int		itype;			/* from WinView .spe image types
 								-1	"an error"
 								0	"float (4 byte)"
-								1	"int32 (4 byte)"
-								2	"int16 (2 byte)"
-								3	"unsigned int16 (2 byte)"
+								1	"long integer (4 byte)"
+								2	"integer (2 byte)"
+								3	"unsigned integer (2 byte)"
 								4	"string/char (1 byte)",  NOT USED with HDF5 here
 								5	"double (8 byte)"
 								6	"signed int8 (1 byte)"
@@ -50,12 +56,29 @@ struct HDF5_Header {
 	size_t	starty;
 	size_t	endy;
 	size_t	groupy;
-/*	int		geo_rotate;		// geometric effect applied, rotate */
-/*	int		geo_reverse;	// geometric effect applied, reverse */
-/*	int		geo_flip;		// geometric effect applied, flipped */
+/*	int		geo_rotate;		/* geometric effect applied, rotate */
+/*	int		geo_reverse;	/* geometric effect applied, reverse */
+/*	int		geo_flip;		/* geometric effect applied, flipped */
+	size_t	Nimages;		/* number of images stored together */
 	double	gain;			/* actually capacitance (pF) */
-	double	exposure;		/* exposure time (seconds) */
 	char	bkgFile[MAX_micro_STRING_LEN+1];	/* name of possible background file */
+#ifdef MULTI_IMAGE_FILE
+	Dvector	exposure;		/* exposure time (seconds) */
+	Dvector	xSample;		/* x sample position from PVlist */
+	Dvector	ySample;		/* y sample position from PVlist */
+	Dvector	zSample;		/* z sample position from PVlist */
+	Dvector	xWire;			/* x wire position from PVlist */
+	Dvector	yWire;			/* y wire position from PVlist */
+	Dvector	zWire;			/* z wire position from PVlist */
+	Dvector	AerotechH;		/* position of Aerotech 45 degree wire positioner (micron) */
+	Dvector	energy;			/* monochromator energy (keV) */
+	Dvector depth;			/* depth of reconstructed image (micron) */
+	Dvector timingClock;	/* time of each measurement in a vector (second) */
+	Dvector	ringCurrent;	/* ring current (mA) */
+	Dvector	undGap;			/* undulator gap (mm) */
+	Dvector	undTaper;		/* undulator taper (mm) */
+#else
+	double	exposure;		/* exposure time (seconds) */
 	double	xSample;		/* x sample position from PVlist */
 	double	ySample;		/* y sample position from PVlist */
 	double	zSample;		/* z sample position from PVlist */
@@ -69,6 +92,7 @@ struct HDF5_Header {
 	double	ringCurrent;	/* ring current (mA) */
 	double	undGap;			/* undulator gap (mm) */
 	double	undTaper;		/* undulator taper (mm) */
+#endif
 	#ifdef VO2
 	double	VO2_current;	/* current through VO2 sample (A) */
 	double	VO2_epoch;		/* epoch from VO2 (second) */
@@ -88,9 +112,9 @@ struct HDF5_Header {
 	char	detector_ID[MAX_micro_STRING_LEN+1];
 	char	detector_model[MAX_micro_STRING_LEN+1];
 	char	detector_vendor[MAX_micro_STRING_LEN+1];
-	int		monitor_I0;		/* monitor I0 */
-	int		monitor_Ifinal;	/* monitor I_final */
-	int		monitor_Istart;	/* monitor I_start */
+	long	monitor_I0;		/* monitor I0 */
+	long	monitor_Ifinal;	/* monitor I_final */
+	long	monitor_Istart;	/* monitor I_start */
 	char	fileName[MAX_micro_STRING_LEN];		/* name of original file */
 	char	fileTime[MAX_micro_STRING_LEN+1];	/* time when original file was written */
 	char	beamline[MAX_micro_STRING_LEN+1];
@@ -106,6 +130,10 @@ int HDF5WriteROI(const char *fileName, const char *dataName, void *vbuf, size_t 
 //int HDF5WriteROI(const char *fileName, const char *dataName, void *vbuf, size_t xlo, size_t xhi, size_t ylo, size_t yhi, struct HDF5_Header *head);
 int HDF5ReadROI(const char *fileName, const char *dataName, void **vbuf, size_t xlo, size_t xhi, size_t ylo, size_t yhi, struct HDF5_Header *head);
 int HDF5ReadROIdouble(const char *fileName, const char *dataName, double **vbuf, size_t xlo, size_t xhi, size_t ylo, size_t yhi, struct HDF5_Header *head);
+#ifdef MULTI_IMAGE_FILE
+int HDF5ReadROIdoubleSlice(const char *fileName, const char *dataName, double **vbuf, long xlo, long xhi, long ylo, long yhi, struct HDF5_Header *head, size_t slice);
+#endif
+int readHDF5oneHeaderVector(const char *fileName, char *name, Dvector *vec);
 int createNewData(const char *fileName, const char *dataName, int rank, int *dims, int dataType);
 int readHDF5header(const char *fileName, struct HDF5_Header *head);
 int printHeader(struct HDF5_Header *h);
@@ -118,7 +146,9 @@ char *getFileTypeString(int itype, char *stype);
 hid_t getHDFtype(int itype);
 void InfoAboutData(hid_t data_id);
 void InfoAboutDataType(hid_t dataType);
-int WinView_itype2len(int itype);
+int WinView_itype2len_new(int itype);
+void empty_Dvector(Dvector *d);
+void init_Dvector(Dvector *d);
 
 
 int repackFile(const char *source, const char *dest);
@@ -126,9 +156,9 @@ int copyFile(const char *source, const char *dest, int overWrite);
 int deleteFile(const char *fileName);
 void initHDF5structure(struct HDF5_Header *head);
 void copyHDF5structure(struct HDF5_Header *dest, struct HDF5_Header *in);
-double NumberByKey(char *key, char *list, char keySepStr, char listSepStr);
-int IntByKey(char *key, char *list, char keySepChar, char listSepChar);
-char* StringByKey(char *key, char *list, char keySepChar, char listSepChar, int maxLen);
+double NumberByKey_new(char *key, char *list, char keySepStr, char listSepStr);
+long IntByKey_new(char *key, char *list, char keySepChar, char listSepChar);
+char* StringByKey_new(char *key, char *list, char keySepChar, char listSepChar, int maxLen);
 
 /*
 int WinViewReadHeader(FILE *fid, struct WinViewHeader *head);
@@ -141,14 +171,14 @@ char *WinViewFileTypeString(int itype,char *stype);
 int WinView_itype2len(int itype);
 int checkTypeSizes();
 void printBufferHex(void *buffer, size_t bufSizeOf, size_t n, size_t offset);
-int byteSwap2(void *j);
+long byteSwap2(void *j);
 void byteSwapArray(size_t wordLen, size_t words, void *a);
 */
 /* for .spe itype==
   0	"float (4 byte)"
-  1	"int32 (4 byte)"
-  2	"int16 (2 byte)"
-  3	"unsigned int16 (2 byte)"
+  1	"long integer (4 byte)"
+  2	"integer (2 byte)"
+  3	"unsigned integer (2 byte)"
   4	"string/char (1 byte)"
   5	"double (8 byte)"
   6	"signed int8 (1 byte)"
