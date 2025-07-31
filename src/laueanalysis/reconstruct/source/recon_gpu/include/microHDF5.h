@@ -130,11 +130,12 @@ int HDF5WriteROI(const char *fileName, const char *dataName, void *vbuf, size_t 
 //int HDF5WriteROI(const char *fileName, const char *dataName, void *vbuf, size_t xlo, size_t xhi, size_t ylo, size_t yhi, struct HDF5_Header *head);
 int HDF5ReadROI(const char *fileName, const char *dataName, void **vbuf, size_t xlo, size_t xhi, size_t ylo, size_t yhi, struct HDF5_Header *head);
 int HDF5ReadROIdouble(const char *fileName, const char *dataName, double **vbuf, size_t xlo, size_t xhi, size_t ylo, size_t yhi, struct HDF5_Header *head);
+int makeTemplateFile(const char* filenameIn, const char* filenameTemplate, char* buf, struct HDF5_Header* output_header);
 #ifdef MULTI_IMAGE_FILE
 int HDF5ReadROIdoubleSlice(const char *fileName, const char *dataName, double **vbuf, long xlo, long xhi, long ylo, long yhi, struct HDF5_Header *head, size_t slice);
 #endif
 int readHDF5oneHeaderVector(const char *fileName, char *name, Dvector *vec);
-int createNewData(const char *fileName, const char *dataName, int rank, int *dims, int dataType);
+int createNewData(hid_t file_id, const char *dataName, int rank, int *dims, hid_t dataType);
 int readHDF5header(const char *fileName, struct HDF5_Header *head);
 int printHeader(struct HDF5_Header *h);
 double readHDF5oneValue(const char *fileName, const char *dataName);

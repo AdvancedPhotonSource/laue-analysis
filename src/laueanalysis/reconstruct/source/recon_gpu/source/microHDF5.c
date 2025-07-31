@@ -22,12 +22,7 @@
 */
 /* #define VERBOSE */
 
-#ifdef __linux__
-//#define repackPATH "/local/kyue/hdf5/bin/h5repack"
-#define repackPATH "/clhome/aps_tools/hdf5-1.8.2/hdf5/bin/h5repack"
-#else
-#define repackPATH "/opt/local/bin/h5repack"
-#endif
+#define repackPATH "/net/s34data/export/s34data1/LauePortal/envs/lau_portal/bin/h5repack"
 
 #define STARTX 0			/* default values */
 #define ENDX 2047
@@ -45,6 +40,7 @@
 
 
 /* Local Routines */
+static int copyobjattr(hid_t oid_src,hid_t oid_dst,const char *objname,const H5O_info_t *objinfo);
 size_t HDF5ReadDoubleVector(hid_t file_id, const char *dataName, double **vbuf);
 int get1HDF5data_float(hid_t file_id, char *dataName, double *value);
 int get1HDF5data_int(hid_t file_id, char *dataName, long *value);
@@ -62,6 +58,169 @@ herr_t groupExists(hid_t file_id, char *groupName);
 /*******************************************************************************************
 *********************************  External HDF5 Routines  *********************************
 ********************************************************************************************/
+
+/* function as callback in H5Ovisit() called by makeTemplateFile to copy object to new H5 file */
+herr_t cp_h5obj(
+	hid_t oid,
+	const char *objname,
+	const H5O_info_t *objinfo,
+	void *param)
+{
+	hid_t *pfid_dst; // pointer to the destination file_id
+	hid_t gid, lcpl;
+	herr_t err;
+	hsize_t i;
+
+	err = 0;
+	gid = 0;
+	
+	// file id of the destination file
+	pfid_dst = (hid_t*) param;
+
+	// create property list for group creation
+	lcpl = H5Pcreate(H5P_LINK_CREATE);
+	H5Pset_create_intermediate_group(lcpl, 1);
+
+	// if is group, create same group in new file & copy the attributes
+	if(objinfo->type == H5O_TYPE_GROUP && strcmp(objname,"entry1/wire") != 0) // all groups except "wire"
+	{
+		if(strcmp(objname,".") == 0)
+		{	gid = H5Gopen(*pfid_dst,".",H5P_DEFAULT);  // no need to create root group
+		}
+		else
+		{	gid = H5Gcreate2(*pfid_dst,objname,lcpl,H5P_DEFAULT,H5P_DEFAULT);
+		}
+
+		// interate through the attributes of the group & copy to the new file
+		if(objinfo->num_attrs > 0)
+			copyobjattr(oid,gid,objname,objinfo);
+	}
+	else if(objinfo->type != H5O_TYPE_GROUP) // objects other than groups
+	{	
+		if(strcmp(objname,"entry1/data/data") == 0 || \
+		   strcmp(objname,"entry1/wire/wireX") == 0 || \
+		   strcmp(objname,"entry1/wire/wireY") == 0 || \
+		   strcmp(objname,"entry1/wire/wireZ") == 0 || \
+		   strcmp(objname,"entry1/wire/wirescan") == 0 || \
+		   strcmp(objname,"entry1/wire/H_upCts") == 0 || \
+		   strcmp(objname,"entry1/wire/H_downCts") == 0 || \
+		   strcmp(objname,"entry1/wire/wirebaseX") == 0 || \
+		   strcmp(objname,"entry1/wire/wirebaseY") == 0 || \
+		   strcmp(objname,"entry1/wire/wirebaseZ") == 0) 
+		{}	// do nothing on selected objects
+		else
+		{	// copy object
+			err = H5Ocopy(oid, objname, *pfid_dst, objname, H5P_DEFAULT, lcpl);
+		}
+	}
+	
+	if(gid>0) H5Gclose(gid);
+	H5Pclose(lcpl);
+
+	return err;
+}
+
+/* Make a template file for reconstructed images from a raw file */
+int makeTemplateFile(
+	const char* filenameIn, 		// raw file name
+	const char* filenameTemplate, 	// template file name
+	char* buf,						// data buffer
+	struct HDF5_Header* output_header)
+{
+	hid_t fid_src, fid_dst;
+	int	dims[2] = {(int)output_header->xdim, (int)output_header->ydim};
+
+	// open file
+	fid_src = H5Fopen(filenameIn,H5F_ACC_RDONLY,H5P_DEFAULT);
+
+	// create new file
+	fid_dst = H5Fcreate(filenameTemplate,H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+
+	// traverse & copy desired objects by calling cp_h5obj
+	#if H5_VERSION_GE(1,12,0)
+	H5Ovisit3(fid_src, H5_INDEX_CRT_ORDER, H5_ITER_NATIVE, cp_h5obj, &fid_dst, H5O_INFO_ALL);
+	#else
+	H5Ovisit(fid_src, H5_INDEX_CRT_ORDER, H5_ITER_NATIVE, cp_h5obj, &fid_dst);
+	#endif
+
+	// re-create "data" in new file
+	if (createNewData(fid_dst,"entry1/data/data",2,dims,getHDFtype(output_header->itype)))
+	{
+		fprintf(stderr, "ERROR in makeTemplateFile(): createNewData() failed.\n");
+		exit(1);
+	}
+	
+	// write data from buffer
+	HDF5WriteROI(filenameTemplate,"entry1/data/data",buf,0,(output_header->xdim)-1,0,(output_header->ydim)-1,getHDFtype(output_header->itype),output_header);
+
+	// write depth etc into new file
+	writeDepthInFile(filenameTemplate,0.0);
+	
+	// norm-by-exponent
+	// if (norm_exponent > 0.0 )  {
+	// 	if (writeImageNormalizationsInFile(fid_dst, norm_exponent, norm_threshold, norm_rescale)) { fprintf(stderr,"error writing the norm_* values in the output template file, file_id = %d\n",fid_dst); goto error_path; }
+	// }
+	// // cosmic
+	// if (cosmic)  {
+	// 	if (writeImageCosmicInFile(fid_dst,cosmic)) { fprintf(stderr,"error writing the cosmic in the output template file, file_id = %d\n",fid_dst); goto error_path; }
+	// }
+	
+	// close files
+	if(H5Fclose(fid_src)<0) {	printf("Error closing raw file %s\n",filenameIn); exit(1);	}
+	if(H5Fclose(fid_dst)<0) {	printf("Error closing template file %s\n",filenameTemplate); exit(1);}
+	
+	return 0;
+}
+
+/* copy an object's attribute to object in new H5 file */
+static int copyobjattr(
+	hid_t oid_src,
+	hid_t oid_dst,
+	const char *objname,
+	const H5O_info_t *objinfo)
+{
+#define MAX_ATTR_NAME_LEN 1000
+	hid_t aid,aid2,attr_ds_id,attr_ds_id2,attr_dt_id;
+	herr_t aerr;
+	hsize_t i,attr_size;
+	size_t attr_type_size;
+	char attrname[MAX_ATTR_NAME_LEN];
+	ssize_t attrname_len;
+	H5A_info_t attrinfo;
+	void *attr_data;
+
+	for(i=0;i<objinfo->num_attrs;i++)
+	{
+		// open attribute # i
+		aid = H5Aopen_by_idx(oid_src,objname,H5_INDEX_CRT_ORDER,H5_ITER_NATIVE,i,H5P_DEFAULT,H5P_DEFAULT);
+		// get attirubte name & datatype
+		attrname_len = H5Aget_name(aid,(size_t)MAX_ATTR_NAME_LEN,attrname);
+		aerr = H5Aget_info(aid,&attrinfo);
+		// get attribute dataspace, datatype (memory type), datasize
+		attr_ds_id = H5Aget_space(aid);
+		attr_dt_id = H5Aget_type(aid);
+		attr_size = H5Aget_storage_size(aid);
+		attr_type_size = H5Tget_size(attr_dt_id);
+		// read data
+		attr_data = malloc(attr_size);
+		H5Aread(aid,attr_dt_id,attr_data);
+		// prepare for creation: define datatype,dataspace,creation property list
+		attr_ds_id2 = H5Scopy(attr_ds_id);
+		// create attribute at destination
+		aid2 = H5Acreate2(oid_dst,attrname,attr_dt_id,attr_ds_id2,H5P_DEFAULT,H5P_DEFAULT);
+		// write attibute data
+		aerr = H5Awrite(aid2,attr_dt_id,attr_data);
+		// close property lists, dataspaces, datatypes etc
+		H5Sclose(attr_ds_id);
+		H5Sclose(attr_ds_id2);
+		H5Tclose(attr_dt_id);
+		free(attr_data);
+		// close both attributes
+		H5Aclose(aid);
+		H5Aclose(aid2);
+	}
+	return 0;
+}
 
 /* write a HDF5 file data part ROI.  To get header information, first call HDF5ReadHeader */
 /* the image is in vbuf, it is ordered with x moving fastest */
@@ -480,27 +639,45 @@ size_t	slice)							/* particular image in the stack */
 /* Create the data space for the dataset. */
 /*	e.g.	dims[2]={4,6};	 for rank=2 */
 int createNewData(
-const char *fileName,						/* name of file to use */
+//const char *fileName,						/* name of file to use */
+hid_t 	file_id,							/* id of the file already openned */
 const char *dataName,						/* FULL name of data set, e.g. "entry1/data/data" */
 int		rank,								/* rank of new data */
 int		*dims,								/* inidvidual dimensions (dims must be of length rank) */
-int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
+hid_t	dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getHDFtype(itype); */
 {
-	hid_t	file_id, dataset_id, dataspace_id;  /* identifiers */
+	hid_t	dataset_id, dataspace_id;  /* identifiers */
 	hid_t	attribute_id;
 	hid_t	attr_dataspace_id;
+	hid_t   lcpl_id;
 	herr_t	status;
 	hsize_t	dimsHDF5[rank];
 	int		signal=1;
 	int		i;
 	for (i=0;i<rank;i++) dimsHDF5[i] = dims[i];
 
-	file_id = H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT);	/* Open an existing file */
+//	file_id = H5Fopen(fileName,H5F_ACC_RDWR,H5P_DEFAULT);	/* Open an existing file */
 	dataspace_id = H5Screate_simple(rank,dimsHDF5,NULL);	/* create the data space */
+	if (dataspace_id < 0) {
+		fprintf(stderr, "ERROR in createNewData(): H5Screate_simple() failed.\n");
+		return -1;
+	}
+
+	// create property list and set it to create intermediate groups
+    lcpl_id = H5Pcreate(H5P_LINK_CREATE);
+    H5Pset_create_intermediate_group(lcpl_id, 1);
 
 	/* Create the dataset. */
-	dataset_id = H5Dcreate(file_id,dataName,dataType,dataspace_id,H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
+	dataset_id = H5Dcreate(file_id,dataName,dataType,dataspace_id,lcpl_id,H5P_DEFAULT,H5P_DEFAULT);
+	if (dataset_id < 0) {
+		fprintf(stderr, "ERROR in createNewData(): H5Dcreate() failed for dataset '%s'.\n", dataName);
+		H5Eprint(H5E_DEFAULT, stderr); // Print HDF5 error stack
+		H5Sclose(dataspace_id);
+		H5Pclose(lcpl_id);
+		return -1;
+	}
 
+	H5Pclose(lcpl_id);
 	attr_dataspace_id = H5Screate(H5S_SCALAR);
 	attribute_id = H5Acreate(dataset_id,"signal",H5T_STD_I32LE,attr_dataspace_id,H5P_DEFAULT,H5P_DEFAULT);	/* Create a dataset attribute. */
 	status = H5Awrite(attribute_id,H5T_STD_I32LE,&signal);	/* Write the attribute data. */
@@ -509,7 +686,7 @@ int		dataType)							/* HDF5 data type, e.g. H5T_NATIVE_INT32,  	dataType = getH
 
 	status = status | H5Dclose(dataset_id);		/* End access to the dataset and release resources used by it. */
 	status = status | H5Sclose(dataspace_id);	/* Terminate access to the data space. */ 
-	status = status | H5Fclose(file_id);		/* Close the file. */
+//	status = status | H5Fclose(file_id);		/* Close the file. */
 
 	return status;
 }
@@ -1602,6 +1779,7 @@ Dvector	*d)
 ********************************************************************************************/
 
 
+
 #define SKIP 1							/* number at start of a vector to skip, for 1, skip first point of a vector */
 
 /* read in a 1D vector from an HDF5 file.  To get header information, first call HDF5ReadHeader */
@@ -2277,7 +2455,7 @@ const char *dest)			/* path to destination file */
 	if (!cmdbuf) return -1;								/* allocation failed */
 
 	sprintf(cmdbuf,"%s \"%s\" \"%s\"",repack,source,dest);
-	if (err=system(cmdbuf)) fprintf(stderr,"ERROR -- repackFile()\n\t%s\n\t%s\n",source,dest);
+	if ((err=system(cmdbuf))) fprintf(stderr,"ERROR -- repackFile()\n\t%s\n\t%s\n",source,dest);
 	free(cmdbuf);
 	return err;
 }

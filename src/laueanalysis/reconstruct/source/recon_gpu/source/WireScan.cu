@@ -2033,58 +2033,14 @@ int		file_num_end)				/* last output file number */
 
 	/* create the first output file using fn_in_first as a template */
 	strcpy(filenameTemp,tmpnam(NULL));					/* get unique filenames */
-	strcpy(finalTemplate,tmpnam(NULL));
-
-/*	
- *	/tmp/ccz301rF.o: In function 'writeAllHeaders':
- *	WireScan.c:(.text+0xbfe): warning: the use of 'tmpnam' is dangerous, better use 'mkstemp'
- */	
 	
-printf("\n\n ********************************* START FIX HERE *********************************\n");
-printf("     For Fly Scan files, this copy takes a long  time since the files are BIG\n");
-printf("filenameTemp = %s\n",filenameTemp);
-printf("finalTemplate = %s\n",finalTemplate);
-#ifdef FIX_ME_SLOW
-	copyFile(fn_in_first,filenameTemp,1);
-#endif
-printf(" *********************************   END FIX HERE *********************************\n");
-
-#ifdef FIX_ME_SLOW
-	/* delete the main data in file, and delete the wire positions from the template otuput file */
-	if ((file_id=H5Fopen(filenameTemp,H5F_ACC_RDWR,H5P_DEFAULT))<=0) { fprintf(stderr,"error after file open, file_id = %d\n",file_id); goto error_path; }
-	if ((file_id=H5Fopen(filenameTemp,H5F_ACC_RDWR,H5P_DEFAULT))<=0) { fprintf(stderr,"error after file open, file_id = %d\n",file_id); goto error_path; }
-	if (deleteDataFromFile(file_id,"entry1/data","data")) { fprintf(stderr,"error trying to delete \"/entry1/data/data\", file_id = %d\n",file_id); goto error_path; }	/* delete the data */
-	if (deleteDataFromFile(file_id,"entry1","wireX")) { fprintf(stderr,"error trying to delete \"/entry1/wireX\", file_id = %d\n",file_id); goto error_path; }			/* delete the wire positions */
-	if (deleteDataFromFile(file_id,"entry1","wireY")) { fprintf(stderr,"error trying to delete \"/entry1/wireY\", file_id = %d\n",file_id); goto error_path; }
-	if (deleteDataFromFile(file_id,"entry1","wireZ")) { fprintf(stderr,"error trying to delete \"/entry1/wireZ\", file_id = %d\n",file_id); goto error_path; }
-	if (H5Fclose(file_id)) { fprintf(stderr,"file close error\n"); goto error_path; } else file_id = 0;
-
-	/* write the depth */
-	writeDepthInFile(filenameTemp,0.0);					/* create & write the depth, it will overwrite if depth already present */
-
-	/* make a re-packed version of file */
-	if (repackFile(filenameTemp,finalTemplate)) { fprintf(stderr,"error after calling repackFile()\n"); goto error_path; }
-
-	/* re-create the /entry1/data/data, same full size, but with appropriate data type */
-	if(createNewData(finalTemplate,"entry1/data/data",2,dims,getHDFtype(output_header.itype))) fprintf(stderr,"error after calling createNewData()\n");
-
-	/* write entire image back into file, but using different data type, using HDF5WriteROI() */
-	/*	for (i=0;i<(1024*1024);i++) wholeImage[i] = wholeImage[i] & 0x7FFFFFFF;	/* trim off high order bit */
-	if ((HDF5WriteROI(finalTemplate,"entry1/data/data",buf,0,(output_header.xdim)-1,0,(output_header.ydim)-1,getHDFtype(output_header.itype),&output_header)))
-		{ fprintf(stderr,"error from HDF5WriteROI()\n"); goto error_path; }
-#endif
+	makeTemplateFile(fn_in_first,filenameTemp,buf, &output_header);
 
 	/* create each of the output files with the correct depth in it */
-	for (i = file_num_start; i <= file_num_end; i++) write1Header(finalTemplate,fn_out_base, i);
+	for (i = file_num_start; i <= file_num_end; i++) write1Header(filenameTemp,fn_out_base, i);
 
 	/* delete both unused files */
-
-printf("\n ********************************* START FIX HERE *********************************\n");
-#ifdef FIX_ME_SLOW
 	deleteFile(filenameTemp);
-	deleteFile(finalTemplate);
-#endif
-printf("\n *********************************   END FIX HERE *********************************\n");
 	CHECK_FREE(buf);
 	return;
 
