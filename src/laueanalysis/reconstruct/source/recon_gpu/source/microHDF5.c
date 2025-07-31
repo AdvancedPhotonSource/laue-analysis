@@ -560,7 +560,8 @@ size_t	slice)							/* particular image in the stack */
 
 	if (strlen(fileName)<1 || strlen(dataName)<1) return -1;	/* need valid file and data name */
 	if (!head) return -1;								/* header must be valid */
-	if (slice<0 || slice>=head->Nimages) return 2;		/* slice out of range */
+//	if (slice<0 || slice>=head->Nimages) return 2;		/* slice out of range */
+	if (slice>=head->Nimages) return 2;		/* slice out of range */
 	xdim = head->xdim;
 	ydim = head->ydim;
 	ilen = sizeof(double);				/*	used to be this:	ilen = head->isize; */
@@ -589,15 +590,14 @@ size_t	slice)							/* particular image in the stack */
 	if (rank != 3) ERROR_PATH(rank)						/* only understand rank==3 data here */
 
 	/* allocate space for the image */
-	#ifdef DEBUG
-		printf("in HDF5ReadROIdoubleSlice:\n");
+	#ifdef VERBOSE_microHDF5
+		printf("in HDF5ReadROIdoubleSlice (slice=%lu):\n",slice);
 		printf("    about to try to allocate image space of %ld Kbytes\n",pixels*ilen/1024);
 	#endif
 	if (!(*vbuf)) *vbuf = (double*)calloc(pixels,ilen);	/* allocate space here if vbuf is NULL, otherwise it better be big enough */
 	if (!(*vbuf)) return 5;								/* allocation error */
-	#ifdef DEBUG
-//		printf("    image buffer = vbuf = %p,   nx = %lu, ny = %lu\n",vbuf,nx,ny);
-		printf("    [xlo,xhi]=[%ld,%ld] nx=%lu,  [ylo,yh]=[%ld,%ld] ny=%lu,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
+	#ifdef VERBOSE_microHDF5
+		printf("    [xlo,xhi]=[%ld,%ld] nx=%lu,  [ylo,yhi]=[%ld,%ld] ny=%lu,  read %ld pixels\n",xlo,xhi,nx,ylo,yhi,ny,pixels);
 	#endif
 
 #ifdef RECONSTRUCT_BACKWARDS
