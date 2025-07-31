@@ -580,7 +580,7 @@ int main (int argc, const char *argv[]) {
 	int		last_image = 0;					/* defaults to last image in multi-image file */
 	int		out_pixel_type = -1;			/* -1 flags that output image should have same type as input image */
 	int		wireEdge = 1;					/* 1=leading edge of wire, 0=trailing edge of wire, -1=both edges */
-	int		cudaRowNo = 8;					/* the cuda row number handled each time */
+	int		cudaRowNo = 256;					/* the cuda row number handled each time */
 	unsigned long required=0, requiredFlags=((1<<5)-1);	/* (1<<5)-1 == (2^5 - 1) requiredFlags are the arguments that must be set */
 	long	lvalue;
 	#ifdef DEBUG_ALL
@@ -1801,7 +1801,11 @@ Dvector *normalVector)					/* normalization vector made using 'normalization' */
 	positionerType = positionerTypeFromFileTime(in_header.fileTime);		/* sets global value position type, needed for wirePosition2beamLine() */
 	imaging_parameters.NinputImages = file_num_end - file_num_start + 1;	/* number of input image files to process */
 /*	imaging_parameters.NinputImages *= in_header.Nimages;					/* total number of input images (number of files * imags per file) */
-	imaging_parameters.NinputImages *= (in_header.Nimages-MULTI_IMAGE_SKIP);/* total number of input images (number of files * imags per file) */
+	imaging_parameters.NinputImages = (in_header.Nimages-MULTI_IMAGE_SKIP);/* total number of input images (number of files * imags per file) */
+	if (imaging_parameters.NinputImages < 0) {
+		error("no input images to process");
+		exit(1);
+	}
 
 #ifdef MULTI_IMAGE_FILE
 	wire_pos.x = (in_header.xWire.N>0) ? in_header.xWire.v[0] : NAN;		/* first wire position */

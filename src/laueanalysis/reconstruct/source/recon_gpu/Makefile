@@ -7,8 +7,6 @@ BIN := reconstructN_gpu
 # Build mode (debug or release)
 MODE ?= release
 
-# GPU Architecture (default to V100, override with make GPU_ARCH=sm_80 for A100)
-GPU_ARCH ?= sm_70
 
 # Detect conda environment
 ifdef CONDA_PREFIX
@@ -48,7 +46,7 @@ RPATH_FLAGS = -Xlinker -rpath -Xlinker '$$ORIGIN' -Xlinker -rpath -Xlinker '$(CO
 
 # Compiler flags
 CXXFLAGS := -g
-NVCCFLAGS := -arch=$(GPU_ARCH) --ptxas-options=-v
+NVCCFLAGS := -gencode arch=compute_60,code=sm_60 -gencode arch=compute_70,code=sm_70 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 --ptxas-options=-v
 DFLAGS = -D_GNU_SOURCE -DRECONSTRUCT_BACKWARDS -DMULTI_IMAGE_FILE
 
 # Set flags based on build mode
@@ -143,7 +141,7 @@ help:
 	@echo ""
 	@echo "Options:"
 	@echo "  MODE=debug|release - Set build mode (default: release)"
-	@echo "  GPU_ARCH=sm_XX     - Set GPU architecture (default: sm_70)"
+	@echo "  GPU_ARCH=sm_XX     - Set GPU architecture (no longer required)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make                    # Build in release mode"
