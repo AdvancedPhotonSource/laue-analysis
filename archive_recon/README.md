@@ -9,8 +9,8 @@ They are split into 2 types, one for reading multiple h5 files from a step scan 
 Here are the original and current file directory mappings in case files need to be pulled from the deep archive again. 
 
 * reconstructMultiple/cpu - /clhome/KYUE/reconstructMultiple/cpucode
-* reconstructMultiple/gpu - /clhome/KYUE/reconstructMultiple/DEPTHRECON-M81
+* reconstructMultiple/gpu - /clhome/KYUE/reconstructSingle/DEPTHRECON-S82 # Includes MULTI_IMAGE_FILE flag where reconstructMultiple does not.     
 * reconstuctSingle/reconstructBigCPU - /clhome/KYUE/reconstructSingle/reconstructBigCPU/reconstructBig
-* reconstructSingle/reconstructBigGPU - /clhome/KYUE/reconstructSingle/reconstructBigGPU
+* reconstructSingle/reconstructBigGPU - /clhome/KYUE/reconstructSingle/reconstructBigGPU # Removed. Label was misinterperted.
 * reconstructSingle/cpu_optim - /clhome/KYUE/reconstructSingle/cpucode
 * archive_recon/reconstructMultiple/cpu_thread - /data34/Xu/programs/reconstructBP

@@ -4,10 +4,21 @@
 #include <gsl/gsl_matrix.h>
 
 typedef struct {	/* standard R3 coordinate system. */
+	double x;
+	double y;
+	double z;
+} point_xyz;
+
+typedef struct {	/* standard R3 coordinate system. */
 	float x;
 	float y;
 	float z;
 } floatpoint_xyz;
+
+typedef struct {	/* detector coordinate system */
+	double i;
+	double j;
+} point_ccd;
 
 typedef struct {	/* detector coordinate system */
 	float i;
@@ -18,26 +29,15 @@ typedef struct		/* a structured vector of doubles */
 {
 	size_t	size;			/* length of vector, how much space is allocated */
 	size_t	alloc;			/* length of vector allocated, alloc >= size */
-	float	*v;				/* pointer to the vector data */
-} floatdvector;
-
-typedef struct {	/* standard R3 coordinate system. */
-	double x;
-	double y;
-	double z;
-} point_xyz;
-
-typedef struct {	/* detector coordinate system */
-	double i;
-	double j;
-} point_ccd;
+	double	*v;				/* pointer to the vector data */
+} dvector;
 
 typedef struct		/* a structured vector of doubles */
 {
 	size_t	size;			/* length of vector, how much space is allocated */
 	size_t	alloc;			/* length of vector allocated, alloc >= size */
-	double	*v;				/* pointer to the vector data */
-} dvector;
+	float	*v;				/* pointer to the vector data */
+} floatdvector;
 
 typedef struct		/* a structured vector of point_xyz */
 {

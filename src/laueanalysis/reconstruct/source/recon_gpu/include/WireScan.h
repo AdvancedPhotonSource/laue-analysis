@@ -13,10 +13,9 @@
 #define MIN(X,Y) ( ((X)>(Y)) ? (Y) : (X) )
 #endif
 
-
 typedef short unsigned int BOOLEAN;
 
-// struct cudaPara and cuda variables start from here
+// struct cudaPara
 typedef struct
 {
    double CKIX;
@@ -29,8 +28,6 @@ typedef struct
 }cudaConstPara;
 
 extern cudaConstPara paraPassed;
-
-// cuda parameters end here
 
 typedef struct
 {
@@ -45,6 +42,7 @@ typedef struct
 
 extern floatcudaConstPara floatparaPassed;
 
+
 /* data structures containing information for the wire scan */
 extern ws_calibration calibration;
 extern ws_imaging_parameters imaging_parameters;
@@ -53,8 +51,8 @@ extern ws_user_preferences user_preferences;
 
 extern gsl_matrix * intensity_map;
 
-/* struct HDF5_Header first_header; */
 extern struct HDF5_Header in_header;
+//struct HDF5_Header first_header;
 extern struct HDF5_Header output_header;
 extern struct geoStructure geoIn;
 
@@ -64,6 +62,5 @@ extern int		cutoff;								/* default to 0 */
 extern int		AVAILABLE_RAM_MiB;					/* default to 128 */
 extern int		detNum;								/* detector number, default to 0 */
 extern char	distortionPath[FILENAME_MAX];		/* full path to the distortion map */
-extern char	depthCorrectStr[FILENAME_MAX];		/* full path to the depth correction map */
 
 #endif
