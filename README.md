@@ -33,6 +33,7 @@ Prerequisites:
 - Python ≥ 3.12  
 - System libraries and tools: `[make, gcc, h5cc]`, GNU Scientific Library (GSL), HDF5 development libraries
 - Python dependencies: `numpy`, `pyyaml`, `h5py`, `mpi4py`
+- NOTE: The conda packaging is compatible only with linux. Many of the underlying dependencies aren't available for other system. 
 
 Install from source:
 
