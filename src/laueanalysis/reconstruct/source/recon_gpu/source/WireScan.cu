@@ -17,7 +17,6 @@ extern "C" {
 }
 
 cudaConstPara paraPassed;
-floatcudaConstPara floatparaPassed;
 ws_calibration calibration;
 ws_imaging_parameters imaging_parameters;
 ws_image_set image_set;
@@ -105,24 +104,24 @@ inline void GPUassert(cudaError_t code, char * file, int line, bool Abort=true)
 // to leading (or trailing) edge of the wire and intersects the incident beam.  The returned depth is relative to the Si position (origin) 
 // depth is measured along the incident beam from the origin, not just the z value.
 
-__device__ float device_pixel_xyz_to_depth(floatpoint_xyz pixelPos,               /* end point of ray, an xyz location on the detector */
-                                            floatpoint_xyz wire_position,          /* wire center, used to find the tangent point, has been PM500 corrected, origin subtracted, rotated by rho */
+__device__ double device_pixel_xyz_to_depth(doublepoint_xyz pixelPos,               /* end point of ray, an xyz location on the detector */
+                                            doublepoint_xyz wire_position,          /* wire center, used to find the tangent point, has been PM500 corrected, origin subtracted, rotated by rho */
                                             BOOLEAN use_leading_wire_edge,    /* which edge of wire are using here, TRUE for leading edge */
-                                            floatcudaConstPara paraPassed)
+                                            cudaConstPara paraPassed)
 {
 
    //point_xyz pixelPos;                     /* current pixel position */
-   floatpoint_xyz   ki;                           /* incident beam direction */
-   floatpoint_xyz   S;                            /* point where rays intersects incident beam */
-   float      pixel_to_wireCenter_y;        /* vector from pixel to wire center, y,z coordinates */
-   float      pixel_to_wireCenter_z;
-   float      pixel_to_wireCenter_len;      /* length of vector pixel_to_wireCenter (only y & z components) */
-   float      wire_radius;                  /* wire radius */
-   float      phi0;                         /* angle from yhat to wireCenter (measured at the pixel) */
-   float      dphi;                         /* angle between line from detector to centre of wire and to tangent of wire */
-   float      tanphi;                       /* phi is angle from yhat to tangent point on wire */
-   float      b_reflected;
-   float      depth;                        /* the result */
+   doublepoint_xyz   ki;                           /* incident beam direction */
+   doublepoint_xyz   S;                            /* point where rays intersects incident beam */
+   double      pixel_to_wireCenter_y;        /* vector from pixel to wire center, y,z coordinates */
+   double      pixel_to_wireCenter_z;
+   double      pixel_to_wireCenter_len;      /* length of vector pixel_to_wireCenter (only y & z components) */
+   double      wire_radius;                  /* wire radius */
+   double      phi0;                         /* angle from yhat to wireCenter (measured at the pixel) */
+   double      dphi;                         /* angle between line from detector to centre of wire and to tangent of wire */
+   double      tanphi;                       /* phi is angle from yhat to tangent point on wire */
+   double      b_reflected;
+   double      depth;                        /* the result */
 
    /* change coordinate system so that wire axis lies along {1,0,0}, a rotated system */
 
@@ -157,10 +156,10 @@ __device__ float device_pixel_xyz_to_depth(floatpoint_xyz pixelPos,             
 
 /* convert index of a depth resolved image to its depth along the beam (micron) */
 /* this is the depth of the center of the bin */
-__device__ float device_index_to_beam_depth(long index, floatcudaConstPara paraPassed)                  /* index to depth resolved images */
+__device__ double device_index_to_beam_depth(long index, cudaConstPara paraPassed)                  /* index to depth resolved images */
 {
 
-	float absolute_depth = index * paraPassed.UPDEPTHR; //user_preferences.depth_resolution==1
+	double absolute_depth = index * paraPassed.UPDEPTHR; //user_preferences.depth_resolution==1
    absolute_depth += paraPassed.UPDEPTHS;
    return absolute_depth;
 
@@ -170,11 +169,11 @@ __device__ float device_index_to_beam_depth(long index, floatcudaConstPara paraP
 
 /* for a trapezoid of max height 1, find the actual height at x=depth, y=0 outside of [partial_start,partial_end] & y=1 in [full_start,full_end] */
 /* the order of the conditionals was chosen by their likelihood, the most likely test should come first, the least likely last. */
-__device__ float device_get_trapezoid_height(float   partial_start,          /* first depth where trapezoid becomes non-zero */
-											float   partial_end,            /* last depth where trapezoid is non-zero */
-											float   full_start,             /* first depth of the flat top */
-											float   full_end,               /* last depth of the flat top */
-											float   depth)                  /* depth we want the value for */
+__device__ double device_get_trapezoid_height(double   partial_start,          /* first depth where trapezoid becomes non-zero */
+											double   partial_end,            /* last depth where trapezoid is non-zero */
+											double   full_start,             /* first depth of the flat top */
+											double   full_end,               /* last depth of the flat top */
+											double   depth)                  /* depth we want the value for */
 {
 
    if ( depth <= partial_start || depth >= partial_end ) return 0;                              /* depth is outside trapezoid */
@@ -206,14 +205,14 @@ __device__ double device_atomicAdd(double* address, double val)
 
 __device__ void device_add_pixel_intensity_at_index(size_t i,                      /* indicies to pixel, relative to the full stored image, range is (xdim,ydim) */
                                                     size_t j,
-													float intensity,              /* intensity to add */
+													double intensity,              /* intensity to add */
                                                     long index,
-													float *image_depth,
-													float *image_depth_intensity,
+													double *image_depth,
+													double *image_depth_intensity,
                                                     size_t step,
                                                     int DATAXSIZE,
                                                     int DATAYSIZE,
-                                                    floatcudaConstPara paraPassed)                      /* depth index */
+                                                    cudaConstPara paraPassed)                      /* depth index */
 {
 
    #ifdef DEBUG_1_PIXEL
@@ -224,13 +223,9 @@ __device__ void device_add_pixel_intensity_at_index(size_t i,                   
 
    int offset= i+j*DATAXSIZE+index*DATAXSIZE*DATAYSIZE;
 
-   //device_atomicAdd(&image_depth[offset],intensity);
+   device_atomicAdd(&image_depth[offset],intensity);
 
-   //device_atomicAdd(&image_depth_intensity[index],intensity);
-
-   atomicAdd(&image_depth[offset],intensity);
-
-   atomicAdd(&image_depth_intensity[index],intensity);
+   device_atomicAdd(&image_depth_intensity[index],intensity);
 
 }
 
@@ -239,25 +234,25 @@ __device__ void device_add_pixel_intensity_at_index(size_t i,                   
 /* Given the difference intensity at one pixel for two wire positions, distribute the difference intensity into the depth histogram */
 /* This routine only tests for zero pixel_intensity, it does not avoid negative intensities,  this routine can accumulate negative intensities. */
 /* This routine assumes that the wire is moving "forward" */
-__device__ void device_depth_resolve_pixel(float pixel_intensity,          /* difference of the intensity at the two wire positions */
+__device__ void device_depth_resolve_pixel(double pixel_intensity,          /* difference of the intensity at the two wire positions */
                                            size_t   i,                      /* indicies to the the pixel being processed, relative to the full stored image, range is (xdim,ydim) */
                                            size_t   j,
                                            size_t step,
-										   float partial_start,
-										   float partial_end,
-										   float full_start,
-										   float full_end,
+										   double partial_start,
+										   double partial_end,
+										   double full_start,
+										   double full_end,
                                            BOOLEAN use_leading_wire_edge, 
-										   float *image_depth,
-										   float *image_depth_intensity,
+										   double *image_depth,
+										   double *image_depth_intensity,
                                            int DATAXSIZE,
                                            int DATAYSIZE,
-                                           floatcudaConstPara paraPassed)                   /* true=(use leading endge of wire), false=(use trailing edge of wire) */
+                                           cudaConstPara paraPassed)                   /* true=(use leading endge of wire), false=(use trailing edge of wire) */
 {
 
-   float   area;                     /* area of trapezoid */
-   float   maxDepth;                 /* depth of deepest reconstructed image (micron) */
-   float   dDepth;                   /* local version of user_preferences.depth_resolution */
+   double   area;                     /* area of trapezoid */
+   double   maxDepth;                 /* depth of deepest reconstructed image (micron) */
+   double   dDepth;                   /* local version of user_preferences.depth_resolution */
    long     m;                        /* index to depth */
 
    //if (pixel_intensity==0) return;   /* do not process pixels without intensity */
@@ -279,7 +274,7 @@ __device__ void device_depth_resolve_pixel(float pixel_intensity,          /* di
    //full_end = pixel_xyz_to_depth(front_edge, wire_position_2, use_leading_wire_edge);
 
    if (full_end < full_start) {		/* in case mid points are backwards, ensure proper order by swapping */
-      float swap;
+      double swap;
       swap = full_end;
       full_end = full_start;
       full_start = swap;
@@ -300,9 +295,9 @@ __device__ void device_depth_resolve_pixel(float pixel_intensity,          /* di
    if (verbosePixel) printf("\n\ttrapezoid over range (% .3f, % .3f) micron == image index[%ld, %ld],  area=%g",partial_start,partial_end,start_index,end_index,area);
    #endif
 
-   float area_in_range = 0;
-   float depth_1, depth_2, height_1, height_2;						/* one part of the trapezoid that overlaps the current bin */
-   float depth_i, depth_i1;												/* depth range of depth bin i */
+   double area_in_range = 0;
+   double depth_1, depth_2, height_1, height_2;						/* one part of the trapezoid that overlaps the current bin */
+   double depth_i, depth_i1;												/* depth range of depth bin i */
    for (m = start_index; m <= end_index; m++) {						/* loop over possible depth indicies (m is index to depth-resolved image) */
       area_in_range = 0;
       depth_i = device_index_to_beam_depth(m, paraPassed) - (dDepth*0.5);	/* ends of current depth bin */
@@ -338,20 +333,20 @@ __device__ void device_depth_resolve_pixel(float pixel_intensity,          /* di
 /*---------------------------------------------------------------------------*/
 
 // device function to set the 3D volume for front edge trailing or back edge trailing
-__global__ void setOne(float *gsl,
-                       float *edge,
-                       float *intensity,
-                       floatpoint_xyz *firstedge,
+__global__ void setOne(double *gsl,
+                       double *edge,
+                       double *intensity,
+                       doublepoint_xyz *firstedge,
                        int d_cutoff,
-                       floatpoint_xyz *gpuPointArray,
-					   float maxDepth,
-					   float *image_depth,
-					   float *image_depth_intensity,
+                       doublepoint_xyz *gpuPointArray,
+					   double maxDepth,
+					   double *image_depth,
+					   double *image_depth_intensity,
                        int wire_edge,
                        int DATAXSIZE,
                        int DATAYSIZE,
                        int DATAZSIZE,
-                       floatcudaConstPara paraPassed)
+                       cudaConstPara paraPassed)
 {
 
    unsigned idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -365,20 +360,20 @@ __global__ void setOne(float *gsl,
       if ( intensity [instensity_offset] < d_cutoff) return;
          if ( gsl[gsl_offset] == 0) return;
 
-         	float diff_value = gsl[gsl_offset];
+         	double diff_value = gsl[gsl_offset];
 
-         	float partial_start;
-         	float partial_end;
-         	float full_start;
-         	float full_end;
+         	double partial_start;
+         	double partial_end;
+         	double full_start;
+         	double full_end;
 
             partial_start = 0;
             partial_end = 0;
             full_start = 0;
             full_end = 0;
 
-            floatpoint_xyz back_edge;
-            floatpoint_xyz front_edge;
+            doublepoint_xyz back_edge;
+            doublepoint_xyz front_edge;
 
             if(idy== 0)
             {
@@ -416,19 +411,19 @@ __global__ void setOne(float *gsl,
 /*---------------------------------------------------------------------------*/
 
 // device function to set the 3D volume for both the edge trailing
-__global__ void setTwo(float *gsl,
-					   float *edge,
-		               float *intensity,
-                       floatpoint_xyz *firstedge,
+__global__ void setTwo(double *gsl,
+					   double *edge,
+		               double *intensity,
+                       doublepoint_xyz *firstedge,
                        int d_cutoff,
-                       floatpoint_xyz *gpuPointArray,
-                       float maxDepth,
-                       float *image_depth,
-                       float *image_depth_intensity,
+                       doublepoint_xyz *gpuPointArray,
+                       double maxDepth,
+                       double *image_depth,
+                       double *image_depth_intensity,
                        int DATAXSIZE,
                        int DATAYSIZE,
                        int DATAZSIZE,
-                       floatcudaConstPara paraPassed)
+                       cudaConstPara paraPassed)
 {
 
    unsigned idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -442,12 +437,12 @@ __global__ void setTwo(float *gsl,
       if ( intensity [instensity_offset] < d_cutoff) return;
          if ( gsl[gsl_offset] == 0) return;
 
-            float diff_value = gsl[gsl_offset];
+            double diff_value = gsl[gsl_offset];
 
-            float partial_start[2];
-            float partial_end[2];
-            float full_start[2];
-            float full_end[2];
+            double partial_start[2];
+            double partial_end[2];
+            double full_start[2];
+            double full_end[2];
 
             partial_start[0] = partial_start[1] =  0;
             partial_end[0] = partial_end[1] = 0;
@@ -456,8 +451,8 @@ __global__ void setTwo(float *gsl,
 
             int wire_edge[2];
 
-            floatpoint_xyz back_edge;
-            floatpoint_xyz front_edge;
+            doublepoint_xyz back_edge;
+            doublepoint_xyz front_edge;
 
             if(idy== 0)
             {
@@ -1135,23 +1130,23 @@ int i_stop)				/* final row of this stripe*/
 	point_xyz front_edge;					/* xyz coords of the front edge of a pixel */
 	point_xyz back_edge;					/* xyz coords of the back edge of a pixel */
 //	double	diff_value;						/* intensity difference between two wire steps for a pixel */
-	floatdvector pixel_values;					/* vector to hold one pixel's values at all depths */
+	doubledvector pixel_values;					/* vector to hold one pixel's values at all depths */
 	long	step;							/* index over the input images */
 	size_t	idep;							/* index into depths */
 	int i,j;							/* loop indicies */
 
-   float dDepth;
-   float maxDepth;
+   double dDepth;
+   double maxDepth;
 
    //cudaSetDevice(videoCardNo);
 
-   floatparaPassed.CKIX = (float)calibration.wire.ki.x;
-   floatparaPassed.CKIY = (float)calibration.wire.ki.y;
-   floatparaPassed.CKIZ = (float)calibration.wire.ki.z;
-   floatparaPassed.UPDEPTHS = (float)user_preferences.depth_start;
-   floatparaPassed.UPDEPTHR = (float)user_preferences.depth_resolution;
-   floatparaPassed.IMDEPTHSIXE = (float)image_set.depth_resolved.size;
-   floatparaPassed.CWIREDIAMETER = (float)calibration.wire.diameter;
+   paraPassed.CKIX = (double)calibration.wire.ki.x;
+   paraPassed.CKIY = (double)calibration.wire.ki.y;
+   paraPassed.CKIZ = (double)calibration.wire.ki.z;
+   paraPassed.UPDEPTHS = (double)user_preferences.depth_start;
+   paraPassed.UPDEPTHR = (double)user_preferences.depth_resolution;
+   paraPassed.IMDEPTHSIXE = (double)image_set.depth_resolved.size;
+   paraPassed.CWIREDIAMETER = (double)calibration.wire.diameter;
 
    pixel_values.size = pixel_values.alloc = imaging_parameters.NinputImages - 1 - 1;
    //pixel_values.v = (double*)calloc(pixel_values.alloc,sizeof(double));          /* allocate space for array of doubles in the vector */
@@ -1165,8 +1160,8 @@ int i_stop)				/* final row of this stripe*/
    verbosePixel = 0;
    #endif
 
-   dDepth = (float)user_preferences.depth_resolution;                                            /* just a local copy */
-   maxDepth = (float)(dDepth*(image_set.depth_resolved.size- 1) + user_preferences.depth_start);   /* max reconstructed depth (mciron) */
+   dDepth = (double)user_preferences.depth_resolution;                                            /* just a local copy */
+   maxDepth = (double)(dDepth*(image_set.depth_resolved.size- 1) + user_preferences.depth_start);   /* max reconstructed depth (mciron) */
 
    int gpustop= i_stop - imaging_parameters.current_selection_start;
 
@@ -1178,21 +1173,21 @@ int i_stop)				/* final row of this stripe*/
    const dim3 blockSize(BLKXSIZE, BLKYSIZE, BLKZSIZE);
    const dim3 gridSize(((nx+BLKXSIZE-1)/BLKXSIZE), ((ny+BLKYSIZE-1)/BLKYSIZE), ((nz+BLKZSIZE-1)/BLKZSIZE));
 
-   float *c;
-   float *c1;
-   float *intensity;
-   floatpoint_xyz *backedge1;
-   float *image_depth;
-   float *image_depth_intensity;   //image_set.depth_intensity.v
+   double *c;
+   double *c1;
+   double *intensity;
+   doublepoint_xyz *backedge1;
+   double *image_depth;
+   double *image_depth_intensity;   //image_set.depth_intensity.v
 
 
    // allocate storage for c, c1, intensity, image_depth
-   if ((c = (float *)malloc(nx*ny*nz*sizeof(float))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
-   if ((c1 = (float *)malloc((nx*ny*3)*sizeof(float))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
-   if ((intensity = (float *)malloc((nx*ny*1)*sizeof(float))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
-   if ((backedge1 = (floatpoint_xyz *)malloc(nx*sizeof(floatpoint_xyz))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
-   if ((image_depth = (float *)malloc((nx*ny*user_preferences.NoutputDepths)*sizeof(float))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
-   if ((image_depth_intensity = (float *)malloc(user_preferences.NoutputDepths*sizeof(float))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   if ((c = (double *)malloc(nx*ny*nz*sizeof(double))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   if ((c1 = (double *)malloc((nx*ny*3)*sizeof(double))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   if ((intensity = (double *)malloc((nx*ny*1)*sizeof(double))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   if ((backedge1 = (doublepoint_xyz *)malloc(nx*sizeof(doublepoint_xyz))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   if ((image_depth = (double *)malloc((nx*ny*user_preferences.NoutputDepths)*sizeof(double))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   if ((image_depth_intensity = (double *)malloc(user_preferences.NoutputDepths*sizeof(double))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
 
 
    // Initialize the host data structures
@@ -1200,11 +1195,11 @@ int i_stop)				/* final row of this stripe*/
    for (step = 0; step < (size_t)(pixel_values.size-1); step++)
       for (j = 0; j < (size_t)imaging_parameters.nROI_j; j++)
          for (i = 0; i <= (size_t)gpustop; i++)
-            c[i+j*nx+step*nx*ny] = (float)gsl_matrix_get((const gsl_matrix *)image_set.wire_scanned.v[step], i , j);
+            c[i+j*nx+step*nx*ny] = (double)gsl_matrix_get((const gsl_matrix *)image_set.wire_scanned.v[step], i , j);
 
    for (j = 0; j < (size_t)imaging_parameters.nROI_j; j++)
       for (i = 0; i <= (size_t)gpustop; i++)
-         intensity[i+j*nx] = (float)gsl_matrix_get(intensity_map, (i+i_start), j);
+         intensity[i+j*nx] = (double)gsl_matrix_get(intensity_map, (i+i_start), j);
 
    for (step=0; step < (size_t)(user_preferences.NoutputDepths); step++)
       for (j=0; j < (size_t)imaging_parameters.nROI_j; j++)
@@ -1217,28 +1212,28 @@ int i_stop)				/* final row of this stripe*/
    }
 
    // Delcare the device data structures
-   float *d_c;	// storage for result computed on device
-   float *d_c1;
-   floatpoint_xyz *d_backedge1;
+   double *d_c;	// storage for result computed on device
+   double *d_c1;
+   doublepoint_xyz *d_backedge1;
 
-   float *d_intensity;
-   float *d_image_depth;	//image_set.depth_resolved.v[index]
+   double *d_intensity;
+   double *d_image_depth;	//image_set.depth_resolved.v[index]
 
-   float *d_image_depth_intensity;
+   double *d_image_depth_intensity;
 
 
    //allocate GPU device buffers
-   cudaMalloc((void **) &d_c, (nx*ny*nz)*sizeof(float));
-   cudaMalloc((void **) &d_c1, (nx*ny*3)*sizeof(float));
-   cudaMalloc((void **) &d_intensity, (nx*ny*1)*sizeof(float));
-   cudaMalloc((void **) &d_backedge1, nx*sizeof(floatpoint_xyz));
-   cudaMalloc((void **) &d_image_depth, (nx*ny*user_preferences.NoutputDepths)*sizeof(float));
-   cudaMalloc((void **) &d_image_depth_intensity, (user_preferences.NoutputDepths)*sizeof(float));
+   cudaMalloc((void **) &d_c, (nx*ny*nz)*sizeof(double));
+   cudaMalloc((void **) &d_c1, (nx*ny*3)*sizeof(double));
+   cudaMalloc((void **) &d_intensity, (nx*ny*1)*sizeof(double));
+   cudaMalloc((void **) &d_backedge1, nx*sizeof(doublepoint_xyz));
+   cudaMalloc((void **) &d_image_depth, (nx*ny*user_preferences.NoutputDepths)*sizeof(double));
+   cudaMalloc((void **) &d_image_depth_intensity, (user_preferences.NoutputDepths)*sizeof(double));
    cudaCheckErrors("Failed to allocate device buffer");
 
-   const float value = 0.0;
-   cudaMemset(d_image_depth,value,(nx*ny*user_preferences.NoutputDepths)*sizeof(float)); // Set the initial value to 0
-   cudaMemset(d_image_depth_intensity,value,(user_preferences.NoutputDepths)*sizeof(float)); // Set the initial value to 0
+   const double value = 0.0;
+   cudaMemset(d_image_depth,value,(nx*ny*user_preferences.NoutputDepths)*sizeof(double)); // Set the initial value to 0
+   cudaMemset(d_image_depth_intensity,value,(user_preferences.NoutputDepths)*sizeof(double)); // Set the initial value to 0
 
       for (i = i_start; i <= (size_t)i_stop; i++) {                           /* loop over selected part of i */
          pixel_edge.i = (double)i;
@@ -1248,9 +1243,9 @@ int i_stop)				/* final row of this stripe*/
                pixel_edge.j = 0.5 + (double)(j - 1);
                back_edge = pixel_to_point_xyz(pixel_edge);
                back_edge = MatrixMultiply31(calibration.wire.rho,back_edge);
-               backedge1[i-i_start].x=(float)back_edge.x;
-               backedge1[i-i_start].y=(float)back_edge.y;
-               backedge1[i-i_start].z=(float)back_edge.z;
+               backedge1[i-i_start].x=(double)back_edge.x;
+               backedge1[i-i_start].y=(double)back_edge.y;
+               backedge1[i-i_start].z=(double)back_edge.z;
             }
             else
             {
@@ -1261,50 +1256,50 @@ int i_stop)				/* final row of this stripe*/
          front_edge = pixel_to_point_xyz(pixel_edge);									/* the front edge of this pixel */
          front_edge = MatrixMultiply31(calibration.wire.rho,front_edge);
 
-         c1[i-i_start+j*nx]= (float)front_edge.x;
-         c1[i-i_start+j*nx+nx*ny]= (float)front_edge.y;
-         c1[i-i_start+j*nx+2*nx*ny]= (float)front_edge.z;
+         c1[i-i_start+j*nx]= (double)front_edge.x;
+         c1[i-i_start+j*nx+nx*ny]= (double)front_edge.y;
+         c1[i-i_start+j*nx+2*nx*ny]= (double)front_edge.z;
       }
    }
 
-   cudaMemcpy(d_c, c, ((nx*ny*nz)*sizeof(float)), cudaMemcpyHostToDevice);
-   cudaMemcpy(d_c1, c1, ((nx*ny*3)*sizeof(float)), cudaMemcpyHostToDevice);
-   cudaMemcpy(d_intensity, intensity, ((nx*ny*1)*sizeof(float)), cudaMemcpyHostToDevice);
-   cudaMemcpy(d_backedge1, backedge1, nx*sizeof(floatpoint_xyz), cudaMemcpyHostToDevice);
+   cudaMemcpy(d_c, c, ((nx*ny*nz)*sizeof(double)), cudaMemcpyHostToDevice);
+   cudaMemcpy(d_c1, c1, ((nx*ny*3)*sizeof(double)), cudaMemcpyHostToDevice);
+   cudaMemcpy(d_intensity, intensity, ((nx*ny*1)*sizeof(double)), cudaMemcpyHostToDevice);
+   cudaMemcpy(d_backedge1, backedge1, nx*sizeof(doublepoint_xyz), cudaMemcpyHostToDevice);
 
-   floatpoint_xyz *d_gpuPointArray;
-   cudaMalloc((void**)&d_gpuPointArray, pixel_values.size*sizeof(floatpoint_xyz));
+   doublepoint_xyz *d_gpuPointArray;
+   cudaMalloc((void**)&d_gpuPointArray, pixel_values.size*sizeof(doublepoint_xyz));
 
-   floatpoint_xyz *gpuPointArray;
-   if ((gpuPointArray = (floatpoint_xyz *)malloc(pixel_values.size*sizeof(floatpoint_xyz))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
+   doublepoint_xyz *gpuPointArray;
+   if ((gpuPointArray = (doublepoint_xyz *)malloc(pixel_values.size*sizeof(doublepoint_xyz))) == 0) {fprintf(stderr,"malloc1 Fail \n"); return;}
 
    for(int index = 0; index < pixel_values.size; index++)
    {
-	   gpuPointArray[index].x = (float)image_set.wire_positions.v[index].x;
-	   gpuPointArray[index].y = (float)image_set.wire_positions.v[index].y;
-	   gpuPointArray[index].z = (float)image_set.wire_positions.v[index].z;
+	   gpuPointArray[index].x = (double)image_set.wire_positions.v[index].x;
+	   gpuPointArray[index].y = (double)image_set.wire_positions.v[index].y;
+	   gpuPointArray[index].z = (double)image_set.wire_positions.v[index].z;
    }
 
-   cudaMemcpy(d_gpuPointArray, gpuPointArray, pixel_values.size*sizeof(floatpoint_xyz), cudaMemcpyHostToDevice);
+   cudaMemcpy(d_gpuPointArray, gpuPointArray, pixel_values.size*sizeof(doublepoint_xyz), cudaMemcpyHostToDevice);
 
-//   cudaMemcpy(d_gpuPointArray, image_set.wire_positions.v, pixel_values.size*sizeof(floatpoint_xyz), cudaMemcpyHostToDevice);
+//   cudaMemcpy(d_gpuPointArray, image_set.wire_positions.v, pixel_values.size*sizeof(doublepoint_xyz), cudaMemcpyHostToDevice);
    cudaCheckErrors("Cuda copy failure");
 
    //using both leading and trailing edges of the wire
    if (user_preferences.wireEdge<0)
    {
-      setTwo<<<gridSize,blockSize>>>(d_c, d_c1, d_intensity, d_backedge1, cutoff, d_gpuPointArray, maxDepth, d_image_depth, d_image_depth_intensity, nx, ny, nz, floatparaPassed);
+      setTwo<<<gridSize,blockSize>>>(d_c, d_c1, d_intensity, d_backedge1, cutoff, d_gpuPointArray, maxDepth, d_image_depth, d_image_depth_intensity, nx, ny, nz, paraPassed);
    }
 /*   else if (user_preferences.wireEdge && diff_value>0 || !(user_preferences.wireEdge) && diff_value<0) {*/
    else
    {
-      setOne<<<gridSize,blockSize>>>(d_c, d_c1, d_intensity, d_backedge1, cutoff, d_gpuPointArray, maxDepth, d_image_depth, d_image_depth_intensity, user_preferences.wireEdge, nx, ny, nz, floatparaPassed);
+      setOne<<<gridSize,blockSize>>>(d_c, d_c1, d_intensity, d_backedge1, cutoff, d_gpuPointArray, maxDepth, d_image_depth, d_image_depth_intensity, user_preferences.wireEdge, nx, ny, nz, paraPassed);
    }
 
    cudaCheckErrors("Kernel launch failure");
 
-   cudaMemcpy(image_depth, d_image_depth, ((nx*ny*user_preferences.NoutputDepths)*sizeof(float)), cudaMemcpyDeviceToHost);
-   cudaMemcpy(image_depth_intensity, d_image_depth_intensity, ((user_preferences.NoutputDepths)*sizeof(float)), cudaMemcpyDeviceToHost);
+   cudaMemcpy(image_depth, d_image_depth, ((nx*ny*user_preferences.NoutputDepths)*sizeof(double)), cudaMemcpyDeviceToHost);
+   cudaMemcpy(image_depth_intensity, d_image_depth_intensity, ((user_preferences.NoutputDepths)*sizeof(double)), cudaMemcpyDeviceToHost);
    cudaCheckErrors("CUDA memcpy failure");
 
    double *d;

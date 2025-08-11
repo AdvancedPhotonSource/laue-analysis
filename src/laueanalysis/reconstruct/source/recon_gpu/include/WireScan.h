@@ -29,19 +29,6 @@ typedef struct
 
 extern cudaConstPara paraPassed;
 
-typedef struct
-{
-   float CKIX;
-   float CKIY;
-   float CKIZ;
-   float UPDEPTHS;
-   float UPDEPTHR;
-   float IMDEPTHSIXE;
-   float CWIREDIAMETER;
-}floatcudaConstPara;
-
-extern floatcudaConstPara floatparaPassed;
-
 
 /* data structures containing information for the wire scan */
 extern ws_calibration calibration;
