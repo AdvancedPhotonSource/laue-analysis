@@ -4,7 +4,6 @@ MPI runner for functional indexing interface.
 import os
 import yaml
 from datetime import datetime
-import fire
 from mpi4py import MPI
 
 from laueanalysis.indexing import index
@@ -50,6 +49,3 @@ def run_mpi(config=None):
     if rank == 0:
         print(f'runtime is {datetime.now() - start}')
 
-
-if __name__ == '__main__':
-    fire.Fire(run_mpi)
