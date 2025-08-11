@@ -10,10 +10,10 @@ typedef struct {	/* standard R3 coordinate system. */
 } point_xyz;
 
 typedef struct {	/* standard R3 coordinate system. */
-	float x;
-	float y;
-	float z;
-} floatpoint_xyz;
+	double x;
+	double y;
+	double z;
+} doublepoint_xyz;
 
 typedef struct {	/* detector coordinate system */
 	double i;
@@ -21,9 +21,9 @@ typedef struct {	/* detector coordinate system */
 } point_ccd;
 
 typedef struct {	/* detector coordinate system */
-	float i;
-	float j;
-} floatpoint_ccd;
+	double i;
+	double j;
+} doublepoint_ccd;
 
 typedef struct		/* a structured vector of doubles */
 {
@@ -36,8 +36,8 @@ typedef struct		/* a structured vector of doubles */
 {
 	size_t	size;			/* length of vector, how much space is allocated */
 	size_t	alloc;			/* length of vector allocated, alloc >= size */
-	float	*v;				/* pointer to the vector data */
-} floatdvector;
+	double	*v;				/* pointer to the vector data */
+} doubledvector;
 
 typedef struct		/* a structured vector of point_xyz */
 {
