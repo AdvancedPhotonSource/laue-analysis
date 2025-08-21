@@ -301,6 +301,43 @@ def _parse_indexing_output(index_file: str) -> int:
         return 0
 
 
+def _override_depth_in_peaks(peaks_file: str, depth_value: float) -> None:
+    """
+    Override or insert the $depth header line in a peaks file so downstream pixels2qs
+    uses this value instead of what's in the HDF5.
+    """
+    try:
+        with open(peaks_file, "r") as f:
+            lines = f.read().splitlines()
+    except Exception as e:
+        raise RuntimeError(f"Failed to read peaks file for depth override: {e}")
+    replaced = False
+    # Replace existing $depth if present before the data table
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("$Npeaks") or stripped.startswith("$peakList"):
+            break
+        if stripped.startswith("$depth"):
+            lines[i] = f"$depth\t\t{depth_value}\t\t// depth for depth resolved images (micron)"
+            replaced = True
+            break
+    if not replaced:
+        # Insert before the first header separator line starting with //
+        insert_at = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("//"):
+                insert_at = i
+                break
+        if insert_at is None:
+            insert_at = 0
+        lines.insert(insert_at, f"$depth\t\t{depth_value}\t\t// depth for depth resolved images (micron)")
+    try:
+        with open(peaks_file, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception as e:
+        raise RuntimeError(f"Failed to write peaks file for depth override: {e}")
+
+
 def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           *,
           # Peak search parameters
@@ -323,6 +360,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           index_k: int = 0,
           index_l: int = 1,
           # General parameters
+          depth_override: Optional[float] = None,
           timeout: int = 300) -> IndexingResult:
     """
     Perform complete Laue indexing on an input image.
@@ -420,6 +458,14 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     peaks_file = str(peaks_files[0])
     output_files['peaks'] = peaks_file
     n_peaks_found = _parse_peaks_output(peaks_file)
+    # Optional: override depth header before pixels2qs step
+    if depth_override is not None:
+        try:
+            _override_depth_in_peaks(peaks_file, depth_override)
+            log_parts.append(f"Depth override applied: $depth = {depth_override}")
+            command_history.append(f"override_depth {peaks_file} -> {depth_override}")
+        except Exception as e:
+            log_parts.append(f"Depth override failed: {e}")
     
     # Only run p2q if we have peaks
     if n_peaks_found > 0:
