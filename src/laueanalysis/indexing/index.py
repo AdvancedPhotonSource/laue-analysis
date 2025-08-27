@@ -6,6 +6,7 @@ import subprocess
 import os
 import shutil
 import functools
+import re
 from importlib import resources
 
 from laueanalysis.indexing.lau_dataclasses.step import Step
@@ -258,19 +259,56 @@ def _run_indexing(p2q_file: str, output_dir: str,
 def _parse_peaks_output(peaks_file: str) -> int:
     """
     Parse peaks file to count number of peaks found.
-    
-    Args:
-        peaks_file: Path to peaks output file.
-        
-    Returns:
-        Number of peaks found.
+
+    Strategy:
+    - Prefer $peakList dims if present: "$peakList <params_per_peak> <n_peaks> ..."
+      e.g., "$peakList 8 13" means 13 peaks; "$peakList 8 0" means zero peaks.
+    - Otherwise, use explicit $Npeaks header if present.
+    - Otherwise, count numeric data rows following the $peakList header
+      until the next header/comment/blank line.
+    - Robust to files that use $-headers and // comments (not just #).
     """
     try:
-        with open(peaks_file, 'r') as f:
-            lines = f.readlines()
-            # Skip header lines and count data lines
-            data_lines = [line for line in lines if line.strip() and not line.startswith('#')]
-            return len(data_lines)
+        with open(peaks_file, "r") as f:
+            lines = f.read().splitlines()
+
+        # 1) Prefer $peakList dims: "$peakList <params_per_peak> <n_peaks> ..."
+        for line in lines:
+            m = re.match(r'^\s*\$peakList\s+(\d+)\s+(\d+)\b', line)
+            if m:
+                return int(m.group(2))
+
+        # 2) Next prefer explicit header: $Npeaks <int>
+        for line in lines:
+            m = re.match(r'^\s*\$Npeaks\s+(\d+)', line)
+            if m:
+                return int(m.group(1))
+
+        # 3) Fallback: count numeric rows after $peakList
+        in_table = False
+        count = 0
+        for line in lines:
+            s = line.strip()
+            if not s:
+                if in_table:
+                    break
+                continue
+            if s.startswith("$peakList"):
+                in_table = True
+                continue
+            if in_table:
+                # Stop if we hit another header/comment
+                if s.startswith("$") or s.startswith("#") or s.startswith("//"):
+                    break
+                # Count if the first token is numeric
+                parts = s.split()
+                try:
+                    float(parts[0])
+                    count += 1
+                except (ValueError, IndexError):
+                    # Non-numeric row signals end or malformed table
+                    break
+        return count
     except (FileNotFoundError, IOError):
         return 0
 
