@@ -456,6 +456,8 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     command_history = []
     log_parts = []
     output_files = {}
+    # Determine the base name for all expected outputs from this input
+    input_base = Path(input_image).stem
     
     # Step 1: Run peaksearch
     log_parts.append("Running peak search...")
@@ -476,10 +478,25 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     if not success:
         log_parts.append(f"Peak search had errors (return code {returncode}), but checking for output files...")
     
-    # Find peaks output file (typically peaks_*.txt)
-    peaks_files = list(subdirs['peaks'].glob('peaks_*.txt'))
-    if not peaks_files:
-        # Only fail if no output file was created at all
+    # Determine expected peaks output file for this image
+    expected_peaks = subdirs['peaks'] / f'peaks_{input_base}.txt'
+    if expected_peaks.is_file():
+        peaks_file = str(expected_peaks)
+    else:
+        globbed = list(subdirs['peaks'].glob('peaks_*.txt'))
+        if len(globbed) == 0:
+            return IndexingResult(
+                success=False,
+                output_files=output_files,
+                n_peaks_found=0,
+                n_indexed=0,
+                indexing_data=None,
+                step_data=None,
+                config=None,
+                log="\n".join(log_parts),
+                error="No peaks output file found - peak search completely failed",
+                command_history=command_history
+            )
         return IndexingResult(
             success=False,
             output_files=output_files,
@@ -489,11 +506,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             step_data=None,
             config=None,
             log="\n".join(log_parts),
-            error="No peaks output file found - peak search completely failed",
+            error=f"No specific peaks file found for this image: expected {expected_peaks.name}",
             command_history=command_history
         )
-    
-    peaks_file = str(peaks_files[0])
     output_files['peaks'] = peaks_file
     n_peaks_found = _parse_peaks_output(peaks_file)
     # Optional: override depth header before pixels2qs step
@@ -533,10 +548,12 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 command_history=command_history
             )
         
-        # Find p2q output file
-        p2q_files = list(subdirs['p2q'].glob('p2q_*.txt'))
-        if not p2q_files:
-            log_parts.append("No p2q output file found, skipping indexing...")
+        # Determine expected p2q output file for this image
+        expected_p2q = subdirs['p2q'] / f'p2q_{input_base}.txt'
+        if expected_p2q.is_file():
+            p2q_file = str(expected_p2q)
+        else:
+            log_parts.append(f"Expected p2q file {expected_p2q.name} not found, skipping indexing...")
             return IndexingResult(
                 success=True,  # Still success, just no indexing
                 output_files=output_files,
@@ -550,7 +567,6 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 command_history=command_history
             )
         
-        p2q_file = str(p2q_files[0])
         output_files['p2q'] = p2q_file
         
         # Only run indexing if we have at least 2 peaks
@@ -585,15 +601,15 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                     command_history=command_history
                 )
             
-            # Find indexing output file
-            index_files = list(subdirs['index'].glob('index_*.txt'))
-            if index_files:
-                index_file = str(index_files[0])
+            # Determine expected index output file for this image
+            expected_index = subdirs['index'] / f'index_{input_base}.txt'
+            if expected_index.is_file():
+                index_file = str(expected_index)
                 output_files['index'] = index_file
                 n_indexed = _parse_indexing_output(index_file)
             else:
                 n_indexed = 0
-                log_parts.append("No indexing output file found")
+                log_parts.append(f"No indexing output file found for expected file {expected_index.name}")
         else:
             log_parts.append(f"Only {n_peaks_found} peak(s) found, need at least 2 for indexing. Skipping indexing step.")
             n_indexed = 0

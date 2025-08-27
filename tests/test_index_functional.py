@@ -90,39 +90,40 @@ def test_index_function_with_mocked_executables(test_config_data, temp_image_fil
         mock_parse_peaks.return_value = 10  # Found 10 peaks
         mock_parse_index.return_value = 8   # Indexed 8 reflections
         
-        # Mock output files being created
-        def mock_glob(pattern):
-            if 'peaks_' in str(pattern):
-                return [Path(temp_output_dir) / 'peaks' / 'peaks_test.txt']
-            elif 'p2q_' in str(pattern):
-                return [Path(temp_output_dir) / 'p2q' / 'p2q_test.txt']
-            elif 'index_' in str(pattern):
-                return [Path(temp_output_dir) / 'index' / 'index_test.txt']
-            return []
+        # Create expected output files with deterministic names
+        base = Path(temp_image_file).stem
+        peaks_dir = Path(temp_output_dir) / 'peaks'
+        p2q_dir = Path(temp_output_dir) / 'p2q'
+        index_dir = Path(temp_output_dir) / 'index'
+        peaks_dir.mkdir(parents=True, exist_ok=True)
+        p2q_dir.mkdir(parents=True, exist_ok=True)
+        index_dir.mkdir(parents=True, exist_ok=True)
+        (peaks_dir / f'peaks_{base}.txt').write_text('')
+        (p2q_dir / f'p2q_{base}.txt').write_text('')
+        (index_dir / f'index_{base}.txt').write_text('')
         
-        with patch('pathlib.Path.glob', side_effect=mock_glob):
-            # Run the index function with parameters
-            result = index(
-                input_image=temp_image_file,
-                output_dir=temp_output_dir,
-                geo_file=test_config_data['geoFile'],
-                crystal_file=test_config_data['crystFile'],
-                boxsize=test_config_data['boxsize'],
-                max_rfactor=test_config_data['maxRfactor'],
-                min_size=test_config_data['min_size'],
-                min_separation=test_config_data['min_separation'],
-                threshold=test_config_data['threshold'],
-                peak_shape=test_config_data['peakShape'],
-                max_peaks=test_config_data['max_peaks'],
-                smooth=test_config_data['smooth'],
-                index_kev_max_calc=test_config_data['indexKeVmaxCalc'],
-                index_kev_max_test=test_config_data['indexKeVmaxTest'],
-                index_angle_tolerance=test_config_data['indexAngleTolerance'],
-                index_cone=test_config_data['indexCone'],
-                index_h=test_config_data['indexH'],
-                index_k=test_config_data['indexK'],
-                index_l=test_config_data['indexL']
-            )
+        # Run the index function with parameters
+        result = index(
+            input_image=temp_image_file,
+            output_dir=temp_output_dir,
+            geo_file=test_config_data['geoFile'],
+            crystal_file=test_config_data['crystFile'],
+            boxsize=test_config_data['boxsize'],
+            max_rfactor=test_config_data['maxRfactor'],
+            min_size=test_config_data['min_size'],
+            min_separation=test_config_data['min_separation'],
+            threshold=test_config_data['threshold'],
+            peak_shape=test_config_data['peakShape'],
+            max_peaks=test_config_data['max_peaks'],
+            smooth=test_config_data['smooth'],
+            index_kev_max_calc=test_config_data['indexKeVmaxCalc'],
+            index_kev_max_test=test_config_data['indexKeVmaxTest'],
+            index_angle_tolerance=test_config_data['indexAngleTolerance'],
+            index_cone=test_config_data['indexCone'],
+            index_h=test_config_data['indexH'],
+            index_k=test_config_data['indexK'],
+            index_l=test_config_data['indexL']
+        )
         
         # Verify the result
         assert isinstance(result, IndexingResult)
@@ -175,19 +176,18 @@ def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
         mock_run_cmd.return_value = (True, "Mock output", "", 0)
         mock_parse_peaks.return_value = 0  # No peaks found
         
-        # Mock peaks file exists but is empty
-        def mock_glob(pattern):
-            if 'peaks_' in str(pattern):
-                return [Path(temp_output_dir) / 'peaks' / 'peaks_test.txt']
-            return []
+        # Create expected peaks file (empty)
+        base = Path(temp_image_file).stem
+        peaks_dir = Path(temp_output_dir) / 'peaks'
+        peaks_dir.mkdir(parents=True, exist_ok=True)
+        (peaks_dir / f'peaks_{base}.txt').write_text('')
         
-        with patch('pathlib.Path.glob', side_effect=mock_glob):
-            result = index(
-                input_image=temp_image_file,
-                output_dir=temp_output_dir,
-                geo_file='/tmp/test_geo.xml',
-                crystal_file='/tmp/test_cryst.xml'
-            )
+        result = index(
+            input_image=temp_image_file,
+            output_dir=temp_output_dir,
+            geo_file='/tmp/test_geo.xml',
+            crystal_file='/tmp/test_cryst.xml'
+        )
         
         # Should still succeed but skip p2q and indexing
         assert result.success is True
@@ -217,21 +217,21 @@ def test_index_function_insufficient_peaks_for_indexing(temp_image_file, temp_ou
         mock_run_cmd.return_value = (True, "Mock output", "", 0)
         mock_parse_peaks.return_value = 1  # Only 1 peak found
         
-        # Mock output files being created for peaks and p2q, but not indexing
-        def mock_glob(pattern):
-            if 'peaks_' in str(pattern):
-                return [Path(temp_output_dir) / 'peaks' / 'peaks_test.txt']
-            elif 'p2q_' in str(pattern):
-                return [Path(temp_output_dir) / 'p2q' / 'p2q_test.txt']
-            return []
+        # Create expected peaks and p2q files
+        base = Path(temp_image_file).stem
+        peaks_dir = Path(temp_output_dir) / 'peaks'
+        p2q_dir = Path(temp_output_dir) / 'p2q'
+        peaks_dir.mkdir(parents=True, exist_ok=True)
+        p2q_dir.mkdir(parents=True, exist_ok=True)
+        (peaks_dir / f'peaks_{base}.txt').write_text('')
+        (p2q_dir / f'p2q_{base}.txt').write_text('')
         
-        with patch('pathlib.Path.glob', side_effect=mock_glob):
-            result = index(
-                input_image=temp_image_file,
-                output_dir=temp_output_dir,
-                geo_file='/tmp/test_geo.xml',
-                crystal_file='/tmp/test_cryst.xml'
-            )
+        result = index(
+            input_image=temp_image_file,
+            output_dir=temp_output_dir,
+            geo_file='/tmp/test_geo.xml',
+            crystal_file='/tmp/test_cryst.xml'
+        )
         
         # Should succeed, run p2q, but skip indexing
         assert result.success is True
@@ -265,19 +265,18 @@ def test_index_function_with_errors_continues_processing(temp_image_file, temp_o
         ]
         mock_parse_peaks.return_value = 5  # Found 5 peaks
         
-        # Mock peaks file exists (despite peaksearch error)
-        def mock_glob(pattern):
-            if 'peaks_' in str(pattern):
-                return [Path(temp_output_dir) / 'peaks' / 'peaks_test.txt']
-            return []
+        # Create expected peaks file (despite peaksearch error)
+        base = Path(temp_image_file).stem
+        peaks_dir = Path(temp_output_dir) / 'peaks'
+        peaks_dir.mkdir(parents=True, exist_ok=True)
+        (peaks_dir / f'peaks_{base}.txt').write_text('')
         
-        with patch('pathlib.Path.glob', side_effect=mock_glob):
-            result = index(
-                input_image=temp_image_file,
-                output_dir=temp_output_dir,
-                geo_file='/tmp/test_geo.xml',
-                crystal_file='/tmp/test_cryst.xml'
-            )
+        result = index(
+            input_image=temp_image_file,
+            output_dir=temp_output_dir,
+            geo_file='/tmp/test_geo.xml',
+            crystal_file='/tmp/test_cryst.xml'
+        )
         
         # Should still succeed (graceful degradation)
         assert result.success is True
@@ -306,20 +305,17 @@ def test_index_function_default_config():
         mock_run_cmd.return_value = (True, "Mock output", "", 0)
         mock_parse_peaks.return_value = 0
         
-        # Mock output files
-        def mock_glob(pattern):
-            if 'peaks_' in str(pattern):
-                return [Path('/tmp/output/peaks/peaks_test.txt')]
-            return []
+        # Create expected output file for defaults
+        Path('/tmp/output/peaks').mkdir(parents=True, exist_ok=True)
+        Path('/tmp/output/peaks/peaks_test.txt').write_text('')
         
-        with patch('pathlib.Path.glob', side_effect=mock_glob):
-            result = index(
-                input_image='/tmp/test.h5',
-                output_dir='/tmp/output',
-                geo_file='/tmp/geo.xml',
-                crystal_file='/tmp/crystal.xml'
-                # No config provided - should use defaults
-            )
+        result = index(
+            input_image='/tmp/test.h5',
+            output_dir='/tmp/output',
+            geo_file='/tmp/geo.xml',
+            crystal_file='/tmp/crystal.xml'
+            # No config provided - should use defaults
+        )
         
         # Should succeed with defaults
         assert result.success is True
@@ -346,11 +342,11 @@ def test_index_function_complete_failure():
         
         mock_run_cmd.return_value = (False, "", "Command failed", 1)
         
-        # Mock no output files created
-        with patch('pathlib.Path.glob', return_value=[]):
+        # Use a unique temporary output directory and do not create any peaks files
+        with tempfile.TemporaryDirectory() as temp_dir:
             result = index(
                 input_image='/tmp/test.h5',
-                output_dir='/tmp/output',
+                output_dir=temp_dir,
                 geo_file='/tmp/geo.xml',
                 crystal_file='/tmp/crystal.xml'
             )
