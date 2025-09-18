@@ -185,7 +185,7 @@ def reconstruct(
     verbose: int = 1,
     percent_brightest: float = 100.0,
     wire_edge: str = 'leading',
-    memory_limit_mb: int = 128,
+    memory_limit_mb: int = 8192,
     executable: Optional[str] = None,
     timeout: int = 7200,
     # Advanced options
@@ -214,7 +214,7 @@ def reconstruct(
         verbose: Verbosity level 0-3 (default 1)
         percent_brightest: Process only N% brightest pixels (default 100)
         wire_edge: Wire edge to use - 'leading', 'trailing', or 'both' (default 'leading')
-        memory_limit_mb: Memory limit in MB (default 128)
+        memory_limit_mb: Memory limit in MB (default 8192)
         executable: Optional path to executable (default: auto-detect)
         timeout: Timeout in seconds (default 7200 = 2 hours)
         normalization: Optional normalization tag
@@ -314,7 +314,7 @@ def reconstruct_gpu(
     verbose: int = 1,
     percent_brightest: float = 100.0,
     wire_edge: str = 'leading',
-    memory_limit_mb: int = 128,
+    memory_limit_mb: int = 8192,
     executable: Optional[str] = None,
     timeout: int = 7200,
     # Advanced options
@@ -343,7 +343,7 @@ def reconstruct_gpu(
         verbose: Verbosity level 0-3 (default 1)
         percent_brightest: Process only N% brightest pixels (default 100)
         wire_edge: Wire edge to use - 'leading', 'trailing', or 'both' (default 'leading')
-        memory_limit_mb: Memory limit in MB (default 128)
+        memory_limit_mb: Memory limit in MB (default 8192)
         executable: Optional path to executable (default: auto-detect)
         timeout: Timeout in seconds (default 7200 = 2 hours)
         normalization: Optional normalization tag
