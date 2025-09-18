@@ -129,6 +129,7 @@ def worker_cpu(i: int,
                resolution: float,
                verbose: int,
                num_threads: int,
+               memory_limit_mb: int,
                percent_brightest: float) -> dict:
     t0 = time.perf_counter()
     res = reconstruct(
@@ -137,6 +138,7 @@ def worker_cpu(i: int,
         geometry_file=geometry,
         depth_range=(depth_start, depth_end),
         resolution=resolution,
+        memory_limit_mb=memory_limit_mb, 
         verbose=verbose,
         percent_brightest=percent_brightest,
         num_threads=num_threads,
@@ -160,6 +162,7 @@ def worker_gpu(i: int,
                depth_end: float,
                resolution: float,
                verbose: int,
+               memory_limit_mb: int,
                percent_brightest: float) -> dict:
     t0 = time.perf_counter()
     res = reconstruct_gpu(
@@ -170,6 +173,7 @@ def worker_gpu(i: int,
         resolution=resolution,
         verbose=verbose,
         percent_brightest=percent_brightest,
+        memory_limit_mb=memory_limit_mb, 
     )
     t1 = time.perf_counter()
     return {
@@ -213,6 +217,7 @@ def run_matrix_cpu(args, replicas: List[Path], results_path: Path) -> None:
                                 args.depth_start, args.depth_end,
                                 args.resolution, args.verbose,
                                 threads,
+                                args.memory_limit_mb,
                                 args.percent_brightest,
                             )
                             for (i, inpath, outbase) in jobs
@@ -271,6 +276,7 @@ def run_matrix_gpu(args, replicas: List[Path], results_path: Path) -> None:
                             str(args.geometry),
                             args.depth_start, args.depth_end,
                             args.resolution, args.verbose,
+                            args.memory_limit_mb,
                             args.percent_brightest,
                         )
                         for (i, inpath, outbase) in jobs
@@ -315,6 +321,7 @@ def main(argv: List[str]) -> int:
     parser.add_argument("--resolution", type=float, default=1.0, help="Depth resolution (microns).")
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity 0-3.")
     parser.add_argument("--percent-brightest", type=float, default=100.0, help="Process only N%% brightest pixels.")
+    parser.add_argument("--memory-limit-mb", type=int, default=8192, help="Memory limit in MB passed to reconstruction executables (default: 8192).")
     parser.add_argument("--results", type=Path, default=None, help="Results JSONL path (default: <staging>/results.jsonl)")
     parser.add_argument("--tag", type=str, default="", help="Optional freeform label.")
     parser.add_argument("--dry-run", action="store_true", help="Print planned matrix and exit.")
@@ -366,6 +373,7 @@ def main(argv: List[str]) -> int:
         "resolution": args.resolution,
         "verbose": args.verbose,
         "percent_brightest": args.percent_brightest,
+        "memory_limit_mb": args.memory_limit_mb,
         "mode": args.mode,
         "cpu_parallel": args.cpu_parallel,
         "cpu_threads": args.cpu_threads,
