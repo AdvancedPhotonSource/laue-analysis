@@ -19,6 +19,7 @@ class IndexingResult(NamedTuple):
     output_files: Dict[str, str]  # e.g., {'peaks': 'path/to/peaks.txt', ...}
     n_peaks_found: int
     n_indexed: int
+    n_patterns_found: int
     indexing_data: Optional[Indexing]
     step_data: Optional[Step]
     config: Optional[object]  # Keep for compatibility but will be None
@@ -316,25 +317,33 @@ def _parse_peaks_output(peaks_file: str) -> int:
 def _parse_indexing_output(index_file: str) -> int:
     """
     Parse indexing output file to count number of indexed reflections.
-    
-    Args:
-        index_file: Path to indexing output file.
-        
-    Returns:
-        Number of indexed reflections.
+
+    Only uses the $Nindexed tag (format: "$Nindexed  <int>"). If absent or file unreadable, returns 0.
     """
     try:
-        with open(index_file, 'r') as f:
-            lines = f.readlines()
-            # Look for indexed reflections count in output
-            for line in lines:
-                if 'indexed' in line.lower() and 'reflections' in line.lower():
-                    # Extract number from line like "123 reflections indexed"
-                    words = line.split()
-                    for word in words:
-                        if word.isdigit():
-                            return int(word)
-            return 0
+        with open(index_file, "r") as f:
+            for line in f:
+                m = re.match(r'^\s*\$Nindexed\s+(\d+)\b', line)
+                if m:
+                    return int(m.group(1))
+        return 0
+    except (FileNotFoundError, IOError):
+        return 0
+
+
+def _parse_npatterns_found(index_file: str) -> int:
+    """
+    Parse indexing output file to get number of patterns found.
+
+    Only uses the $NpatternsFound tag. If absent or file unreadable, returns 0.
+    """
+    try:
+        with open(index_file, "r") as f:
+            for line in f:
+                m = re.match(r'^\s*\$NpatternsFound\s+(\d+)\b', line)
+                if m:
+                    return int(m.group(1))
+        return 0
     except (FileNotFoundError, IOError):
         return 0
 
@@ -458,6 +467,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     output_files = {}
     # Determine the base name for all expected outputs from this input
     input_base = Path(input_image).stem
+    n_patterns_found = 0
     
     # Step 1: Run peaksearch
     log_parts.append("Running peak search...")
@@ -490,6 +500,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 output_files=output_files,
                 n_peaks_found=0,
                 n_indexed=0,
+                n_patterns_found=0,
                 indexing_data=None,
                 step_data=None,
                 config=None,
@@ -502,6 +513,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             output_files=output_files,
             n_peaks_found=0,
             n_indexed=0,
+            n_patterns_found=0,
             indexing_data=None,
             step_data=None,
             config=None,
@@ -540,6 +552,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 output_files=output_files,
                 n_peaks_found=n_peaks_found,
                 n_indexed=0,
+                n_patterns_found=0,
                 indexing_data=None,
                 step_data=None,
                 config=None,
@@ -559,6 +572,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 output_files=output_files,
                 n_peaks_found=n_peaks_found,
                 n_indexed=0,
+                n_patterns_found=0,
                 indexing_data=None,
                 step_data=None,
                 config=None,
@@ -593,6 +607,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                     output_files=output_files,
                     n_peaks_found=n_peaks_found,
                     n_indexed=0,
+                    n_patterns_found=0,
                     indexing_data=None,
                     step_data=None,
                     config=None,
@@ -607,15 +622,19 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 index_file = str(expected_index)
                 output_files['index'] = index_file
                 n_indexed = _parse_indexing_output(index_file)
+                n_patterns_found = _parse_npatterns_found(index_file)
             else:
                 n_indexed = 0
+                n_patterns_found = 0
                 log_parts.append(f"No indexing output file found for expected file {expected_index.name}")
         else:
             log_parts.append(f"Only {n_peaks_found} peak(s) found, need at least 2 for indexing. Skipping indexing step.")
             n_indexed = 0
+            n_patterns_found = 0
     else:
         log_parts.append("No peaks found, skipping p2q and indexing steps.")
         n_indexed = 0
+        n_patterns_found = 0
     
     log_parts.append("Indexing completed successfully!")
     
@@ -624,6 +643,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         output_files=output_files,
         n_peaks_found=n_peaks_found,
         n_indexed=n_indexed,
+        n_patterns_found=n_patterns_found,
         indexing_data=None,
         step_data=None,
         config=None,
