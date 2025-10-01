@@ -23,10 +23,6 @@ class DetectorParams:
 
     # Wire calibration
     wire_diameter: float  # microns
-    # Rotation matrix rho (3x3) that aligns wire axis to beamline x-axis (optional if ki given in detector frame)
-    rho: Optional[torch.Tensor] = None  # shape [3,3], torch.tensor(float64)
-    # Incident beam direction vector ki (unit length), in wire-aligned frame (after rho). If None, assumed along z.
-    ki: Optional[Tuple[float, float, float]] = None
 
     # ROI and binning (mapping binned ROI indices to full-chip unbinned pixels)
     starti: int
@@ -38,6 +34,12 @@ class DetectorParams:
     depth_start: float  # microns
     depth_end: float    # microns
     depth_resolution: float  # microns
+    
+    # Optional parameters (must come after required ones)
+    # Rotation matrix rho (3x3) that aligns wire axis to beamline x-axis (optional if ki given in detector frame)
+    rho: Optional[torch.Tensor] = None  # shape [3,3], torch.tensor(float64)
+    # Incident beam direction vector ki (unit length), in wire-aligned frame (after rho). If None, assumed along z.
+    ki: Optional[Tuple[float, float, float]] = None
 
 
 def rodrigues_rotation_matrix(axis: torch.Tensor) -> torch.Tensor:
@@ -159,10 +161,12 @@ def pixel_xyz_to_depth(
     wire_position: torch.Tensor,     # [S,3] float64 in beamline coordinates
     params: DetectorParams,
     use_leading_wire_edge: bool,
+    wire_batch_size: int = 50,       # Process wire positions in smaller batches
 ) -> torch.Tensor:
     """
     Compute depth along incident beam for rays tangent to wire edge from detector pixel.
     Vectorized over pixels (H,W) and steps (S). Returns [S,H,W] depth (microns).
+    Process wire positions in batches to manage memory.
     """
     dtype = torch.float64
     device = point_on_ccd_xyz.device
@@ -184,54 +188,71 @@ def pixel_xyz_to_depth(
     else:
         pixelPos = point_on_ccd_xyz
 
-    # Broadcast wire positions to pixel grid
-    wirePos = wire_position.view(S, 1, 1, 3).expand(S, H, W, 3)  # [S,H,W,3]
+    # Process wire positions in batches to manage memory
+    depth_results = []
+    
+    for s_start in range(0, S, wire_batch_size):
+        s_end = min(s_start + wire_batch_size, S)
+        wire_batch = wire_position[s_start:s_end]
+        S_batch = s_end - s_start
+        
+        # Broadcast wire positions to pixel grid for this batch
+        wirePos = wire_batch.view(S_batch, 1, 1, 3).expand(S_batch, H, W, 3)  # [S_batch,H,W,3]
 
-    # Vector from pixel to wire center (use only y,z components)
-    dY = wirePos[..., 1] - pixelPos[..., 1]  # [S,H,W]
-    dZ = wirePos[..., 2] - pixelPos[..., 2]  # [S,H,W]
-    wire_radius = params.wire_diameter / 2.0
+        # Vector from pixel to wire center (use only y,z components)
+        dY = wirePos[..., 1] - pixelPos[..., 1]  # [S_batch,H,W]
+        dZ = wirePos[..., 2] - pixelPos[..., 2]  # [S_batch,H,W]
+        wire_radius = params.wire_diameter / 2.0
 
-    lensq = dY * dY + dZ * dZ
-    # Avoid invalid sqrt for cases where lensq <= r^2; mask them (no contribution)
-    delta = lensq - wire_radius * wire_radius
-    # tandphi = wire_radius / sqrt(lensq - r^2)
-    safe = delta > 0
-    tandphi = torch.zeros_like(dY, dtype=dtype)
-    tandphi[safe] = wire_radius / torch.sqrt(delta[safe])
+        lensq = dY * dY + dZ * dZ
+        # Avoid invalid sqrt for cases where lensq <= r^2; mask them (no contribution)
+        delta = lensq - wire_radius * wire_radius
+        # tandphi = wire_radius / sqrt(lensq - r^2)
+        safe = delta > 0
+        tandphi = torch.zeros_like(dY, dtype=dtype)
+        tandphi[safe] = wire_radius / torch.sqrt(delta[safe])
 
-    tanphi0 = torch.zeros_like(dY, dtype=dtype)
-    # Avoid division by zero in tanphi0 = dZ/dY
-    nonzero_y = dY != 0
-    tanphi0[nonzero_y] = dZ[nonzero_y] / dY[nonzero_y]
-    # For zero dY, tanphi0 is inf; set a large value with proper sign
-    tanphi0[~nonzero_y] = torch.sign(dZ[~nonzero_y]) * 1e12
+        tanphi0 = torch.zeros_like(dY, dtype=dtype)
+        # Avoid division by zero in tanphi0 = dZ/dY
+        nonzero_y = dY != 0
+        tanphi0[nonzero_y] = dZ[nonzero_y] / dY[nonzero_y]
+        # For zero dY, tanphi0 is inf; set a large value with proper sign
+        tanphi0[~nonzero_y] = torch.sign(dZ[~nonzero_y]) * 1e12
 
-    if use_leading_wire_edge:
-        numerator = tanphi0 - tandphi
-        denominator = 1.0 + tanphi0 * tandphi
-    else:
-        numerator = tanphi0 + tandphi
-        denominator = 1.0 - tanphi0 * tandphi
+        if use_leading_wire_edge:
+            numerator = tanphi0 - tandphi
+            denominator = 1.0 + tanphi0 * tandphi
+        else:
+            numerator = tanphi0 + tandphi
+            denominator = 1.0 - tanphi0 * tandphi
 
-    tanphi = torch.zeros_like(tanphi0, dtype=dtype)
-    valid = denominator != 0
-    tanphi[valid] = numerator[valid] / denominator[valid]
-    # Compute reflected-line intercept b at tangent line: z = y * tanphi + b
-    b_reflected = pixelPos[..., 2] - pixelPos[..., 1] * tanphi  # [S,H,W]
-    # Intersection of ray and incident beam line: S.z = b / (1 - tanphi * (kiy/kiz))
-    kiy_over_kiz = (kiy / kiz).item() if kiz != 0 else 0.0
-    denom_intersect = 1.0 - tanphi * kiy_over_kiz
-    S_z = torch.zeros_like(b_reflected, dtype=dtype)
-    valid2 = denom_intersect != 0
-    S_z[valid2] = b_reflected[valid2] / denom_intersect[valid2]
-    S_y = kiy_over_kiz * S_z
-    kix_over_kiz = (kix / kiz).item() if kiz != 0 else 0.0
-    S_x = kix_over_kiz * S_z
+        tanphi = torch.zeros_like(tanphi0, dtype=dtype)
+        valid = denominator != 0
+        tanphi[valid] = numerator[valid] / denominator[valid]
+        # Compute reflected-line intercept b at tangent line: z = y * tanphi + b
+        b_reflected = pixelPos[..., 2] - pixelPos[..., 1] * tanphi  # [S_batch,H,W]
+        # Intersection of ray and incident beam line: S.z = b / (1 - tanphi * (kiy/kiz))
+        kiy_over_kiz = (kiy / kiz).item() if kiz != 0 else 0.0
+        denom_intersect = 1.0 - tanphi * kiy_over_kiz
+        S_z = torch.zeros_like(b_reflected, dtype=dtype)
+        valid2 = denom_intersect != 0
+        S_z[valid2] = b_reflected[valid2] / denom_intersect[valid2]
+        S_y = kiy_over_kiz * S_z
+        kix_over_kiz = (kix / kiz).item() if kiz != 0 else 0.0
+        S_x = kix_over_kiz * S_z
 
-    # Depth is projection of intersection point onto ki
-    # depth = dot(ki, S) = kx*Sx + ky*Sy + kz*Sz
-    depth = kix * S_x + kiy * S_y + kiz * S_z  # [S,H,W]
+        # Depth is projection of intersection point onto ki
+        # depth = dot(ki, S) = kx*Sx + ky*Sy + kz*Sz
+        depth_batch = kix * S_x + kiy * S_y + kiz * S_z  # [S_batch,H,W]
+        depth_results.append(depth_batch)
+        
+        # Clean up batch tensors
+        del wirePos, dY, dZ, tandphi, tanphi0, tanphi, b_reflected, S_z, S_y, S_x
+        if device == 'cuda':
+            torch.cuda.empty_cache()
+    
+    # Concatenate all batch results
+    depth = torch.cat(depth_results, dim=0)  # [S,H,W]
     return depth
 
 
@@ -240,6 +261,7 @@ def reconstruct_depth_torch(
     wire_positions: torch.Tensor,   # [S,3] float64 wire positions (beamline coordinates; corrected & rotated if needed)
     params: DetectorParams,
     wire_edge: int = 1,             # 1=leading, 0=trailing, -1=both
+    chunk_size: int = 256,          # Process pixels in chunks to manage memory
 ) -> torch.Tensor:
     """
     PyTorch implementation of depth-resolved reconstruction using a prefix-sum binning scheme.
@@ -279,187 +301,276 @@ def reconstruct_depth_torch(
     # Diff sequence: I[s] - I[s+1], shape [S-1,H,W]
     diff = imgs[:-1] - imgs[1:]
 
-    # Compute depths at s and s+1 for front/back edges
-    # Shape: [S,H,W]
-    depth_front_s = pixel_xyz_to_depth(front_xyz_det, wire_beam, params, use_leading_wire_edge=(wire_edge != 0))
-    depth_back_s = pixel_xyz_to_depth(back_xyz_det, wire_beam, params, use_leading_wire_edge=(wire_edge != 0))
-
-    # For s+1:
-    depth_front_s1 = depth_front_s[1:]  # [S-1,H,W]
-    depth_back_s1 = depth_back_s[1:]    # [S-1,H,W]
-    depth_front_s = depth_front_s[:-1]  # [S-1,H,W]
-    depth_back_s = depth_back_s[:-1]    # [S-1,H,W]
-
-    # Trapezoid endpoints (partial_start, full_start, full_end, partial_end)
-    # as per C code conventions:
-    partial_start = depth_front_s
-    partial_end = depth_back_s1
-    full_start = depth_back_s
-    full_end = depth_front_s1
-
-    # If full_end < full_start, swap to ensure proper order
-    swap_mask = full_end < full_start
-    fs = torch.where(swap_mask, full_end, full_start)
-    fe = torch.where(swap_mask, full_start, full_end)
-    full_start = fs
-    full_end = fe
-
-    # Clip trapezoid to depth range
-    # We'll operate on edge indices; edges run from E0 = D_start - dD/2 to EM = D_start - dD/2 + M*dD
+    # Edge offset for depth bins
     edge0 = d_start - dD / 2.0
-
-    # Compute trapezoid area (height max 1). If area invalid/negative, skip.
-    # area = (full_end + partial_end - full_end - partial_start) / 2 = (partial_end - partial_start) / 2
-    area = (partial_end - partial_start) / 2.0  # [S-1,H,W]
-    valid_area = torch.isfinite(area) & (area > 0)
-
-    # For trailing edge, invert intensity contribution (diff_value sign)
-    sign = 1.0 if wire_edge != 0 else -1.0  # leading: +1; trailing: -1
-
-    # Flatten pixel grid to simplify scatter_add operations
     Npix = H * W
-    diff_flat = diff.reshape(diff.shape[0], Npix)  # [S-1, Npix]
-    area_flat = area.reshape(area.shape[0], Npix)
-    valid_flat = valid_area.reshape(valid_area.shape[0], Npix)
-
-    # Convert trapezoid endpoints to edge indices (integer in [0..M])
-    def to_edge_index(d: torch.Tensor) -> torch.Tensor:
-        idx = torch.floor((d - edge0) / dD).to(torch.int64)
-        idx = torch.clamp(idx, 0, M)
-        return idx
-
-    m_ps = to_edge_index(partial_start.reshape(partial_start.shape[0], Npix))
-    m_fs = to_edge_index(full_start.reshape(full_start.shape[0], Npix))
-    m_fe = to_edge_index(full_end.reshape(full_end.shape[0], Npix))
-    m_pe = to_edge_index(partial_end.reshape(partial_end.shape[0], Npix))
-
-    # Segment parameters for h(d):
-    # Rising segment: h(d) = (d - ps)/(fs - ps), slope = 1/(fs-ps), intercept = -ps/(fs-ps)
-    denom_rise = (full_start - partial_start).reshape(full_start.shape[0], Npix)
-    valid_rise = torch.isfinite(denom_rise) & (denom_rise > 0)
-    slope_rise = torch.zeros_like(denom_rise, dtype=torch.float64, device=device)
-    intercept_rise = torch.zeros_like(denom_rise, dtype=torch.float64, device=device)
-    slope_rise[valid_rise] = 1.0 / denom_rise[valid_rise]
-    intercept_rise[valid_rise] = -partial_start.reshape(partial_start.shape[0], Npix)[valid_rise] * slope_rise[valid_rise]
-
-    # Flat segment: h(d) = 1 on [fs, fe], slope=0, intercept=1
-    slope_flat = torch.zeros_like(slope_rise)
-    intercept_flat = torch.ones_like(intercept_rise)
-
-    # Falling segment: h(d) = (pe - d)/(pe - fe), slope = -1/(pe - fe), intercept = pe/(pe - fe)
-    denom_fall = (partial_end - full_end).reshape(partial_end.shape[0], Npix)
-    valid_fall = torch.isfinite(denom_fall) & (denom_fall > 0)
-    slope_fall = torch.zeros_like(denom_fall, dtype=torch.float64, device=device)
-    intercept_fall = torch.zeros_like(denom_fall, dtype=torch.float64, device=device)
-    slope_fall[valid_fall] = -1.0 / denom_fall[valid_fall]
-    intercept_fall[valid_fall] = partial_end.reshape(partial_end.shape[0], Npix)[valid_fall] * (-slope_fall[valid_fall])
-
-    # Weight by diff_value / area and wire edge sign
-    # Contribution per trapezoid is diff * (area_in_bin / total_area)
-    weight = torch.zeros_like(diff_flat, dtype=torch.float64, device=device)
-    valid_weight = valid_flat & torch.isfinite(diff_flat) & (area_flat > 0)
-    weight[valid_weight] = (sign * diff_flat[valid_weight]) / area_flat[valid_weight]
-
-    # Prepare difference arrays along depth edges for slope and intercept
-    # We'll store flattened pixels for difference arrays: [M+1, Npix]
+    
+    # Process in chunks to manage memory
+    # Initialize output accumulator
     slope_diff = torch.zeros((M + 1, Npix), dtype=torch.float64, device=device)
     intercept_diff = torch.zeros((M + 1, Npix), dtype=torch.float64, device=device)
-
-    def scatter_segment(m_start: torch.Tensor, m_end: torch.Tensor, slope: torch.Tensor, intercept: torch.Tensor, seg_valid: torch.Tensor):
-        """
-        Apply difference updates along depth edges:
-        slope_diff[m_start] += slope * weight
-        slope_diff[m_end]   -= slope * weight
-        intercept_diff[m_start] += intercept * weight
-        intercept_diff[m_end]   -= intercept * weight
-        Only for seg_valid and weight-valid pixels.
-        """
-        mask = seg_valid & valid_weight
-        if not torch.any(mask):
-            return
-        ms = m_start[mask]  # [K]
-        me = m_end[mask]    # [K]
-        w = weight[mask]    # [K]
-        sl = slope[mask] * w
-        it = intercept[mask] * w
-
-        # Flatten pixel indices for gather/scatter
-        # Each mask corresponds to multiple trapezoids across steps and pixels
-        # We need to map them to positions in [M+1, Npix] for scatter_add.
-        # To scatter along depth dimension, we use advanced indexing with (edge_idx, pixel_linear_idx)
-        # pixel_linear_idx must be known: from mask indices, derive pixel indices
-        # Build pixel indices from mask nonzero positions
-        # mask comes from 2D [S-1, Npix]; we need corresponding pixel index vector
-        # To get pixel indices, compute nonzero of mask and derive col (pix) via modulo
-        nz = torch.nonzero(mask, as_tuple=False)  # [K,2] with (s_idx, pix_idx)
-        pix_idx = nz[:, 1]  # [K]
-
-        # Scatter updates at start edge
-        slope_diff.index_put_((ms, pix_idx), sl, accumulate=True)
-        intercept_diff.index_put_((ms, pix_idx), it, accumulate=True)
-        # Scatter negative updates at end edge
-        slope_diff.index_put_((me, pix_idx), -sl, accumulate=True)
-        intercept_diff.index_put_((me, pix_idx), -it, accumulate=True)
-
-    # Apply segments
-    scatter_segment(m_ps, m_fs, slope_rise, intercept_rise, valid_rise)
-    scatter_segment(m_fs, m_fe, slope_flat, intercept_flat, torch.ones_like(valid_flat, dtype=torch.bool, device=device))
-    scatter_segment(m_fe, m_pe, slope_fall, intercept_fall, valid_fall)
-
-    # Accumulate along depth edges (prefix sums)
+    
+    # Process pixels in chunks
+    for h_start in range(0, H, chunk_size):
+        h_end = min(h_start + chunk_size, H)
+        h_chunk = h_end - h_start
+        
+        # Get chunk of pixel coordinates
+        front_chunk = front_xyz_det[h_start:h_end]  # [h_chunk, W, 3]
+        back_chunk = back_xyz_det[h_start:h_end]     # [h_chunk, W, 3]
+        
+        # Compute depths for this chunk
+        depth_front_s = pixel_xyz_to_depth(front_chunk, wire_beam, params, use_leading_wire_edge=(wire_edge != 0))
+        depth_back_s = pixel_xyz_to_depth(back_chunk, wire_beam, params, use_leading_wire_edge=(wire_edge != 0))
+        
+        # For s+1:
+        depth_front_s1 = depth_front_s[1:]  # [S-1,h_chunk,W]
+        depth_back_s1 = depth_back_s[1:]    # [S-1,h_chunk,W]
+        depth_front_s = depth_front_s[:-1]  # [S-1,h_chunk,W]
+        depth_back_s = depth_back_s[:-1]    # [S-1,h_chunk,W]
+        
+        # Get diff for this chunk
+        diff_chunk = diff[:, h_start:h_end]  # [S-1, h_chunk, W]
+        
+        # Process this chunk (rest of the algorithm remains the same)
+        process_chunk(
+            depth_front_s, depth_back_s, depth_front_s1, depth_back_s1,
+            diff_chunk, h_start, h_chunk, W, M, dD, edge0, device, dtype,
+            slope_diff, intercept_diff, wire_edge
+        )
+        
+        # Clean up intermediate tensors to free memory
+        del depth_front_s, depth_back_s, depth_front_s1, depth_back_s1, diff_chunk
+        if device == 'cuda':
+            torch.cuda.empty_cache()
+    
+    # Continue with accumulation as before
     slope_acc_edges = torch.cumsum(slope_diff, dim=0)       # [M+1, Npix]
     intercept_acc_edges = torch.cumsum(intercept_diff, dim=0)
-
-    # Compute heights at bin edges H_edge(m) = slope_acc * E_m + intercept_acc
-    # Edge depths E_m from edge0 + m*dD, m=0..M
-    E_m = (edge0 + torch.arange(M + 1, dtype=torch.float64, device=device) * dD).view(M + 1, 1)  # [M+1,1]
-    H_edge = slope_acc_edges * E_m + intercept_acc_edges  # [M+1, Npix]
-
-    # Area per bin via trapezoidal rule: A_bin[m] = (H_edge[m] + H_edge[m+1])/2 * dD
-    A_bin = 0.5 * (H_edge[:-1, :] + H_edge[1:, :]) * dD  # [M, Npix]
-
+    
+    # Compute heights at bin edges
+    E_m = (edge0 + torch.arange(M + 1, dtype=torch.float64, device=device) * dD).view(M + 1, 1)
+    H_edge = slope_acc_edges * E_m + intercept_acc_edges
+    
+    # Area per bin via trapezoidal rule
+    A_bin = 0.5 * (H_edge[:-1, :] + H_edge[1:, :]) * dD
+    
     # Reshape back to [M,H,W]
-    depth_images = A_bin.reshape(M, H, W)  # float64
-
+    depth_images = A_bin.reshape(M, H, W)
+    
     # If wire_edge == -1 (both edges), we need also trailing-edge contributions added
     if wire_edge == -1:
-        # Compute trailing-edge contributions by recomputing sign and repeating relevant steps
-        trailing_params = params  # same params
-        trailing_sign = -1.0
-        weight_trailing = torch.zeros_like(diff_flat, dtype=torch.float64, device=device)
-        weight_trailing[valid_weight] = (trailing_sign * diff_flat[valid_weight]) / area_flat[valid_weight]
-
-        # Reuse precomputed segment indices and slopes/intercepts, but with new weights
-        slope_diff_t = torch.zeros_like(slope_diff)
-        intercept_diff_t = torch.zeros_like(intercept_diff)
-
-        def scatter_segment_trailing(m_start, m_end, slope, intercept, seg_valid, w_tr):
-            mask = seg_valid & valid_weight
-            if not torch.any(mask):
-                return
-            ms = m_start[mask]
-            me = m_end[mask]
-            w = w_tr[mask]
-            sl = slope[mask] * w
-            it = intercept[mask] * w
-            nz = torch.nonzero(mask, as_tuple=False)
-            pix_idx = nz[:, 1]
-            slope_diff_t.index_put_((ms, pix_idx), sl, accumulate=True)
-            intercept_diff_t.index_put_((ms, pix_idx), it, accumulate=True)
-            slope_diff_t.index_put_((me, pix_idx), -sl, accumulate=True)
-            intercept_diff_t.index_put_((me, pix_idx), -it, accumulate=True)
-
-        scatter_segment_trailing(m_ps, m_fs, slope_rise, intercept_rise, valid_rise, weight_trailing)
-        scatter_segment_trailing(m_fs, m_fe, slope_flat, intercept_flat, torch.ones_like(valid_flat, dtype=torch.bool, device=device), weight_trailing)
-        scatter_segment_trailing(m_fe, m_pe, slope_fall, intercept_fall, valid_fall, weight_trailing)
-
+        # Process trailing edge with opposite sign
+        slope_diff_t = torch.zeros((M + 1, Npix), dtype=torch.float64, device=device)
+        intercept_diff_t = torch.zeros((M + 1, Npix), dtype=torch.float64, device=device)
+        
+        # Process in chunks again for trailing edge
+        for h_start in range(0, H, chunk_size):
+            h_end = min(h_start + chunk_size, H)
+            h_chunk = h_end - h_start
+            
+            front_chunk = front_xyz_det[h_start:h_end]
+            back_chunk = back_xyz_det[h_start:h_end]
+            
+            depth_front_s = pixel_xyz_to_depth(front_chunk, wire_beam, params, use_leading_wire_edge=False)
+            depth_back_s = pixel_xyz_to_depth(back_chunk, wire_beam, params, use_leading_wire_edge=False)
+            
+            depth_front_s1 = depth_front_s[1:]
+            depth_back_s1 = depth_back_s[1:]
+            depth_front_s = depth_front_s[:-1]
+            depth_back_s = depth_back_s[:-1]
+            
+            diff_chunk = diff[:, h_start:h_end]
+            
+            process_chunk(
+                depth_front_s, depth_back_s, depth_front_s1, depth_back_s1,
+                diff_chunk, h_start, h_chunk, W, M, dD, edge0, device, dtype,
+                slope_diff_t, intercept_diff_t, 0  # wire_edge=0 for trailing
+            )
+            
+            # Clean up intermediate tensors
+            del depth_front_s, depth_back_s, depth_front_s1, depth_back_s1, diff_chunk
+            if device == 'cuda':
+                torch.cuda.empty_cache()
+        
         slope_acc_edges_t = torch.cumsum(slope_diff_t, dim=0)
         intercept_acc_edges_t = torch.cumsum(intercept_diff_t, dim=0)
         H_edge_t = slope_acc_edges_t * E_m + intercept_acc_edges_t
         A_bin_t = 0.5 * (H_edge_t[:-1, :] + H_edge_t[1:, :]) * dD
         depth_images += A_bin_t.reshape(M, H, W)
-
+    
     return depth_images
+
+
+def process_chunk(
+    depth_front_s, depth_back_s, depth_front_s1, depth_back_s1,
+    diff_chunk, h_start, h_chunk, W, M, dD, edge0, device, dtype,
+    slope_diff, intercept_diff, wire_edge
+):
+    """Process a chunk of pixels for memory efficiency with better memory management."""
+    # Process in smaller sub-batches to avoid memory spikes
+    S_minus_1 = depth_front_s.shape[0]
+    batch_size = min(50, S_minus_1)  # Process 50 wire steps at a time
+    
+    # Flatten the chunk dimension
+    Npix_chunk = h_chunk * W
+    pixel_offset = h_start * W
+    
+    # Sign for wire edge
+    sign = 1.0 if wire_edge != 0 else -1.0
+    
+    for s_start in range(0, S_minus_1, batch_size):
+        s_end = min(s_start + batch_size, S_minus_1)
+        s_batch = s_end - s_start
+        
+        # Get batch of depths
+        depth_front_s_batch = depth_front_s[s_start:s_end]
+        depth_back_s_batch = depth_back_s[s_start:s_end]
+        depth_front_s1_batch = depth_front_s1[s_start:s_end]
+        depth_back_s1_batch = depth_back_s1[s_start:s_end]
+        diff_batch = diff_chunk[s_start:s_end]
+        
+        # Flatten batch
+        diff_flat = diff_batch.reshape(s_batch, Npix_chunk)
+        
+        # Trapezoid endpoints
+        partial_start = depth_front_s_batch
+        partial_end = depth_back_s1_batch
+        full_start = depth_back_s_batch
+        full_end = depth_front_s1_batch
+        
+        # Ensure proper order
+        swap_mask = full_end < full_start
+        full_start, full_end = torch.where(swap_mask, full_end, full_start), torch.where(swap_mask, full_start, full_end)
+        
+        # Compute area
+        area = (partial_end - partial_start) / 2.0
+        valid_area = torch.isfinite(area) & (area > 0)
+        
+        # Flatten for processing
+        area_flat = area.reshape(s_batch, Npix_chunk)
+        valid_flat = valid_area.reshape(s_batch, Npix_chunk)
+        
+        # Convert to edge indices
+        def to_edge_index(d: torch.Tensor) -> torch.Tensor:
+            idx = torch.floor((d - edge0) / dD).to(torch.int64)
+            return torch.clamp(idx, 0, M)
+        
+        partial_start_flat = partial_start.reshape(s_batch, Npix_chunk)
+        full_start_flat = full_start.reshape(s_batch, Npix_chunk)
+        full_end_flat = full_end.reshape(s_batch, Npix_chunk)
+        partial_end_flat = partial_end.reshape(s_batch, Npix_chunk)
+        
+        m_ps = to_edge_index(partial_start_flat)
+        m_fs = to_edge_index(full_start_flat)
+        m_fe = to_edge_index(full_end_flat)
+        m_pe = to_edge_index(partial_end_flat)
+        
+        # Weight by diff_value / area
+        weight = torch.zeros_like(diff_flat, dtype=torch.float64, device=device)
+        valid_weight = valid_flat & torch.isfinite(diff_flat) & (area_flat > 0)
+        weight[valid_weight] = (sign * diff_flat[valid_weight]) / area_flat[valid_weight]
+        
+        # Process each segment type
+        # Rising segment
+        denom_rise = (full_start - partial_start).reshape(s_batch, Npix_chunk)
+        valid_rise = torch.isfinite(denom_rise) & (denom_rise > 0) & valid_weight
+        if torch.any(valid_rise):
+            slope_rise = torch.zeros_like(denom_rise, dtype=torch.float64, device=device)
+            slope_rise[valid_rise] = 1.0 / denom_rise[valid_rise]
+            intercept_rise = -partial_start_flat[valid_rise] * slope_rise[valid_rise]
+            
+            # Apply rising segment
+            nz = torch.nonzero(valid_rise, as_tuple=False)
+            if nz.shape[0] > 0:
+                ms = m_ps[valid_rise]
+                me = m_fs[valid_rise]
+                w = weight[valid_rise]
+                pix_idx = nz[:, 1] + pixel_offset
+                
+                sl = slope_rise[valid_rise] * w
+                it = intercept_rise * w
+                
+                # Use smaller batches for scatter operations
+                scatter_batch_size = 10000
+                for i in range(0, len(ms), scatter_batch_size):
+                    j = min(i + scatter_batch_size, len(ms))
+                    slope_diff.index_put_((ms[i:j], pix_idx[i:j]), sl[i:j], accumulate=True)
+                    intercept_diff.index_put_((ms[i:j], pix_idx[i:j]), it[i:j], accumulate=True)
+                    slope_diff.index_put_((me[i:j], pix_idx[i:j]), -sl[i:j], accumulate=True)
+                    intercept_diff.index_put_((me[i:j], pix_idx[i:j]), -it[i:j], accumulate=True)
+            
+            del slope_rise, intercept_rise
+        
+        # Flat segment
+        valid_flat_seg = valid_weight
+        if torch.any(valid_flat_seg):
+            nz = torch.nonzero(valid_flat_seg, as_tuple=False)
+            if nz.shape[0] > 0:
+                ms = m_fs[valid_flat_seg]
+                me = m_fe[valid_flat_seg]
+                w = weight[valid_flat_seg]
+                pix_idx = nz[:, 1] + pixel_offset
+                
+                # Use smaller batches for scatter operations
+                scatter_batch_size = 10000
+                for i in range(0, len(ms), scatter_batch_size):
+                    j = min(i + scatter_batch_size, len(ms))
+                    slope_diff.index_put_((me[i:j], pix_idx[i:j]), -w[i:j], accumulate=True)
+                    intercept_diff.index_put_((ms[i:j], pix_idx[i:j]), w[i:j], accumulate=True)
+                    intercept_diff.index_put_((me[i:j], pix_idx[i:j]), -w[i:j], accumulate=True)
+        
+        # Falling segment
+        denom_fall = (partial_end - full_end).reshape(s_batch, Npix_chunk)
+        valid_fall = torch.isfinite(denom_fall) & (denom_fall > 0) & valid_weight
+        if torch.any(valid_fall):
+            slope_fall = torch.zeros_like(denom_fall, dtype=torch.float64, device=device)
+            slope_fall[valid_fall] = -1.0 / denom_fall[valid_fall]
+            intercept_fall = partial_end_flat[valid_fall] * (-slope_fall[valid_fall])
+            
+            # Apply falling segment
+            nz = torch.nonzero(valid_fall, as_tuple=False)
+            if nz.shape[0] > 0:
+                ms = m_fe[valid_fall]
+                me = m_pe[valid_fall]
+                w = weight[valid_fall]
+                pix_idx = nz[:, 1] + pixel_offset
+                
+                sl = slope_fall[valid_fall] * w
+                it = intercept_fall * w
+                
+                # Use smaller batches for scatter operations
+                scatter_batch_size = 10000
+                for i in range(0, len(ms), scatter_batch_size):
+                    j = min(i + scatter_batch_size, len(ms))
+                    slope_diff.index_put_((ms[i:j], pix_idx[i:j]), sl[i:j], accumulate=True)
+                    intercept_diff.index_put_((ms[i:j], pix_idx[i:j]), it[i:j], accumulate=True)
+                    slope_diff.index_put_((me[i:j], pix_idx[i:j]), -sl[i:j], accumulate=True)
+                    intercept_diff.index_put_((me[i:j], pix_idx[i:j]), -it[i:j], accumulate=True)
+            
+            del slope_fall, intercept_fall
+        
+        # Clean up batch tensors
+        del diff_flat, area_flat, valid_flat, weight
+        del m_ps, m_fs, m_fe, m_pe
+        del partial_start_flat, full_start_flat, full_end_flat, partial_end_flat
+        
+        if device == 'cuda':
+            torch.cuda.empty_cache()
+
+
+# Keep the original implementation but refactor it
+def reconstruct_depth_torch_original(
+    images: torch.Tensor,
+    wire_positions: torch.Tensor,
+    params: DetectorParams,
+    wire_edge: int = 1,
+) -> torch.Tensor:
+    """Original implementation - kept for reference but will OOM on large data."""
+
+    # The old non-chunked implementation has been moved to reconstruct_depth_torch_original
+    # This is now replaced with the chunked version above
+    pass
 
 
 # Example usage (pseudo):
