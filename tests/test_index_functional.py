@@ -313,13 +313,13 @@ def test_index_function_default_config():
             input_image='/tmp/test.h5',
             output_dir='/tmp/output',
             geo_file='/tmp/geo.xml',
-            crystal_file='/tmp/crystal.xml'
-            # No config provided - should use defaults
+            crystal_file='/tmp/crystal.xml',
+            generate_xml=False  # Disable XML for this mock test since H5 file doesn't exist
         )
         
         # Should succeed with defaults
         assert result.success is True
-        assert result.config is None  # No config object anymore
+        assert result.xml_file is None  # XML generation was disabled
         
         # Check that default values were used in the command
         peaksearch_call = mock_run_cmd.call_args_list[0][0][0]
