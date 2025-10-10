@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element, SubElement
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import h5py
 
 from laueanalysis.indexing.lau_dataclasses.detector import Detector
@@ -55,7 +55,7 @@ class Step:
     energyUnit: str = 'keV'
     hutchTemperature: float = None
     sampleDistance: float = None
-    detector = Detector()
+    detector: Detector = field(default_factory=Detector)
     indexing: Indexing = None
 
     def fromH5(self, filename:str):

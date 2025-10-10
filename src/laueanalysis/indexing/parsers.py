@@ -24,6 +24,20 @@ def parse_peaks_file(peaks_file: str, step: Step) -> None:
     """
     with open(peaks_file, encoding='windows-1252', errors='ignore') as f:
         lines = f.readlines()
+        # Reset peaks lists to avoid accumulation across calls/tests
+        px = step.detector.peaksXY
+        px.Xpixel.clear()
+        px.Ypixel.clear()
+        px.Intens.clear()
+        px.Integral.clear()
+        px.hwhmX.clear()
+        px.hwhmY.clear()
+        px.tilt.clear()
+        px.chisq.clear()
+        px.Qx.clear()
+        px.Qy.clear()
+        px.Qz.clear()
+
         for line in lines:
             line = line.split('\t')
             vals = []
@@ -33,8 +47,10 @@ def parse_peaks_file(peaks_file: str, step: Step) -> None:
             if len(vals) == 2:
                 step.set(vals[0], vals[1])
             elif vals:
-                vals = vals[0].split()
-                step.detector.peaksXY.addPeak(*vals)
+                tokens = vals[0].split()
+                # Only treat as peak rows if there are exactly 8 values
+                if len(tokens) == 8:
+                    step.detector.peaksXY.addPeak(*tokens)
 
 
 def parse_p2q_file(p2q_file: str, peaks_xy: PeaksXY) -> None:
