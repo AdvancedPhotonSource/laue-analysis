@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element, SubElement
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from laueanalysis.indexing.lau_dataclasses.roi import ROI
 from laueanalysis.indexing.lau_dataclasses.peaksXY import PeaksXY
@@ -38,8 +38,8 @@ class Detector:
     numAboveThreshold: float = None
     cosmicFilter: bool = None
     geoFile: str = None
-    roi = ROI()
-    peaksXY = PeaksXY()
+    roi: ROI = field(default_factory=ROI)
+    peaksXY: PeaksXY = field(default_factory=PeaksXY)
 
     def set(self, key, val):
         floats = ['exposure', 'totalSum', 'sumAboveThreshold', 'numAboveThreshold']

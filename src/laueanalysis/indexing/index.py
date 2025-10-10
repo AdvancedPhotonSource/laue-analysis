@@ -11,6 +11,8 @@ from importlib import resources
 
 from laueanalysis.indexing.lau_dataclasses.step import Step
 from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
+from laueanalysis.indexing.parsers import parse_full_step_data
+from laueanalysis.indexing.xml_utils import write_step_xml, get_default_xml_filename
 
 
 class IndexingResult(NamedTuple):
@@ -22,7 +24,7 @@ class IndexingResult(NamedTuple):
     n_patterns_found: int
     indexing_data: Optional[Indexing]
     step_data: Optional[Step]
-    config: Optional[object]  # Keep for compatibility but will be None
+    xml_file: Optional[str]  # Path to generated XML file
     log: str
     error: Optional[str] = None
     command_history: List[str] = []
@@ -408,6 +410,9 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           index_l: int = 1,
           # General parameters
           depth_override: Optional[float] = None,
+          cosmic_filter: bool = False,
+          generate_xml: bool = True,
+          xml_output_file: Optional[str] = None,
           timeout: int = 300) -> IndexingResult:
     """
     Perform complete Laue indexing on an input image.
@@ -416,6 +421,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     1. Peak search to find reflections in the image
     2. Pixel-to-q conversion using geometry
     3. Indexing against crystal structure
+    4. XML generation with complete results (optional)
     
     Args:
         input_image: Path to input diffraction image.
@@ -439,10 +445,14 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         index_h: H component of reference vector (default: 0).
         index_k: K component of reference vector (default: 0).
         index_l: L component of reference vector (default: 1).
+        depth_override: Optional depth value to override in peaks file (microns).
+        cosmic_filter: Whether cosmic ray filtering was applied (default: False).
+        generate_xml: Whether to generate XML output with full data (default: True).
+        xml_output_file: Path for XML output (default: output_dir/indexed.xml).
         timeout: Timeout for each subprocess in seconds (default: 300).
         
     Returns:
-        IndexingResult containing success status, output files, and statistics.
+        IndexingResult containing success status, output files, statistics, and parsed data.
     """
     
     # Set up output directories
@@ -454,9 +464,10 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             output_files={},
             n_peaks_found=0,
             n_indexed=0,
+            n_patterns_found=0,
             indexing_data=None,
             step_data=None,
-            config=None,
+            xml_file=None,
             log="",
             error=f"Failed to create output directories: {e}",
             command_history=[]
@@ -503,7 +514,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 n_patterns_found=0,
                 indexing_data=None,
                 step_data=None,
-                config=None,
+                xml_file=None,
                 log="\n".join(log_parts),
                 error="No peaks output file found - peak search completely failed",
                 command_history=command_history
@@ -516,7 +527,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             n_patterns_found=0,
             indexing_data=None,
             step_data=None,
-            config=None,
+            xml_file=None,
             log="\n".join(log_parts),
             error=f"No specific peaks file found for this image: expected {expected_peaks.name}",
             command_history=command_history
@@ -555,7 +566,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 n_patterns_found=0,
                 indexing_data=None,
                 step_data=None,
-                config=None,
+                xml_file=None,
                 log="\n".join(log_parts),
                 error=None,
                 command_history=command_history
@@ -575,7 +586,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 n_patterns_found=0,
                 indexing_data=None,
                 step_data=None,
-                config=None,
+                xml_file=None,
                 log="\n".join(log_parts),
                 error=None,
                 command_history=command_history
@@ -610,7 +621,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                     n_patterns_found=0,
                     indexing_data=None,
                     step_data=None,
-                    config=None,
+                    xml_file=None,
                     log="\n".join(log_parts),
                     error=None,
                     command_history=command_history
@@ -638,15 +649,68 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     
     log_parts.append("Indexing completed successfully!")
     
+    # Generate XML output if requested
+    step_data = None
+    indexing_data = None
+    xml_file = None
+    
+    if generate_xml:
+        try:
+            log_parts.append("Generating XML output...")
+            
+            # Parse all data into Step dataclass
+            step_data = parse_full_step_data(
+                input_image=input_image,
+                output_files=output_files,
+                geo_file=geo_file,
+                crystal_file=crystal_file,
+                cosmic_filter=cosmic_filter,
+                boxsize=boxsize,
+                max_rfactor=max_rfactor,
+                min_size=min_size,
+                min_separation=min_separation,
+                threshold=threshold,
+                peak_shape=peak_shape,
+                max_peaks=max_peaks,
+                mask_file=mask_file,
+                threshold_ratio=threshold_ratio,
+                index_kev_max_calc=index_kev_max_calc,
+                index_kev_max_test=index_kev_max_test,
+                index_angle_tolerance=index_angle_tolerance,
+                index_cone=index_cone,
+                index_h=index_h,
+                index_k=index_k,
+                index_l=index_l,
+            )
+            
+            # Extract indexing data for convenience
+            indexing_data = step_data.indexing
+            
+            # Determine XML output file path
+            if xml_output_file is None:
+                xml_file = get_default_xml_filename(output_dir)
+            else:
+                xml_file = xml_output_file
+            
+            # Write XML
+            write_step_xml(step_data, xml_file)
+            log_parts.append(f"XML output written to: {xml_file}")
+            command_history.append(f"write_xml -> {xml_file}")
+            
+        except Exception as e:
+            log_parts.append(f"Warning: XML generation failed: {e}")
+            # Don't fail the whole operation if XML generation fails
+            xml_file = None
+    
     return IndexingResult(
         success=True,
         output_files=output_files,
         n_peaks_found=n_peaks_found,
         n_indexed=n_indexed,
         n_patterns_found=n_patterns_found,
-        indexing_data=None,
-        step_data=None,
-        config=None,
+        indexing_data=indexing_data,
+        step_data=step_data,
+        xml_file=xml_file,
         log="\n".join(log_parts),
         error=None,
         command_history=command_history
