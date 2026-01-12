@@ -64,7 +64,7 @@ def _find_executables() -> Dict[str, str]:
     return execs
 
 
-def _run_command(cmd: List[str], timeout: int) -> Tuple[bool, str, str, int]:
+def _run_command(cmd: List[str], timeout: int) -> Tuple[bool, str, str, int, str]:
     """
     Execute a command and capture output.
 
@@ -73,11 +73,12 @@ def _run_command(cmd: List[str], timeout: int) -> Tuple[bool, str, str, int]:
         timeout: Timeout in seconds.
 
     Returns:
-        A tuple of (success, stdout, stderr, return_code).
+        A tuple of (success, stdout, stderr, return_code, command_string).
         Note: success is based on return code being 0. Some Laue tools
         have other success codes, which must be handled by the caller.
         This implements graceful degradation - continuing on errors.
     """
+    command_string = ' '.join(cmd)
     try:
         result = subprocess.run(
             cmd,
@@ -87,13 +88,13 @@ def _run_command(cmd: List[str], timeout: int) -> Tuple[bool, str, str, int]:
             timeout=timeout
         )
         # Log errors but don't fail immediately - graceful degradation
-        return result.returncode == 0, result.stdout, result.stderr, result.returncode
+        return result.returncode == 0, result.stdout, result.stderr, result.returncode, command_string
     except subprocess.TimeoutExpired:
-        return False, "", f"Process timed out after {timeout} seconds", -1
+        return False, "", f"Process timed out after {timeout} seconds", -1, command_string
     except FileNotFoundError as e:
-        return False, "", f"Executable not found: {e}", -1
+        return False, "", f"Executable not found: {e}", -1, command_string
     except Exception as e:
-        return False, "", f"An unexpected error occurred: {e}", -1
+        return False, "", f"An unexpected error occurred: {e}", -1, command_string
 
 
 def _setup_output_dirs(output_dir: Union[str, Path]) -> Dict[str, Path]:
@@ -127,7 +128,7 @@ def _run_peaksearch(input_image: str, output_dir: str,
                    min_separation: int, threshold: int, peak_shape: str,
                    max_peaks: int, mask_file: Optional[str],
                    threshold_ratio: float, smooth: bool,
-                   timeout: int = 300) -> Tuple[bool, str, str, int]:
+                   timeout: int = 300) -> Tuple[bool, str, str, int, str]:
     """
     Run the peaksearch executable.
     
@@ -147,7 +148,7 @@ def _run_peaksearch(input_image: str, output_dir: str,
         timeout: Command timeout in seconds.
         
     Returns:
-        Tuple of (success, stdout, stderr, return_code).
+        Tuple of (success, stdout, stderr, return_code, command_string).
     """
     executables = _find_executables()
     
@@ -159,6 +160,9 @@ def _run_peaksearch(input_image: str, output_dir: str,
         base_name = input_path.stem
     output_file = Path(output_dir) / f'peaks_{base_name}.txt'
     
+    # Map peak_shape to single letter if needed
+    peak_shape_flag = peak_shape[0].upper() if peak_shape else 'L'
+    
     # Build peaksearch command
     cmd = [
         executables['peaksearch'],
@@ -166,12 +170,14 @@ def _run_peaksearch(input_image: str, output_dir: str,
         '-R', str(max_rfactor),
         '-m', str(min_size),
         '-s', str(min_separation),
-        '-t', str(threshold),
-        '-p', peak_shape,
+        '-p', peak_shape_flag,
         '-M', str(max_peaks)
     ]
     
     # Add optional parameters
+    # Only add threshold if it's set (not None)
+    if threshold is not None:
+        cmd.extend(['-t', str(threshold)])
     if mask_file:
         cmd.extend(['-K', mask_file])
     if threshold_ratio != -1:
@@ -186,7 +192,7 @@ def _run_peaksearch(input_image: str, output_dir: str,
 
 
 def _run_p2q(peaks_file: str, output_dir: str, geo_file: str, crystal_file: str,
-             timeout: int = 300) -> Tuple[bool, str, str, int]:
+             timeout: int = 300) -> Tuple[bool, str, str, int, str]:
     """
     Run the pix2qs (p2q) executable.
     
@@ -198,7 +204,7 @@ def _run_p2q(peaks_file: str, output_dir: str, geo_file: str, crystal_file: str,
         timeout: Command timeout in seconds.
         
     Returns:
-        Tuple of (success, stdout, stderr, return_code).
+        Tuple of (success, stdout, stderr, return_code, command_string).
     """
     executables = _find_executables()
     
@@ -220,7 +226,7 @@ def _run_indexing(p2q_file: str, output_dir: str,
                   index_kev_max_calc: float, index_kev_max_test: float,
                   index_angle_tolerance: float, index_cone: float,
                   index_h: int, index_k: int, index_l: int,
-                  timeout: int = 300) -> Tuple[bool, str, str, int]:
+                  timeout: int = 300) -> Tuple[bool, str, str, int, str]:
     """
     Run the euler (indexing) executable.
     
@@ -237,7 +243,7 @@ def _run_indexing(p2q_file: str, output_dir: str,
         timeout: Command timeout in seconds.
         
     Returns:
-        Tuple of (success, stdout, stderr, return_code).
+        Tuple of (success, stdout, stderr, return_code, command_string).
     """
     executables = _find_executables()
     
@@ -482,7 +488,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     
     # Step 1: Run peaksearch
     log_parts.append("Running peak search...")
-    success, stdout, stderr, returncode = _run_peaksearch(
+    success, stdout, stderr, returncode, cmd_str = _run_peaksearch(
         input_image, str(subdirs['peaks']),
         boxsize, max_rfactor, min_size,
         min_separation, threshold, peak_shape,
@@ -490,7 +496,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         threshold_ratio, smooth,
         timeout
     )
-    command_history.append(f"peaksearch {input_image} -> {subdirs['peaks']}")
+    command_history.append(cmd_str)
     log_parts.append(f"Peak search stdout: {stdout}")
     if stderr:
         log_parts.append(f"Peak search stderr: {stderr}")
@@ -547,10 +553,10 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     if n_peaks_found > 0:
         # Step 2: Run p2q conversion
         log_parts.append("Running pixel-to-q conversion...")
-        success, stdout, stderr, returncode = _run_p2q(
+        success, stdout, stderr, returncode, cmd_str = _run_p2q(
             peaks_file, str(subdirs['p2q']), geo_file, crystal_file, timeout
         )
-        command_history.append(f"pix2qs {peaks_file} -> {subdirs['p2q']}")
+        command_history.append(cmd_str)
         log_parts.append(f"P2Q stdout: {stdout}")
         if stderr:
             log_parts.append(f"P2Q stderr: {stderr}")
@@ -598,14 +604,14 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         if n_peaks_found > 1:
             # Step 3: Run indexing
             log_parts.append("Running indexing...")
-            success, stdout, stderr, returncode = _run_indexing(
+            success, stdout, stderr, returncode, cmd_str = _run_indexing(
                 p2q_file, str(subdirs['index']),
                 index_kev_max_calc, index_kev_max_test,
                 index_angle_tolerance, index_cone,
                 index_h, index_k, index_l,
                 timeout
             )
-            command_history.append(f"euler {p2q_file} -> {subdirs['index']}")
+            command_history.append(cmd_str)
             log_parts.append(f"Indexing stdout: {stdout}")
             if stderr:
                 log_parts.append(f"Indexing stderr: {stderr}")
