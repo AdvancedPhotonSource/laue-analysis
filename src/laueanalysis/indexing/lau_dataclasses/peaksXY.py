@@ -52,6 +52,10 @@ class PeaksXY:
 
     def set(self, key, val):
         if key in self.__dict__.keys():
+            # Skip None values - they don't need conversion
+            if val is None:
+                self.__dict__[key] = val
+                return
             floats = ['minwidth', 'threshold', 'maxRfactor', 'maxwidth', 'maxCentToFit', 'executionTime']
             if key in ['Npeaks']:
                 val = int(val)
@@ -80,14 +84,20 @@ class PeaksXY:
             'maxRfactor', 'maxwidth', 'maxCentToFit', 'boxsize']
 
         for attr in attrs:
-            elem.set(attr, str(getattr(self, attr)))
+            val = getattr(self, attr)
+            if val is not None:
+                elem.set(attr, str(val))
 
-        elem.set('max_number', str(self.NpeakMax))
-        elem.set('min_separation', str(self.minSeparation))
+        if self.NpeakMax is not None:
+            elem.set('max_number', str(self.NpeakMax))
+        if self.minSeparation is not None:
+            elem.set('min_separation', str(self.minSeparation))
 
         attrs = ['peakShape', 'Npeaks', 'executionTime']
         for attr in attrs:
-            elem.set(attr, str(getattr(self, attr)))
+            val = getattr(self, attr)
+            if val is not None:
+                elem.set(attr, str(val))
 
         if self.maskFile:
             elem.set('maskFile', self.maskFile)

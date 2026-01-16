@@ -60,7 +60,8 @@ class Indexing:
         for attr in attrs:
             elem.set(attr, str(getattr(self, attr)))
         #breaking up in the middle to preserve order, but need to rename NpatternsFound
-        elem.set('Npatterns', self.NpatternsFound)
+        # Fix: Added str() wrapper to handle None values properly
+        elem.set('Npatterns', str(self.NpatternsFound) if self.NpatternsFound is not None else '0')
         attrs =['keVmaxCalc',
             'keVmaxTest', 'angleTolerance', 'cone', 'hklPrefer', 'executionTime']
         for attr in attrs:
