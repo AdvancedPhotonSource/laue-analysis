@@ -112,6 +112,7 @@ def _setup_output_dirs(output_dir: Union[str, Path]) -> Dict[str, Path]:
         'peaks': output_dir / 'peaks',
         'p2q': output_dir / 'p2q',
         'index': output_dir / 'index',
+        'xml': output_dir / 'xml',
         'error': output_dir / 'error'
     }
     
@@ -694,7 +695,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             
             # Determine XML output file path
             if xml_output_file is None:
-                xml_file = get_default_xml_filename(output_dir)
+                xml_file = get_default_xml_filename(output_dir, input_image)
             else:
                 xml_file = xml_output_file
             

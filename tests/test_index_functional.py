@@ -85,8 +85,8 @@ def test_index_function_with_mocked_executables(test_config_data, temp_image_fil
             'euler': '/mock/euler'
         }
         
-        # Mock successful execution for all steps
-        mock_run_cmd.return_value = (True, "Mock output", "", 0)
+        # Mock successful execution for all steps (5 values: success, stdout, stderr, return_code, cmd_string)
+        mock_run_cmd.return_value = (True, "Mock output", "", 0, "/mock/command")
         mock_parse_peaks.return_value = 10  # Found 10 peaks
         mock_parse_index.return_value = 8   # Indexed 8 reflections
         
@@ -173,7 +173,7 @@ def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
             'euler': '/mock/euler'
         }
         
-        mock_run_cmd.return_value = (True, "Mock output", "", 0)
+        mock_run_cmd.return_value = (True, "Mock output", "", 0, "/mock/command")
         mock_parse_peaks.return_value = 0  # No peaks found
         
         # Create expected peaks file (empty)
@@ -214,7 +214,7 @@ def test_index_function_insufficient_peaks_for_indexing(temp_image_file, temp_ou
             'euler': '/mock/euler'
         }
         
-        mock_run_cmd.return_value = (True, "Mock output", "", 0)
+        mock_run_cmd.return_value = (True, "Mock output", "", 0, "/mock/command")
         mock_parse_peaks.return_value = 1  # Only 1 peak found
         
         # Create expected peaks and p2q files
@@ -258,10 +258,10 @@ def test_index_function_with_errors_continues_processing(temp_image_file, temp_o
             'euler': '/mock/euler'
         }
         
-        # Mock peaksearch fails but still produces output, p2q fails
+        # Mock peaksearch fails but still produces output, p2q fails (5 values each)
         mock_run_cmd.side_effect = [
-            (False, "Peak search output", "Peak search error", 1),  # peaksearch fails but produces file
-            (False, "P2Q output", "P2Q error", 1),  # p2q fails
+            (False, "Peak search output", "Peak search error", 1, "/mock/peaksearch"),  # peaksearch fails but produces file
+            (False, "P2Q output", "P2Q error", 1, "/mock/p2q"),  # p2q fails
         ]
         mock_parse_peaks.return_value = 5  # Found 5 peaks
         
@@ -302,7 +302,7 @@ def test_index_function_default_config():
             'euler': '/mock/euler'
         }
         
-        mock_run_cmd.return_value = (True, "Mock output", "", 0)
+        mock_run_cmd.return_value = (True, "Mock output", "", 0, "/mock/command")
         mock_parse_peaks.return_value = 0
         
         # Create expected output file for defaults
@@ -340,7 +340,7 @@ def test_index_function_complete_failure():
             'euler': '/mock/euler'
         }
         
-        mock_run_cmd.return_value = (False, "", "Command failed", 1)
+        mock_run_cmd.return_value = (False, "", "Command failed", 1, "/mock/command")
         
         # Use a unique temporary output directory and do not create any peaks files
         with tempfile.TemporaryDirectory() as temp_dir:

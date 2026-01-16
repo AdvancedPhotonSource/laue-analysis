@@ -47,16 +47,32 @@ def write_combined_xml(steps: List[Step], xml_file: str) -> None:
         f.write(pretty_xml)
 
 
-def get_default_xml_filename(output_dir: str, prefix: str = '') -> str:
+def get_default_xml_filename(output_dir: str, input_image: str = '', prefix: str = '') -> str:
     """
-    Get the default XML output filename.
+    Get the default XML output filename based on the input image.
+    
+    XML files are stored in the 'xml' subdirectory of the output directory,
+    following the same pattern as other intermediate files (peaks, p2q, index).
     
     Args:
         output_dir: Output directory path.
+        input_image: Path to input image file (used to derive unique filename).
         prefix: Optional prefix for the filename.
         
     Returns:
-        Full path to the XML file.
+        Full path to the XML file in the xml subdirectory.
     """
-    filename = f'{prefix}indexed.xml' if prefix else 'indexed.xml'
-    return str(Path(output_dir) / filename)
+    xml_dir = Path(output_dir) / 'xml'
+    
+    # Create xml directory if it doesn't exist
+    xml_dir.mkdir(parents=True, exist_ok=True)
+    
+    if input_image:
+        # Derive filename from input image, similar to peaks/p2q/index files
+        input_base = Path(input_image).stem
+        filename = f'{prefix}indexed_{input_base}.xml' if prefix else f'indexed_{input_base}.xml'
+    else:
+        # Fallback for combined/batch operations
+        filename = f'{prefix}indexed.xml' if prefix else 'indexed.xml'
+    
+    return str(xml_dir / filename)

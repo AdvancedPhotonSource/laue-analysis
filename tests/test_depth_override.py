@@ -89,14 +89,15 @@ def _make_fake_run_peaksearch(template: str):
         peaks_path = out_dir / f"peaks_{base_name}.txt"
         content = template.format(input_image=input_image)
         peaks_path.write_text(content)
-        # Return code tuple: success, stdout, stderr, return_code
-        return True, "fake peaksearch ok", "", 0
+        # Return code tuple: success, stdout, stderr, return_code, cmd_string
+        return True, "fake peaksearch ok", "", 0, "/mock/peaksearch"
     return _fake_run_peaksearch
 
 
 def _fake_run_p2q(*args, **kwargs):
     # Do nothing, just return success. We won't create a p2q output file.
-    return True, "fake p2q ok", "", 0
+    # Return code tuple: success, stdout, stderr, return_code, cmd_string
+    return True, "fake p2q ok", "", 0, "/mock/p2q"
 
 
 @pytest.mark.parametrize("template_has_depth", [True, False])
