@@ -113,7 +113,7 @@ def test_get_step_element(xml_writer, test_args):
     
     # Check if the returned element has the expected structure
     assert step_element.tag == 'step'
-    assert step_element.get('xmlns') == 'python3p8'
+    assert step_element.get('original_xmlns') == 'python3p8'
     
     # Check if step has a detector child
     detector = step_element.find('detector')
@@ -145,7 +145,7 @@ def test_write_xml(xml_writer, test_args):
         with open(tmp_path, 'r') as f:
             content = f.read()
             # Check for key elements in the XML
-            assert '<step xmlns="python3p8">' in content
+            assert '<step original_xmlns="python3p8">' in content
             assert '<title>Test Title</title>' in content
             assert '<sampleName>Ni Sample</sampleName>' in content
             assert '<detector>' in content

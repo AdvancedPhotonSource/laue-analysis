@@ -9,7 +9,7 @@ from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
 class Step:
     '''
     Example output:
-    <step xmlns="">
+    <step original_xmlns="http://sector34.xray.aps.anl.gov/34ide:indexResult">
         <title> </title>
         <sampleName> </sampleName>
         <userName>Liu</userName>
@@ -36,7 +36,7 @@ class Step:
     </step>
     '''
 
-    xmlns: str = '' #TODO what does this value represent?
+    original_xmlns: str = 'http://sector34.xray.aps.anl.gov/34ide:indexResult'
     title: str = ''
     sampleName: str = ''
     userName: str = ''
@@ -80,7 +80,7 @@ class Step:
 
     def getXMLElem(self) -> Element:
         elem = Element("step")
-        elem.set('xmlns', self.xmlns)
+        elem.set('original_xmlns', self.original_xmlns)
         attrs = ['title', 'sampleName', 'userName', 'beamline',
             'scanNum']
         for attr in attrs:

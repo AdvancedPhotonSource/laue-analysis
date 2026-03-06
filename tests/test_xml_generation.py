@@ -19,6 +19,11 @@ from laueanalysis.indexing.xml_utils import write_step_xml, write_combined_xml
 from laueanalysis.indexing.lau_dataclasses.step import Step
 from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
 
+# The original_xmlns value required by the downstream processing program.
+# Originally this was emitted as "xmlns", but that interfered with XML
+# namespace parsing, so it is now written as "original_xmlns".
+STEP_XMLNS = 'http://sector34.xray.aps.anl.gov/34ide:indexResult'
+
 
 @pytest.fixture
 def sample_peaks_file():
@@ -222,6 +227,45 @@ def test_xml_generation_structure():
     assert '<detector>' in xml_str
     assert '<indexing' in xml_str
 
+    # The original_xmlns attribute on <step> preserves the original namespace
+    # metadata without interfering with XML namespace parsing.
+    assert xml_elem.get('original_xmlns') == 'http://sector34.xray.aps.anl.gov/34ide:indexResult'
+
+
+def test_step_original_xmlns_default():
+    """Test that Step dataclass has the correct default original_xmlns value.
+
+    The original_xmlns attribute on <step> preserves the original namespace
+    metadata. The value must be
+    'http://sector34.xray.aps.anl.gov/34ide:indexResult' so that the
+    downstream program can identify the XML schema.
+    """
+    step = Step()
+    assert step.original_xmlns == 'http://sector34.xray.aps.anl.gov/34ide:indexResult'
+
+
+def test_step_original_xmlns_in_xml_element():
+    """Test that Step.getXMLElem() emits the original_xmlns attribute on <step>.
+
+    The original_xmlns attribute on <step> preserves the original namespace
+    metadata without interfering with XML namespace parsing.
+    """
+    step = Step()
+    step.indexing = Indexing()
+    step.indexing.set('Nindexed', '0')
+    step.indexing.set('indexProgram', 'euler')
+    step.indexing.set('Npeaks', 0)
+    step.indexing.set('NpatternsFound', '0')
+
+    xml_elem = step.getXMLElem()
+
+    assert xml_elem.tag == 'step'
+    assert xml_elem.get('original_xmlns') == 'http://sector34.xray.aps.anl.gov/34ide:indexResult'
+
+    # Also verify it appears in the serialized XML string
+    xml_str = ElementTree.tostring(xml_elem, encoding='unicode')
+    assert 'original_xmlns="http://sector34.xray.aps.anl.gov/34ide:indexResult"' in xml_str
+
 
 def test_write_step_xml():
     """Test writing a single step to XML file."""
@@ -256,9 +300,12 @@ def test_write_step_xml():
         assert len(root) == 1  # One step
         
         step_elem = root[0]
+
+        # With original_xmlns (instead of xmlns), ElementTree does not apply
+        # namespace prefixing — the tag is just 'step'.
         assert step_elem.tag == 'step'
-        
-        # Find and check specific elements
+
+        # Find and check specific elements (no namespace prefix)
         title_elem = step_elem.find('title')
         assert title_elem is not None
         assert title_elem.text == 'Test'
@@ -266,7 +313,12 @@ def test_write_step_xml():
         beamline_elem = step_elem.find('beamline')
         assert beamline_elem is not None
         assert beamline_elem.text == '34ID-E'
-        
+
+        # Also verify the raw file content contains the original_xmlns attribute.
+        with open(temp_xml, 'r') as f:
+            content = f.read()
+        assert f'original_xmlns="{STEP_XMLNS}"' in content
+
     finally:
         if os.path.exists(temp_xml):
             os.unlink(temp_xml)
@@ -303,11 +355,19 @@ def test_write_combined_xml():
         assert root.tag == 'AllSteps'
         assert len(root) == 3  # Three steps
         
+        # With original_xmlns (instead of xmlns), ElementTree does not apply
+        # namespace prefixing — the tag is just 'step'.
+
         # Check each step
         for i, step_elem in enumerate(root):
             assert step_elem.tag == 'step'
             title_elem = step_elem.find('title')
             assert title_elem.text == f'Test {i}'
+
+        # Also verify the raw file content contains the original_xmlns attribute.
+        with open(temp_xml, 'r') as f:
+            content = f.read()
+        assert content.count(f'original_xmlns="{STEP_XMLNS}"') == 3
             
     finally:
         if os.path.exists(temp_xml):
@@ -340,6 +400,9 @@ def test_xml_formatting():
         # Check for proper indentation (4 spaces)
         assert '\n    <step' in content
         assert '\n        <title>' in content
+
+        # The original_xmlns attribute preserves the original namespace metadata.
+        assert 'original_xmlns="http://sector34.xray.aps.anl.gov/34ide:indexResult"' in content
         
     finally:
         if os.path.exists(temp_xml):
@@ -408,8 +471,12 @@ $SpaceGroup	225
         
         assert root.tag == 'AllSteps'
         step_elem = root[0]
+
+        # With original_xmlns (instead of xmlns), ElementTree does not apply
+        # namespace prefixing — the tag is just 'step'.
+        assert step_elem.tag == 'step'
         
-        # Check detector section
+        # Check detector section (no namespace prefix)
         detector = step_elem.find('detector')
         assert detector is not None
         
@@ -429,6 +496,11 @@ $SpaceGroup	225
         
         pattern = indexing.find('pattern')
         assert pattern is not None
+
+        # Verify the raw file content contains the original_xmlns attribute.
+        with open(xml_file, 'r') as f:
+            content = f.read()
+        assert f'original_xmlns="{STEP_XMLNS}"' in content
         
     finally:
         # Cleanup

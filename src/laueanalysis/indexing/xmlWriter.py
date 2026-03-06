@@ -45,7 +45,7 @@ class XMLWriter:
 
     def getStepElement(self, args):
         step = self._getElement('step', args, texts=self.stepTexts)
-        step.set('xmlns', 'python3p8')
+        step.set('original_xmlns', 'python3p8')
         energy = SubElement(step, 'energy', unit=args.energyUnit)
         energy.set('text', str(args.energy))
         step.append(self._getDetectorElement(args))
