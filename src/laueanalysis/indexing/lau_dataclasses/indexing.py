@@ -34,7 +34,7 @@ class Indexing:
     hklPrefer: str = None
     executionTime: float = None
     patterns: list = field(default_factory=lambda: [])
-    xtl = Xtl()
+    xtl: Xtl = field(default_factory=Xtl)
 
     def set(self, key, val):
         floats = ['keVmaxCalc', 'keVmaxTest', 'angleTolerance', 'cone', 'executionTime']

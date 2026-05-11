@@ -93,13 +93,10 @@ $recip_lattice0	{{-0.1924936,8.4843187,-12.9893838}{-15.4015677,-1.6708082,-0.86
 [  1]   ( 0.1558722  0.7066679 -0.6901625)     (  5  -1   1)    0.2379,    11.5256,     0.00902      6
 [  2]   ( 0.1099165  0.6673192 -0.7366162)     (  7  -1   1)    0.0760,    14.8415,     0.00572      0
 $structureDesc	Aluminum
-$xtlFile	tests/data/crystal/Al.xtal
+$xtalFileName	tests/data/crystal/Al.xtal
 $SpaceGroup	225
 $latticeParameters	0.40495 0.40495 0.40495 90 90 90
-$atom0	0 0 0
-$symbol0	Al
-$label0	Al
-$n0	1
+$AtomDesctiption1	{Al001  0 0 0 1}
 """
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
         f.write(content)
@@ -192,6 +189,28 @@ def test_parse_indexing_file(sample_index_file):
     # Check crystal structure
     assert indexing.xtl.structureDesc == 'Aluminum'
     assert indexing.xtl.SpaceGroup == '225'
+    assert len(indexing.xtl.atoms) == 1
+
+
+def test_parse_indexing_file_does_not_share_xtl(sample_index_file):
+    """Parsing multiple files must not accumulate crystal atoms across instances."""
+    first = parse_indexing_file(sample_index_file, n_peaks=13)
+    second = parse_indexing_file(sample_index_file, n_peaks=13)
+
+    assert first.xtl is not second.xtl
+    assert len(first.xtl.atoms) == 1
+    assert len(second.xtl.atoms) == 1
+
+
+def test_indexing_xtl_is_per_instance():
+    first = Indexing()
+    second = Indexing()
+
+    first.xtl.set('AtomDesctiption1', '{Ni001  0 0 0 1}')
+
+    assert first.xtl is not second.xtl
+    assert len(first.xtl.atoms) == 1
+    assert len(second.xtl.atoms) == 0
 
 
 def test_xml_generation_structure():
