@@ -42,7 +42,7 @@ gsl_vector * f)
 	size_t	n = ((ObservedValues *)params)->n;
 	double	*y = ((ObservedValues *)params)->y;
 
-	if(a->size != 4) { printf("Error, wrong numParameters in expb_f_1D!\n"); exit(1); }
+	if(a->size != 4) return GSL_EBADLEN;
 
 	A = gsl_vector_get(a,0);
 	mu = gsl_vector_get(a,1);
@@ -82,7 +82,7 @@ gsl_matrix * J)
 	size_t	i;
 	double	df_dA, df_dmu, df_dsigma, df_db;
 
-	if(a->size != 4) { printf("Error, wrong numParameters in expb_df_1D!\n"); exit(1); }
+	if(a->size != 4) return GSL_EBADLEN;
 
 	A		= gsl_vector_get(a,0);
 	mu		= gsl_vector_get(a,1);
@@ -114,9 +114,9 @@ const gsl_vector * a,
 void *params,
 gsl_vector * f, gsl_matrix * J)
 {
-	expb_f_1D(a, params, f);
-	expb_df_1D(a, params, J);
-	return GSL_SUCCESS;
+	int status = expb_f_1D(a, params, f);
+	if (status != GSL_SUCCESS) return status;
+	return expb_df_1D(a, params, J);
 }
 
 
@@ -155,7 +155,12 @@ double	*results)
 
 	T = gsl_multifit_fdfsolver_lmsder;
 	s = gsl_multifit_fdfsolver_alloc (T, n, p);
-	gsl_multifit_fdfsolver_set (s, &f, a);
+	if (!s) return GSL_ENOMEM;
+	status = gsl_multifit_fdfsolver_set (s, &f, a);
+	if (status != GSL_SUCCESS) {
+		gsl_multifit_fdfsolver_free(s);
+		return status;
+	}
 
 	do {
 		iter++;
@@ -198,7 +203,7 @@ gsl_vector * f)
 	double a0, a1, a2, a3, a4, a5, a6;
 	int i;
 
-	if(a->size < 6 || a->size >7) { printf("Error, wrong numParameters in expb_f_2D size=%lu !\n",a->size); exit(1); }
+	if(a->size < 6 || a->size > 7) return GSL_EBADLEN;
 	a0 = gsl_vector_get(a,0);
 	a1 = gsl_vector_get(a,1);
 	a2 = gsl_vector_get(a,2);
@@ -243,7 +248,7 @@ gsl_matrix *J)
 	double	a1, a2, a3, a4, a5, a6;
 	int		i;
 
-	if(a->size < 6 || a->size >7) { printf("Error, wrong numParameters in expb_f_2D!\n"); exit(1); }
+	if(a->size < 6 || a->size > 7) return GSL_EBADLEN;
 	n = nx*ny;
 
 /*	double *y = ((Grid *)image)->values;
@@ -294,9 +299,9 @@ void *params,
 gsl_vector *f,
 gsl_matrix *J)
 {
-	expb_f_2D(a,params,f);
-	expb_df_2D(a,params,J);
-	return GSL_SUCCESS;
+	int status = expb_f_2D(a,params,f);
+	if (status != GSL_SUCCESS) return status;
+	return expb_df_2D(a,params,J);
 }
 
 
@@ -328,7 +333,12 @@ double	*a_fit)
 
 	T = gsl_multifit_fdfsolver_lmsder;
 	s = gsl_multifit_fdfsolver_alloc (T, n, p);
-	gsl_multifit_fdfsolver_set (s, &f, a);
+	if (!s) return GSL_ENOMEM;
+	status = gsl_multifit_fdfsolver_set (s, &f, a);
+	if (status != GSL_SUCCESS) {
+		gsl_multifit_fdfsolver_free(s);
+		return status;
+	}
 
 	do {
 		iter++;
@@ -372,20 +382,22 @@ double	*a_fit)
 {
 	int nx=image->width;
 	int ny=image->height;
-	double	*ax, *ay;
-	double	*x, *y;
-	double	*ax_fit, *ay_fit;
-	int		i;
+	int status = GSL_ENOMEM;
+	int i;
+	Grid *image_roi = NULL;
+	Point *center = NULL;
+	double ax[4], ay[4], ax_fit[4], ay_fit[4];
+	double *x = NULL, *y = NULL;
+	ObservedValues paramsX, paramsY;
+	int ix, iy;
 
-	/* find maxima location (ix,iy) in image */
-	Grid *image_roi = grid_new_copy_region(image,0,0,nx-1,ny-1);
-	grid_smooth_boxcar(image_roi,1);
-	Point* center=centroid_2(image_roi,0,0);
-	int ix=(int)(center->x);
-	int iy=(int)(center->y);
+	image_roi = grid_new_copy_region(image,0,0,nx-1,ny-1);
+	if (!image_roi || grid_smooth_boxcar(image_roi,1)) goto cleanup;
+	center=centroid_2(image_roi,0,0);
+	if (!center) goto cleanup;
+	ix=(int)(center->x);
+	iy=(int)(center->y);
 
-	ax=malloc(4*sizeof(double));
-	ay=malloc(4*sizeof(double));
 	ax[0] = grid_get_value(image,ix,iy)-a[0];
 	ax[1] = center->x;
 	ax[2] = a[2];
@@ -395,23 +407,19 @@ double	*a_fit)
 	ay[2] = a[3];
 	ay[3] = a[0];
 
-	x = malloc(ny*sizeof(double));
-	y = malloc(nx*sizeof(double));
-
+	x = malloc((size_t)ny*sizeof(double));
+	y = malloc((size_t)nx*sizeof(double));
+	if (!x || !y) goto cleanup;
 	for(i=0;i<ny;i++) x[i]=grid_get_value(image,i,iy);
 	for(i=0;i<nx;i++) y[i]=grid_get_value(image,ix,i);
 
+	paramsX.n = ny; paramsX.y = x;
+	paramsY.n = nx; paramsY.y = y;
+	status = fitGauss_1D(ax,&paramsX,ax_fit);
+	if (status != GSL_SUCCESS) goto cleanup;
+	status = fitGauss_1D(ay,&paramsY,ay_fit);
+	if (status != GSL_SUCCESS) goto cleanup;
 
-	ObservedValues paramsX = {ny,x};
-	ObservedValues paramsY = {nx,y};
-
-	ax_fit = malloc(4*sizeof(double));
-	ay_fit = malloc(4*sizeof(double));
-
-	fitGauss_1D(ax,&paramsX,ax_fit);
-	fitGauss_1D(ay,&paramsY,ay_fit);
-
-	/* adjust parameter list a */
 	a[0] = (ax_fit[3] + ay_fit[3])/2.;
 	a[1] = sqrt(fabs(ax_fit[0]*ay_fit[0]));
 	a[2] = fabs(ax_fit[2]);
@@ -419,12 +427,15 @@ double	*a_fit)
 	a[4] = ax_fit[1];
 	a[5] = ay_fit[1];
 
-	fitGauss_2D(a, (void *)image, a_fit);
-	a_fit[6]= mod(a_fit[6],M_PI);
+	status = fitGauss_2D(a, (void *)image, a_fit);
+	if (status == GSL_SUCCESS) a_fit[6]= mod(a_fit[6],M_PI);
 
+cleanup:
+	point_delete(center);
+	grid_delete(image_roi);
 	free(x);
 	free(y);
-	return 0;
+	return status;
 }
 
 
@@ -440,7 +451,7 @@ are all reset with fitted values
 changed Aug 2009 by JZT to reject data values of NAN.
 
  *******************************************************************/
-void fitToFunctionGauss(
+int fitToFunctionGauss(
 Grid	*image,
 double	*fitx,
 double	*fity,
@@ -454,6 +465,7 @@ double	*chisq)
 //	double *a, *a_fit;
 	double a[7], a_fit[7];
 	int		nx, ny, n;
+	int		status;
 	double	s, c;
 	double	xp, yp,u,F,chi, datai, *data;
 	double	sumChi=0., sumData=0.;
@@ -470,7 +482,8 @@ double	*chisq)
 	a[5] = *fity;
 	a[6] = 0.;
 
-	Gauss2DFit(a,image,a_fit);				/* interface for doing the 2D fit */
+	status = Gauss2DFit(a,image,a_fit);			/* interface for doing the 2D fit */
+	if (status != GSL_SUCCESS) return status;
 
 	nx = image->width;
 	ny = image->height;
@@ -499,9 +512,7 @@ double	*chisq)
 	*widthy = a_fit[3] * hw_sigma;
 	*tilt = a_fit[6]*180./M_PI;
 	*chisq = sumChi/sumData;
-
-//	free(a);
-//	free(a_fit);
+	return GSL_SUCCESS;
 }
 
 

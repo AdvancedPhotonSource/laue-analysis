@@ -100,7 +100,7 @@ Grid* grid_new_upscale(Grid* g, int scale_exponent) {
 }
 
 //apply smooth filter (averaging) on image with filter size 2*range+1 by 2*range+1
-void grid_smooth_boxcar(Grid* g, int range) {
+int grid_smooth_boxcar(Grid* g, int range) {
 
 	/* here, range is the distance from the centrepoint to an outer edge - a radius, were this a circle */
 	/* this is to prevent odd or undefined behaviour were an even number to be passed as a width value */
@@ -109,6 +109,7 @@ void grid_smooth_boxcar(Grid* g, int range) {
 	int pixels_counted = 0;
 	
 	Grid* smoothed_grid = grid_new_copy(g);
+	if (!smoothed_grid) return 1;
 	
 	int x, y;
 	for (x = 0; x < g->width; x++){
@@ -138,10 +139,10 @@ void grid_smooth_boxcar(Grid* g, int range) {
 	/* copy the resutls back into the first grid and delete the temporary one */
 	grid_copy(g, smoothed_grid);
 	grid_delete(smoothed_grid);
-
+	return 0;
 }
 
-void grid_smooth_median(Grid* g, int range) {
+int grid_smooth_median(Grid* g, int range) {
 	
 	/* here, range is the distance from the centrepoint to an outer edge - a radius, were this a circle */
 	/* this is to prevent odd or undefined behaviour were an even number to be passed as a width value */
@@ -152,6 +153,7 @@ void grid_smooth_median(Grid* g, int range) {
 	int x, y, x2, y2;
 	
 	Grid* smoothed_grid = grid_new_copy(g);
+	if (!smoothed_grid) return 1;
 	
 	//perform median filter on the image, the size of the filter is 2*range+1 by 2*range+1
 	for (x = 0; x < g->width; x++){
@@ -174,12 +176,12 @@ void grid_smooth_median(Grid* g, int range) {
 	/* copy the resutls back into the first grid and delete the temporary one */
 	grid_copy(g, smoothed_grid);
 	grid_delete(smoothed_grid);
-	return;
+	return 0;
 }
 
 
 #warning "change the gaussian smoothing to allow sizes other than 2, JZT"
-void grid_smooth_gauss(Grid* g, int Nf2) {
+int grid_smooth_gauss(Grid* g, int Nf2) {
 	/* use a Gaussian kernel that is (Nf x Nf).  NOTE, Nf must be 5! */
 	/* see:	http://homepages.inf.ed.ac.uk/rbf/HIPR2/gsmooth.htm */
 	/* this routine uses zero for edge pixels where the kernel extends beyond the image */
@@ -194,13 +196,13 @@ void grid_smooth_gauss(Grid* g, int Nf2) {
 	size_t	ip,jp;				/* current pixel being filtered */
 	size_t	lo,hi;				/* loop over the kernel */
 
-	if (Nf2!=2) return;							/* do nothing if Nf2 not 2,  (so Nf not 5), FIX this limitation */
-	if (Nf2<1) return;							/* Nf2 must be at least 1 */
+	if (Nf2!=2) return 0;							/* do nothing if Nf2 not 2,  (so Nf not 5), FIX this limitation */
+	if (Nf2<1) return 0;							/* Nf2 must be at least 1 */
 
 	Nx = g->width;
 	Ny = g->height;
 
-	if (!(filter=calloc(Nf,sizeof(double)))) exit(ENOMEM);	/* Not enough space. */
+	if (!(filter=calloc(Nf,sizeof(double)))) return 1;
 
 	for (m=0,sumFilter=0.0; m<Nf; m++) {		/* set filter values */
 		arg = (m-Nf2)*0.585;
@@ -211,6 +213,7 @@ void grid_smooth_gauss(Grid* g, int Nf2) {
 	for (m=0;m<Nf;m++) filter[m] /= sumFilter;	/* normalize the filter */
 
 	Grid* temp_grid = grid_new_copy(g);			/* temp copy of image for smoothing */
+	if (!temp_grid) { free(filter); return 1; }
 
 	for (ip=0;ip<Nx;ip++) {						/* smooth along the X direction */
 		lo = MAX(ip-Nf2,0);
@@ -231,7 +234,8 @@ void grid_smooth_gauss(Grid* g, int Nf2) {
 	}
 	
 	grid_delete(temp_grid);						/* done with temporary grid, delete it */
-	return;
+	free(filter);
+	return 0;
 }
 
 

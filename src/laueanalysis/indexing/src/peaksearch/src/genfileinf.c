@@ -10,6 +10,7 @@
 //default seting, can be read from a file
 Genfileinf * default_genfileinf(void){
 	Genfileinf *ginf = malloc(sizeof(Genfileinf));
+	if (!ginf) return NULL;
 	ginf->tilt = 0.;
 	ginf->widthx = 3.;
 	ginf->widthy = 3.;

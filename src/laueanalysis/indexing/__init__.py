@@ -9,11 +9,34 @@ This submodule contains the core indexing functionality including:
 - Compiled C binaries for peak search, q-space conversion, and indexing
 """
 
-from .index import index, IndexingResult
+from ._liblaue import Geometry, load_geometry
+from .crystal import Atom, Cell, Crystal, load_crystal
+from .errors import IndexingError, InputError, LaueError
+from .index import IndexingResult, index, lauego
+from .indexer import (
+    FrameMetadata, FrameResult, Indexer, IndexParams, Pattern, PeakParams, index_frame,
+)
 from .xmlWriter import XMLWriter
 
 __all__ = [
     'index',
-    'IndexingResult', 
+    'lauego',
+    'IndexingResult',
+    'index_frame',
+    'Indexer',
+    'Cell',
+    'Atom',
+    'Crystal',
+    'load_crystal',
+    'Geometry',
+    'load_geometry',
+    'LaueError',
+    'InputError',
+    'IndexingError',
+    'PeakParams',
+    'IndexParams',
+    'Pattern',
+    'FrameMetadata',
+    'FrameResult',
     'XMLWriter'
 ]

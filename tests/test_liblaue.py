@@ -1,0 +1,189 @@
+from pathlib import Path
+import subprocess
+
+import numpy as np
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+LIBRARY = ROOT / "src/laueanalysis/indexing/bin/liblaue.so"
+pytestmark = pytest.mark.skipif(not LIBRARY.is_file(), reason="liblaue.so is not built")
+
+
+def _table_after(path: Path, marker: str, delimiter=None) -> np.ndarray:
+    lines = path.read_text().splitlines()
+    start = next(index for index, line in enumerate(lines) if marker in line) + 1
+    return np.loadtxt(lines[start:], delimiter=delimiter, ndmin=2)
+
+
+def test_shared_library_does_not_import_process_termination():
+    symbols = subprocess.run(
+        ["nm", "-D", str(LIBRARY)], capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    imports = {line.split()[-1].split("@")[0] for line in symbols if " U " in line}
+
+    assert "exit" not in imports
+    assert "abort" not in imports
+
+
+@pytest.mark.parametrize(
+    "p2q_file",
+    sorted((ROOT / "sandbox/results/i71_baseline_20/p2q").glob("p2q_*.txt")),
+    ids=lambda path: path.stem.removeprefix("p2q_"),
+)
+def test_pixels_to_q_matches_i71_reference(p2q_file):
+    from laueanalysis.indexing._liblaue import Geometry, version
+
+    geometry_file = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
+    peaks_file = ROOT / "sandbox/results/i71_baseline_20/peaks" / p2q_file.name.replace("p2q_", "peaks_")
+
+    peak_rows = _table_after(peaks_file, "$peakList")
+    expected = _table_after(p2q_file, "$N_Ghat+Intens", delimiter=",")[:, :3]
+    geometry = Geometry(geometry_file)
+    actual = geometry.pixels_to_q(peak_rows[:, :2])
+
+    assert version() == "0.2.0"
+    assert geometry.detector_count == 3
+    assert geometry.find_detector("PE1621 723-3335") == 0
+    np.testing.assert_allclose(actual, expected, atol=5e-8, rtol=0)
+
+
+def test_pixels_to_q_validates_input_shape():
+    from laueanalysis.indexing._liblaue import Geometry
+
+    geometry = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml")
+    with pytest.raises(ValueError, match="shape"):
+        geometry.pixels_to_q(np.zeros(3))
+
+
+def test_pixels_to_q_accepts_empty_input():
+    from laueanalysis.indexing._liblaue import Geometry
+
+    geometry = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml")
+    result = geometry.pixels_to_q(np.empty((0, 2)))
+    assert result.shape == (0, 3)
+
+
+def test_geometry_exposes_detector_metadata():
+    from laueanalysis.indexing._liblaue import Geometry
+
+    geometry = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml")
+    detector = geometry.detector(0)
+
+    assert (detector.nx, detector.ny) == (2048, 2048)
+    assert detector.detector_id == "PE1621 723-3335"
+    assert detector.size_x == pytest.approx(409600)
+    assert detector.size_y == pytest.approx(409600)
+
+
+def test_geometry_rejects_invalid_detector_parameters(tmp_path):
+    from laueanalysis.indexing._liblaue import Geometry
+
+    source = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
+    path = tmp_path / "invalid-geometry.xml"
+    path.write_text(source.read_text().replace("<Npixels>2048 2048</Npixels>", "<Npixels>0 2048</Npixels>"))
+
+    with pytest.raises(ValueError, match="unable to read detector geometry"):
+        Geometry(path)
+
+
+def test_pixels_to_q_validates_detector_bounds_and_coordinates():
+    from laueanalysis.indexing._liblaue import Geometry
+
+    geometry = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml")
+
+    with pytest.raises(ValueError, match="detector bounds"):
+        geometry.pixels_to_q(np.asarray([[2048.0, 0.0]]))
+    with pytest.raises(ValueError, match="finite"):
+        geometry.pixels_to_q(np.asarray([[np.nan, 0.0]]))
+    with pytest.raises(ValueError, match="integers"):
+        geometry.pixels_to_q(np.asarray([[0.0, 0.0]]), start=(0.5, 0))
+    with pytest.raises(ValueError, match="invalid detector index"):
+        geometry.pixels_to_q(np.asarray([[0.0, 0.0]]), detector_index=3)
+
+
+def _geometry_with(source, *, count="3", detector_1=None, detector_2=None, extras=""):
+    text = source.read_text()
+    start_1 = text.index('\t\t<Detector N="1">')
+    start_2 = text.index('\t\t<Detector N="2">')
+    end_2 = text.index("\t</Detectors>")
+    block_1 = text[start_1:start_2]
+    block_2 = text[start_2:end_2]
+    transformed = text[:start_1] + (block_1 if detector_1 is None else detector_1)
+    transformed += (block_2 if detector_2 is None else detector_2) + extras + text[end_2:]
+    return transformed.replace('Ndetectors="3"', f'Ndetectors="{count}"')
+
+
+def test_sparse_detector_slots_are_addressable(tmp_path):
+    from laueanalysis.indexing import Indexer
+    from laueanalysis.indexing._liblaue import Geometry
+
+    source = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
+    path = tmp_path / "sparse.xml"
+    path.write_text(_geometry_with(source, count="2", detector_1=""))
+    geometry = Geometry(path)
+
+    assert geometry.detector_count == 2
+    assert geometry.find_detector("PE0822 883-4843") == 2
+    assert geometry.detector(2).detector_id == "PE0822 883-4843"
+    with pytest.raises(ValueError, match="invalid detector index"):
+        geometry.detector(1)
+
+    indexer = Indexer(geometry, detector_index=2)
+    by_id = Indexer(geometry, detector_id="PE0822 883-4843")
+    result = indexer.process(np.zeros((8, 12), dtype=np.uint16))
+    assert by_id.detector_index == 2
+    assert result.image_shape == (8, 12)
+
+
+@pytest.mark.parametrize(
+    "transform",
+    [
+        lambda source: source.replace('<Detector N="2">', '<Detector N="3">'),
+        lambda source: source.replace('<Detector N="2">', '<Detector N="1">'),
+        lambda source: source.replace('Ndetectors="3"', 'Ndetectors="2"'),
+        lambda source: source.replace('<Detector N="2">', '<Detector>'),
+        lambda source: source.replace('<Detector N="2">', '<Detector N="two">'),
+        lambda source: source.replace('Ndetectors="3"', 'Ndetectors="three"'),
+        lambda source: source.replace(
+            '<P unit="mm">28.834 2.715 513.399</P>', ""
+        ),
+    ],
+    ids=[
+        "slot-too-large",
+        "duplicate-slot",
+        "count-mismatch",
+        "missing-slot",
+        "nonnumeric-slot",
+        "nonnumeric-count",
+        "incomplete",
+    ],
+)
+def test_geometry_rejects_malformed_detector_declarations(tmp_path, transform):
+    from laueanalysis.indexing._liblaue import Geometry
+
+    source = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
+    path = tmp_path / "malformed.xml"
+    path.write_text(transform(source.read_text()))
+
+    with pytest.raises(ValueError, match="unable to read detector geometry"):
+        Geometry(path)
+
+
+def test_detector_geometry_ignores_unrelated_invalid_sample_and_wire(tmp_path):
+    from laueanalysis.indexing._liblaue import Geometry
+
+    source = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
+    path = tmp_path / "detector-only.xml"
+    text = source.read_text()
+    text = text.replace(
+        '<Origin unit="micron">0 0 0</Origin>',
+        '<Origin unit="micron">nan nan nan</Origin>',
+        1,
+    )
+    text = text.replace('<dia unit="micron">101.5</dia>', '<dia unit="micron">0</dia>')
+    path.write_text(text)
+
+    geometry = Geometry(path)
+    assert geometry.detector_count == 3
+    assert geometry.detector(0).detector_id == "PE1621 723-3335"

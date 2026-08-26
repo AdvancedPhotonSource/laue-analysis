@@ -11,7 +11,7 @@
 Point* point_new_initialized(double x, double y, double value){
 	
 	Point* p = malloc(sizeof(Point));
-	if (!p) exit(ENOMEM);		/* Not enough space. */
+	if (!p) return NULL;		/* Not enough space. */
 	p->x = x;
 	p->y = y;
 	p->value = value;
@@ -23,7 +23,7 @@ Point* point_new_initialized(double x, double y, double value){
 Point* point_new(void){
 
 	Point* p = malloc(sizeof(Point));
-	if (!p) exit(ENOMEM);		/* Not enough space. */
+	if (!p) return NULL;		/* Not enough space. */
 	p->x = 0;
 	p->y = 0;
 	p->value = 0;

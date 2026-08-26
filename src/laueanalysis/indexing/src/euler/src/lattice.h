@@ -136,7 +136,7 @@ double densityOfCrystalStructure(struct crystalStructure *xtal);
 
 void lowestOrderHKL(long hkl[3]);
 void lowestAllowedHKL(long hkl[3], struct crystalStructure *xtal);
-void copyCrystalStructure(struct crystalStructure *destLat, struct crystalStructure *sourceLat);
+int copyCrystalStructure(struct crystalStructure *destLat, struct crystalStructure *sourceLat);
 void InitCleanCrystalStructure(struct crystalStructure *lat);
 void freeCrystalStructure(struct crystalStructure *lat);
 

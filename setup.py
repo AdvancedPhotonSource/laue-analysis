@@ -6,7 +6,14 @@ It only handles the custom C compilation logic.
 """
 
 from setuptools import setup
-from setuptools.command.build import build
+try:
+    from setuptools.command.build import build
+except ModuleNotFoundError:
+    from setuptools._distutils.command.build import build
+try:
+    from setuptools.command.bdist_wheel import bdist_wheel
+except ImportError:
+    from wheel.bdist_wheel import bdist_wheel
 import subprocess
 import os
 import shutil
@@ -61,8 +68,9 @@ class CustomBuild(build):
             'indexing': {
                 'programs': {
                     'euler': 'euler',
-                    'peaksearch': 'peaksearch', 
-                    'pixels2qs': 'pix2qs'  # This program creates 'pix2qs' executable
+                    'peaksearch': 'peaksearch',
+                    'pixels2qs': 'pix2qs',  # This program creates 'pix2qs' executable
+                    'liblaue': 'liblaue.so',
                 },
                 'special_builds': {'peaksearch': ['make', 'linux']}
             },
@@ -145,9 +153,21 @@ class CustomBuild(build):
                     # Don't fail the entire installation, just warn
 
 
+class PlatformWheel(bdist_wheel):
+    """Mark wheels containing Python-independent ELF binaries as platform-specific."""
+
+    def finalize_options(self):
+        super().finalize_options()
+        self.root_is_pure = False
+
+    def get_tag(self):
+        return "py3", "none", super().get_tag()[2]
+
+
 # Minimal setup() call - most configuration is now in pyproject.toml
 setup(
     cmdclass={
         'build': CustomBuild,
+        'bdist_wheel': PlatformWheel,
     },
 )

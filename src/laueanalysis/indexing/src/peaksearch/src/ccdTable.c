@@ -10,11 +10,13 @@
 CCDTable * loadCCDTable ( char * filename){
 
   CCDTable *ct = malloc(sizeof(CCDTable));
-  
-  FILE *input=fopen(filename,"r");
+  FILE *input;
+  if (!ct) return NULL;
+
+  input=fopen(filename,"r");
   if(input==NULL){
-    printf("Error: Can not open file %s to read\n", filename);
-    exit(1);
+    free(ct);
+    return NULL;
   }
   char line[256], delim[]=" ";
 
@@ -28,14 +30,15 @@ CCDTable * loadCCDTable ( char * filename){
   ct->cornery1=atoi(strtok(NULL,delim));
  
   ct->xymap=malloc(sizeof(float)*(ct->nx)*(ct->ny)*4);
-  if(!ct->xymap) exit(ENOMEM);
+  if(!ct->xymap) { fclose(input); free(ct); return NULL; }
 
 	int i;
   for(i=0;i<(ct->nx)*(ct->ny)*4;i+=4){
     if(fgets(line,256,input)==NULL){
-	printf("Error in reading file %s.\n",filename);
-	exit(1);
-      }
+      fclose(input);
+      ccdTable_delete(ct);
+      return NULL;
+    }
     ct->xymap[i]=atof(strtok(line,delim));
     ct->xymap[i+1]=atof(strtok(NULL,delim));
     ct->xymap[i+2]=atof(strtok(NULL,delim));
@@ -60,9 +63,8 @@ void ccdTable_setValue(CCDTable *ct,float value, int x,int y,int i){
 }
 
 void ccdTable_delete(CCDTable* ct){
-  
+  if (!ct) return;
   free(ct->xymap);
-  
   free(ct);
 
 } 

@@ -5,13 +5,14 @@
 
 #define isNotNAN(A) ( (A) == (A) )
 
-List*	get_blob_list(Grid* image, Grid* bitmap);
-void	get_blob_points(Grid* image, Grid* bitmap, List* list, int x, int y);
+List*	get_blob_list(Grid* image, Grid* bitmap, int *status);
+int	get_blob_points(Grid* image, Grid* bitmap, List* list, int x, int y);
 bool	peakQualify(double fitX,double fitY,double centX,double centY,double widthx, double widthy, double chisq,double tilt, Genfileinf *ginf);
-double	peakIntegral(Grid *image,double fitX,double fitY,Genfileinf *ginf);
-void	peakCorrection(double *fitX, double *fitY,Genfileinf *ginf);
+int	peakIntegral(Grid *image,double fitX,double fitY,Genfileinf *ginf,double *integr);
+int	peakCorrection(double *fitX, double *fitY,Genfileinf *ginf);
 double	biggestIntensity(List *peaks, double maxIntens, double *x, double *y);
 void	removeSmallerNearbyPeaks(List *peaks, double px, double py, double pIntens, int minSeparation);
+static void deletePointList(List *points);
 #ifdef OLD_UNUSED_CODE
 List*	find_maximas(Grid* image, double threshold, int npix, double saturation_level, int shiftx, int shifty);
 #endif
@@ -113,7 +114,15 @@ Genfileinf *ginf)			/* general parameters */
 
 		if (ginf->peakShape == 1)		fitToFunctionGauss(image_roi_fit, &x0,&y0, &z0,&A, &hwhmX,&hwhmY, &tilt,&chisq);
 		else if(ginf->peakShape == 0)	fitToFunctionLorentz(image_roi_fit, &x0,&y0, &z0,&A, &hwhmX,&hwhmY, &tilt,&chisq);
-		else { fprintf(stderr,"ERROR -- in boxsearch(), ginf->peakShape = %d, it must be 0 or 1\n",ginf->peakShape); exit(1); }
+		else {
+#ifdef LIBLAUE_BUILD
+			grid_delete(imageMedian);
+			return peaks;
+#else
+			fprintf(stderr,"ERROR -- in boxsearch(), ginf->peakShape = %d, it must be 0 or 1\n",ginf->peakShape);
+			exit(1);
+#endif
+		}
 //		value = grid_get_value(image_roi_fit,(int)round(x0),(int)round(y0));
 		if (x0<0 || x0>=image_roi_fit->width || y0<0 || y0>=image_roi_fit->height || !(x0==x0) || !(y0==y0)) value = NAN;
 		else value = grid_get_value(image_roi_fit,(int)round(x0),(int)round(y0));
@@ -126,7 +135,8 @@ Genfileinf *ginf)			/* general parameters */
 
 
 		if(peakQualify(x0,y0,xcom,ycom,hwhmX,hwhmY,chisq,tilt,ginf) && (value==value)) {
-			double integr = peakIntegral(imageRaw,x0,y0,ginf);
+			double integr;
+			if (peakIntegral(imageRaw,x0,y0,ginf,&integr)) integr = NAN;
 			//printf("beforeCorrection : intens,x0,y0: %f %f %f \n",intens,x0,y0);
 			peakCorrection(&x0,&y0,ginf);
 			//printf("afterCorrection : intens,x0,y0,: %f %f %f \n",intens,x0,y0);
@@ -271,10 +281,14 @@ List * processBlobs(
 List *blobs,					/* list of points where peaks are to be found */
 WinViewImage *wimage,			/* input image */
 Genfileinf *ginf,				/* general parameters */
-int		NpeakMax)				/* maximum allowed number of peaks */
+int		NpeakMax,				/* maximum allowed number of peaks */
+double	background,				/* image-wide fit background */
+int		*status)
 {
 	List * peaks = list_new();						/* for holding peak list */
-	double	xoff=ginf->xoff, yoff=ginf->yoff;		/* information from Genfileinf for doing peak fitting,e.g. fitToFunction */
+	double	xoff=ginf->xoff, yoff=ginf->yoff;
+	if (status) *status = 0;
+	if (!peaks) { if (status) *status = 1; return NULL; }		/* information from Genfileinf for doing peak fitting,e.g. fitToFunction */
 	int		boxsize = ginf->boxsize;				/* local copy of boxsize */
 	int		x1, x2, y1, y2;							/* box for image_roi, used to process one blob */
 	int		width, height;							/* size of image (pixels) */
@@ -313,32 +327,46 @@ int		NpeakMax)				/* maximum allowed number of peaks */
 			y2=min(y2,height-1);
 
 			Grid* image_roi = grid_new_copy_region(image,x1,y1,x2,y2);
+			if (!image_roi) goto allocation_error;
 			if(image_roi->width >= boxsize/2 && image_roi->height >= boxsize/2) {
-				Point * cent=centroid(image_roi,x1,y1);
-				double centX = cent->x + xoff + 1.;
-				double centY = cent->y + yoff + 1.;
+				Point *cent=centroid(image_roi,x1,y1);
+				double centX, centY;
+				int fit_status;
+				if (!cent) { grid_delete(image_roi); goto allocation_error; }
+				centX = cent->x + xoff + 1.;
+				centY = cent->y + yoff + 1.;
 
 				/* set starting point of fit, initial guesses, width is hwhm */
 				double widthx=ginf->widthx, widthy=ginf->widthy, tilt=ginf->tilt;
-				double fitX, fitY,fitIntens,background,chisq=0.;
+				double fitX, fitY,fitIntens,fitBackground=background,chisq=0.;
 				fitX=round((x2-x1)/2.);
 				fitY=round((y2-y1)/2.);
 				fitIntens=intens;
-				background=grid_get_average(image);
-				if (ginf->peakShape == 1)		fitToFunctionGauss(image_roi,&fitX,&fitY,&background, &fitIntens,&widthx, &widthy,&tilt,&chisq);
-				else if(ginf->peakShape == 0)	fitToFunctionLorentz(image_roi,&fitX,&fitY,&background, &fitIntens,&widthx, &widthy,&tilt,&chisq);
-				else { fprintf(stderr,"ERROR -- in processBlobs(), ginf->peakShape = %d, it must be 0 or 1\n",ginf->peakShape); exit(1); }
+				if (ginf->peakShape == 1)		fit_status = fitToFunctionGauss(image_roi,&fitX,&fitY,&fitBackground, &fitIntens,&widthx, &widthy,&tilt,&chisq);
+				else if(ginf->peakShape == 0)	fit_status = fitToFunctionLorentz(image_roi,&fitX,&fitY,&fitBackground, &fitIntens,&widthx, &widthy,&tilt,&chisq);
+				else fit_status = 1;
+				point_delete(cent);
+				if (fit_status) {
+					grid_delete(image_roi);
+					if (status) *status = fit_status == GSL_ENOMEM ? 1 : 2;
+					return peaks;
+				}
 				fitX += x1 + xoff + 1.;				/* translate from small roi to full image */
 				fitY += y1 + yoff +1.;				/* NOTE, these are 1 based pixels, remember to write as 0 based */
 
-				//printf("beforeCorrection : entens,fitx,fity: %f %f %f \n",intens,fitX,fitY);
-				peakCorrection(&fitX,&fitY,ginf);
-				//printf("afterCorrection : intens,fitx,fity,: %f %f %f \n",intens,fitX,fitY);
+				if (peakCorrection(&fitX,&fitY,ginf)) { grid_delete(image_roi); goto allocation_error; }
 
 				if(peakQualify(fitX,fitY,centX,centY,widthx,widthy,chisq,tilt,ginf)) {
-					double integr = peakIntegral(image,fitX,fitY,ginf);
-					list_append(peaks, peak_new_initialized(centX,centY,intens,fitX,fitY,
-						fitIntens,background,widthx,widthy,tilt,integr,boxsize,chisq));
+					double integr;
+					Peak *peak;
+					if (peakIntegral(image,fitX,fitY,ginf,&integr)) { grid_delete(image_roi); goto allocation_error; }
+					peak = peak_new_initialized(centX,centY,intens,fitX,fitY,
+						fitIntens,fitBackground,widthx,widthy,tilt,integr,boxsize,chisq);
+					if (!peak || list_append(peaks, peak)) {
+						peak_delete(peak);
+						grid_delete(image_roi);
+						goto allocation_error;
+					}
 				} /* end if(peakQualify...) */
 				#ifdef DEBUG
 				// else printf("skip %ld \t%s",i,qualifyStr);
@@ -349,6 +377,10 @@ int		NpeakMax)				/* maximum allowed number of peaks */
 
 		blob = blob->next;
 	} /* end while(blob...) */
+	return peaks;
+
+allocation_error:
+	if (status) *status = 1;
 	return peaks;
 }
 
@@ -485,12 +517,13 @@ void savePeaksIDL(List *peaks, char *filename) {
 
 
 /* returns the net peak integral for a region around a peak */
-double peakIntegral(
+int peakIntegral(
 Grid	*image,			/* image to use */
 double	fitX,			/* peak posiiton */
 double	fitY,
-Genfileinf *ginf) {		/* general parameters about the image */
-	double integr=0.;
+Genfileinf *ginf,
+double	*integr) {		/* general parameters about the image */
+	*integr=0.;
 
 	int boxsize = ginf->boxsize;
 	int xoff = (int)ginf->xoff;
@@ -518,6 +551,7 @@ Genfileinf *ginf) {		/* general parameters about the image */
 	if(xlow < xmax-2 && ylow < ymax-2) {
 		Grid * image_roi = grid_new_copy_region(image,round(xlow-1-xoff),round(ylow-1-yoff),round(xmax-1-xoff),round(ymax-1-yoff));
 		Grid * image_roi_b = grid_new_copy_region(image,round(xlow-xoff),round(ylow-yoff),round(xmax-2-xoff),round(ymax-2-yoff));
+		if (!image_roi || !image_roi_b) { grid_delete(image_roi); grid_delete(image_roi_b); return 1; }
 
 		double roi_total = grid_get_total(image_roi);
 		int xxdim = image_roi->width;
@@ -527,6 +561,7 @@ Genfileinf *ginf) {		/* general parameters about the image */
 		int n_roi_b = image_roi_b->width * image_roi_b->height;
 
 		double *edgebackground = malloc((n_roi - n_roi_b)* sizeof(double));
+		if (!edgebackground) { grid_delete(image_roi); grid_delete(image_roi_b); return 1; }
 
 		/* first row of image_roi */
 		int i;
@@ -547,20 +582,22 @@ Genfileinf *ginf) {		/* general parameters about the image */
 
 		double background = median(edgebackground, n_roi-n_roi_b);
 
-		integr = (roi_total - background * n_roi)/1000.;
+		*integr = (roi_total - background * n_roi)/1000.;
 
+		free(edgebackground);
 		grid_delete(image_roi);
 		grid_delete(image_roi_b);
 	}
-	return integr;
+	return 0;
 }
 /*****************************************************************************/
 
 
-void peakCorrection(double *fitx,double *fity,Genfileinf *ginf) {
-	if (strlen(ginf->CCDFilename) < 1) return;	/* no distortion file, so nothing to do */
+int peakCorrection(double *fitx,double *fity,Genfileinf *ginf) {
+	if (strlen(ginf->CCDFilename) < 1) return 0;	/* no distortion file, so nothing to do */
 
 	Calibparam *cp=default_calibparam(); /* need to be free */
+	if (!cp) return 1;
 	float dpsx = cp->dpsx;
 	// float dpsy = cp->dpsy;
 	int xdim = cp->xdim;
@@ -570,8 +607,10 @@ void peakCorrection(double *fitx,double *fity,Genfileinf *ginf) {
 	delete_calibparam(cp);
 
 	CCDTable *ct = loadCCDTable(ginf->CCDFilename); /* need to be free */
+	if (!ct) return 1;
 
 	float *cornerxy=malloc(4*sizeof(float));
+	if (!cornerxy) { ccdTable_delete(ct); return 1; }
 
 	switch (ct->cornerx0) {
 		case 1:cornerxy[0]=ccdTable_getValue(ct,0,0,0);
@@ -680,6 +719,7 @@ void peakCorrection(double *fitx,double *fity,Genfileinf *ginf) {
 	*fity+=deltay;
 	free(cornerxy);
 	ccdTable_delete(ct);
+	return 0;
 }
 
 
@@ -745,30 +785,31 @@ List* blobsearch(
 Grid*	image,				/* image to search on */
 double	threshold,			/* threshold used to identify a blob */
 int		min_size,			/* minimum size in both x and y for valid blob */
-bool	maxima_search)		/* for big blobs do a bit of smoothing first */
+bool	maxima_search,		/* for big blobs do a bit of smoothing first */
+int		*status)
 {
 
-	Grid* bitmap_image = grid_new_copy(image);
+	Grid* bitmap_image = grid_new(image->width, image->height);
+	List* all_maximas = NULL;
+	List* blob_maximas;
+	List* blobs = NULL;
+	if (status) *status = 0;
+	if (!bitmap_image) goto allocation_error;
 
-	/*iterate over every element in image, if it is below threshold, make it a 0, else make it a 1*/
+	/* Build the bitmap directly in row-major order without copying the image first. */
 	int x, y;
-	for (x = 0; x < bitmap_image->width; x++) {
-		for (y = 0; y < bitmap_image->height; y++) {
-
-			if (grid_get_value(bitmap_image, x, y) < threshold) {
-				grid_set_value(bitmap_image, x, y, 0);
-			} else {
-				grid_set_value(bitmap_image, x, y, 1);
-			}
-
+	for (y = 0; y < bitmap_image->height; y++) {
+		for (x = 0; x < bitmap_image->width; x++) {
+			int location = y * bitmap_image->width + x;
+			bitmap_image->values[location] = image->values[location] < threshold ? 0.0 : 1.0;
 		}
 	}
 
-	List* all_maximas = list_new();
-	List* blob_maximas;
-	List* blobs;
+	all_maximas = list_new();
+	if (!all_maximas) goto allocation_error;
 
-	blobs = get_blob_list(image, bitmap_image);
+	blobs = get_blob_list(image, bitmap_image, status);
+	if (!blobs || (status && *status)) goto allocation_error;
 	// printf("number of blobs: %d\n",blobs->size);
 
 
@@ -823,21 +864,30 @@ bool	maxima_search)		/* for big blobs do a bit of smoothing first */
 
 			/* grab a copy of the section of the image that contains the blob in question */
 			Grid* image_roi = grid_new_copy_region(image, xmin, ymin, xmax, ymax);
+			Point *center;
+			if (!image_roi) goto allocation_error;
 
 			int npix = 4;		/* 2*npix+1 is size of local area in which there can be only one maxima */
 
 			/* find_maximas also blanks out 2*npix pixels on the borders (npix pixels on each side */
 			/* so if the size of this region is less than 2*npix+1, we can't use our find_maximas function on it */
 			if ( (xmax - xmin > 2*npix+1) && (ymax-ymin > 2*npix+1) && maxima_search) {
-				grid_smooth_median(image_roi, 1);
-				grid_smooth_boxcar(image_roi, 1);
-				blob_maximas = list_new();
-				list_append( blob_maximas, centroid_2(image_roi, xmin, ymin) ); /* centroid_2 is for large blob center */
+				if (grid_smooth_median(image_roi, 1) || grid_smooth_boxcar(image_roi, 1)) {
+					grid_delete(image_roi);
+					goto allocation_error;
+				}
+				center = centroid_2(image_roi, xmin, ymin);
 			}
 			else {
 				/* too small an area for the find_maximas function */
-				blob_maximas = list_new();
-				list_append( blob_maximas, centroid(image_roi, xmin, ymin) );
+				center = centroid(image_roi, xmin, ymin);
+			}
+			blob_maximas = list_new();
+			if (!center || !blob_maximas || list_append(blob_maximas, center)) {
+				point_delete(center);
+				list_delete(blob_maximas);
+				grid_delete(image_roi);
+				goto allocation_error;
 			}
 
 			/* append the maximas in this list to the list of all maximas */
@@ -849,8 +899,42 @@ bool	maxima_search)		/* for big blobs do a bit of smoothing first */
 		blob_node = blob_node->next;
 	} /* Looping over all lists of blobs */
 
-	list_delete(blobs);
+	blob_node = blobs->head;
+	while (blob_node != EMPTY_NODE) {
+		deletePointList(blob_node->value);
+		blob_node = blob_node->next;
+	}
+	list_delete_nodes(blobs);
+	grid_delete(bitmap_image);
 	return all_maximas;
+
+allocation_error:
+	if (status) *status = 1;
+	if (blobs) {
+		blob_node = blobs->head;
+		while (blob_node != EMPTY_NODE) {
+			deletePointList(blob_node->value);
+			blob_node = blob_node->next;
+		}
+		list_delete_nodes(blobs);
+	}
+	if (all_maximas) {
+		ListNode *node = all_maximas->head;
+		while (node != EMPTY_NODE) { point_delete(node->value); node = node->next; }
+		list_delete_nodes(all_maximas);
+	}
+	grid_delete(bitmap_image);
+	return NULL;
+}
+
+static void deletePointList(List *points)
+{
+	ListNode *node = points->head;
+	while (node != EMPTY_NODE) {
+		free(node->value);
+		node = node->next;
+	}
+	list_delete_nodes(points);
 }
 
 #ifdef OLD_UNUSED_CODE
@@ -918,21 +1002,31 @@ List* find_maximas(Grid* image, double threshold, int npix, double saturation_le
 #endif
 
 /*****************************************************************************/
-List* get_blob_list(Grid* image, Grid* bitmap) {
+List* get_blob_list(Grid* image, Grid* bitmap, int *status) {
 
 	List* blob_list = list_new();
 	List* blob_point_list;
 
 	int x, y;
-	for (x = 0; x < image->width; x++) {
-		for (y = 0; y < image->height; y++) {
+	if (!blob_list) { if (status) *status = 1; return NULL; }
+	for (y = 0; y < image->height; y++) {
+		for (x = 0; x < image->width; x++) {
 
 			/* This is part of a blob */
 			if( grid_get_value(bitmap, x, y) == 1) {
 
 				blob_point_list = list_new();
-				get_blob_points(image, bitmap, blob_point_list, x, y);
-				list_append(blob_list, blob_point_list); /* add this list of points to the list of lists of points */
+				if (!blob_point_list || get_blob_points(image, bitmap, blob_point_list, x, y) ||
+					list_append(blob_list, blob_point_list)) {
+					deletePointList(blob_point_list);
+					if (status) *status = 1;
+					while (blob_list->head != EMPTY_NODE) {
+						deletePointList(blob_list->head->value);
+						list_remove(blob_list, blob_list->head);
+					}
+					list_delete(blob_list);
+					return NULL;
+				}
 			}
 		}
 	}
@@ -940,10 +1034,11 @@ List* get_blob_list(Grid* image, Grid* bitmap) {
 }
 
 /* given a starting point inside a blob, find all points in the blob */
-void get_blob_points(Grid* image, Grid* bitmap, List* list, int x, int y) {
+int get_blob_points(Grid* image, Grid* bitmap, List* list, int x, int y) {
 
 	double value = grid_get_value(image, x, y);
-	list_append( list, point_new_initialized(x, y, value) );
+	Point *point = point_new_initialized(x, y, value);
+	if (!point || list_append(list, point)) { point_delete(point); return 1; }
 	grid_set_value(bitmap, x, y, 0);
 
 	/* recurse */
@@ -954,13 +1049,13 @@ void get_blob_points(Grid* image, Grid* bitmap, List* list, int x, int y) {
 			if ( x+dx >= 0 && x+dx < image->width && y+dy >= 0 && y+dy < image->height && (dx != 0 || dy != 0) ) {
 
 				if (grid_get_value(bitmap, x+dx, y+dy) == 1) {
-					get_blob_points(image, bitmap, list, x+dx, y+dy);
+					if (get_blob_points(image, bitmap, list, x+dx, y+dy)) return 1;
 				}
 			}
 
 		}
 	}
-	return;
+	return 0;
 }
 
 
@@ -982,13 +1077,14 @@ int compare_doubleReverse(double *a, double *b);		/* only called by sorListPoint
 */
 
 /* sorts a list of Points, so that the largest Point->value are first */
-void sorListPoints(
+int sorListPoints(
 List	*blobs)						/* a list of Points which gets resorted */
 {
 	size_t	sort_len = blobs->size;
 	double *points;					/* holds (intens,x,y) to sort */
+	if (!sort_len) return 0;
 	points = (double*)calloc(3*sort_len,sizeof(double));			/* there are 3 values for each blob in blobs */
-	if (!points) { fprintf(stderr,"ERROR -- in sortList(), Could not allocate points %ld bytes\n",3*sort_len); exit(1); }
+	if (!points) return 1;
 
 	ListNode* blob=blobs->head;		/* fill array points */
 	size_t	i=0;
@@ -1011,7 +1107,7 @@ List	*blobs)						/* a list of Points which gets resorted */
 	}
 
 	free(points);					/* done with points, free it */
-	return;
+	return 0;
 }
 
 /*
@@ -1032,8 +1128,13 @@ int compare_doubleReverse(
 double	*a,
 double	*b)
 {
-	if (*a == *b) return 0;
-	else if (*a > *b) return -1;
-	else return 1;
+	if (a[0] > b[0]) return -1;
+	if (a[0] < b[0]) return 1;
+	/* Preserve the historical x-major discovery order when intensities tie. */
+	if (a[1] < b[1]) return -1;
+	if (a[1] > b[1]) return 1;
+	if (a[2] < b[2]) return -1;
+	if (a[2] > b[2]) return 1;
+	return 0;
 }
 

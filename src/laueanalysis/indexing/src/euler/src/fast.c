@@ -536,6 +536,7 @@ char	**headerBuf)		/* string with tag values to pass on to the output flie */
 }
 
 
+#ifndef LIBLAUE_BUILD
 /* returns value of associated with a tag from a buffer, each tag value pair is terminated by a new line */
 /* and tag is separated from its value by white space.  anything after a // is ignored, and can be used as comments in the file*/
 /* tags are limited to 120 characters, and the tag+file://localhost/Users/tischler/dev/Euler/Al.txtvalue is limited to 500 characters */
@@ -628,6 +629,7 @@ long	maxLen)		/* max length of line to pass back */
 	*p = '\0';
 	return 0;
 }
+#endif
 
 
 
@@ -760,7 +762,7 @@ struct	patternOfOneGrain foundPattern[MAX_GRAINS_PER_PATTERN]) /* hold the fitte
 	long	Nremain=Ni;						/* number of measured spots NOT assigned to patterns */
 	long	Ncurrent;						/* number of spots assigned to the current pattern */
 	double  peakValue;
-	struct WaveSpace_struct EulerSpace;		/* pointer to an array of EulerAngle_pair structures */
+	struct WaveSpace_struct EulerSpace = {0};	/* pointer to an array of EulerAngle_pair structures */
 	double  parallel;						/* cos(2*angleTolerance), if a dot is > parallel, then vectors are assumed in same direction */
 	struct box_struct gRange;				/* structure giving the allowed 3d values of (G^ .dot. x^), and also for y^ and z^ */
 	double  (*Gtest)[3]=NULL;				/* directions of calculated test spots on the detector */
@@ -808,14 +810,20 @@ struct	patternOfOneGrain foundPattern[MAX_GRAINS_PER_PATTERN]) /* hold the fitte
 	fprintf(fout,"the largest angle between two data G vectors are is %.2f (deg), with a dot of %g\n",acos(farDot)*180/M_PI,farDot);
 	fprintf(fout,"\n---> run MakeAllPossibleGvectors(), to make Gmhat[Nm][3], hklm[Nm][3], and GmLen[Nm]\n");
 #endif
-	MakeAllPossibleGvectors(&Nm,&Gmhat,&GmLen,&hklm,hkl0,cone,keVmaxCalc,xtal);
+	if (MakeAllPossibleGvectors(&Nm,&Gmhat,&GmLen,&hklm,hkl0,cone,keVmaxCalc,xtal)) {
+		err = 1;
+		goto return_path;
+	}
 	if (Nm<=0) goto return_path;
 
 #if (DEBUG)
 	fprintf(fout,"\n---> run MakeListOfAllEulerAngles()\n");
 #endif
 /*	MakeListOfAllEulerAngles(abgRange,angleTolerance,Ni,GhatSpots,farDot,NdotList,dotList,Nm,Gmhat,GmLen,&AllEulerAngles,&Neuler); */
-	MakeListOfAllEulerAngles(abgRange,angleTolerance,GhatSpots,farDot,NdotList,dotList,Nm,Gmhat,&AllEulerAngles,&Neuler);
+	if (MakeListOfAllEulerAngles(abgRange,angleTolerance,GhatSpots,farDot,NdotList,dotList,Nm,Gmhat,&AllEulerAngles,&Neuler)) {
+		err = 1;
+		goto return_path;
+	}
 	
 	/* create the EulerSpace, and initialize it, this is the array to hold the Hough transform */
 	EulerSpace.aoff = abgRange.xlo; EulerSpace.boff = abgRange.ylo;  EulerSpace.goff = abgRange.zlo;
@@ -824,12 +832,15 @@ struct	patternOfOneGrain foundPattern[MAX_GRAINS_PER_PATTERN]) /* hold the fitte
 	EulerSpace.db = (abgRange.yhi-abgRange.ylo)/EulerSpace.Nb;
 	EulerSpace.dg = (abgRange.zhi-abgRange.zlo)/EulerSpace.Ng;
 	EulerSpace.space = calloc((size_t)(EulerSpace.Na),sizeof(long **));
+	if (!EulerSpace.space) { err=1; goto return_path; }
 	for (n=0;n<(size_t)EulerSpace.Na;n++) {
 		EulerSpace.space[n] = calloc((size_t)(EulerSpace.Nb),sizeof(long *));
+		if (!EulerSpace.space[n]) { err=1; goto return_path; }
 	}
 	for (n=0;n<(size_t)EulerSpace.Na;n++) {
 		for (i=0;i<EulerSpace.Nb;i++) {
 			EulerSpace.space[n][i] = calloc((size_t)(EulerSpace.Ng),sizeof(long));
+			if (!EulerSpace.space[n][i]) { err=1; goto return_path; }
 		}
 	}
 	*Nfound = 0;
@@ -914,8 +925,11 @@ struct	patternOfOneGrain foundPattern[MAX_GRAINS_PER_PATTERN]) /* hold the fitte
 		for (i=0;i<MIN(Ntest,56);i++) fprintf(fout,"Gtest[%ld][] = (%8.5f, %8.5f, %8.5f)  (%3d %3d %3d )\n",i,Gtest[i][0],Gtest[i][1],Gtest[i][2],hklTest[i][0],hklTest[i][1],hklTest[i][2]);
 #endif
 #endif
-		if (foundGtest) foundGtest = realloc(foundGtest,sizeof(char)*Ntest);
-		else foundGtest = calloc((size_t)Ntest,sizeof(char)); 
+		if (foundGtest) {
+			char *resized = realloc(foundGtest,sizeof(char)*Ntest);
+			if (!resized) { err=1; goto return_path; }
+			foundGtest = resized;
+		} else foundGtest = calloc((size_t)Ntest,sizeof(char));
 		if (!foundGtest) { fprintf(stderr,"Unable to allocate space for foundGtest in OrientFast()\n"); err=1; goto return_path; }
 		intensTest = calloc((size_t)Ntest,sizeof(double)); 
 		if (!intensTest) { fprintf(stderr,"Unable to allocate space for intensTest in OrientFast()\n"); err=1; goto return_path; }
@@ -1011,7 +1025,10 @@ struct	patternOfOneGrain foundPattern[MAX_GRAINS_PER_PATTERN]) /* hold the fitte
 			for (i=0;i<itest;i++) goodness += intensTest[i];	/* set goodness for this pattern */
 			goodness = goodness>0. ? goodness*itest*itest : itest;
 			foundPattern[*Nfound].goodness = goodness;
-			copyCrystalStructure(&(foundPattern[*Nfound].xtal),xtal);
+			if (copyCrystalStructure(&(foundPattern[*Nfound].xtal),xtal)) {
+				err = 1;
+				goto return_path;
+			}
 			/* the functions in FillRecipInLattice should be taken care of by copyCrystalStructure() */
 			/* FillRecipInLattice(&(foundPattern[*Nfound].lattice)); // set the reciprocal lattice vectors */
 //printf("foundPattern[0].xtal.equiv.equivXYZM[3][0][0] = %g\n",foundPattern[0].xtal.equiv.equivXYZM[3][0][0]);	/* worked */
@@ -1060,8 +1077,10 @@ return_path:
 	CHECK_FREE(hklm);
 	if (EulerSpace.space) {
 		for (n=0;n<(size_t)EulerSpace.Na;n++) {
-			for (i=0;i<EulerSpace.Nb;i++) CHECK_FREE(EulerSpace.space[n][i]);
-			CHECK_FREE(EulerSpace.space[n]);
+			if (EulerSpace.space[n]) {
+				for (i=0;i<EulerSpace.Nb;i++) CHECK_FREE(EulerSpace.space[n][i]);
+				CHECK_FREE(EulerSpace.space[n]);
+			}
 		}
 		CHECK_FREE(EulerSpace.space);
 	}
@@ -1277,10 +1296,15 @@ double  keVmax)			/* maximum energy (keV) to go out to */
 				keV = hc*glen / (-4*M_PI*dot3(kihat,ghat));	/* G = 4*PI*sin(theta)/lambda, and G = 2*PI/d */
 				if (keV>keVmax) continue;
 				if (n>=N) {
+					double (*new_ghat)[3];
+					int (*new_hkl)[3];
 					N += 500;							/* need more space, reallocate */
-					*GhatSpots = realloc(*GhatSpots,N*3*sizeof(double));
-					*hklSpots  = realloc(*hklSpots,N*3*sizeof(int));
-					if (!(*GhatSpots)  || !(*hklSpots)) { fprintf(stderr,"Unable to re-allocate space for GhatSpots[][3] or hklSpots[][3]\n"); return 0; }
+					new_ghat = realloc(*GhatSpots,N*3*sizeof(double));
+					if (!new_ghat) { CHECK_FREE(*GhatSpots); CHECK_FREE(*hklSpots); return 0; }
+					*GhatSpots = new_ghat;
+					new_hkl = realloc(*hklSpots,N*3*sizeof(int));
+					if (!new_hkl) { CHECK_FREE(*GhatSpots); CHECK_FREE(*hklSpots); return 0; }
+					*hklSpots = new_hkl;
 				}
 #if (DEBUG>3)
 	if (n<55) fprintf(fout,"saving Gtest[%2ld] = (%2ld %2ld %2ld)  =  (%8.5f, %8.5f, %8.5f),  glen=%g,  keV=%g\n",n,h,k,l,ghat[0],ghat[1],ghat[2],glen,keV);
@@ -1293,8 +1317,6 @@ double  keVmax)			/* maximum energy (keV) to go out to */
 		}
 	}
 	N = n = RemoveDuplicateTripletsPlus(n,*GhatSpots,*hklSpots,sizeof((*hklSpots)[0]),0);
-	*GhatSpots = realloc(*GhatSpots,N*3*sizeof(double)); /* trim arrays to final size */
-	*hklSpots = realloc(*hklSpots,N*3*sizeof(int));
 	return N;
 }
 

@@ -52,8 +52,12 @@ Grid*	grid_new_copy_region(Grid* g, int x1, int y1, int x2, int y2);
 Grid*	grid_new_bin(Grid* g, int scale_exponent);
 void	grid_copy(Grid* destination, Grid* source);
 void	grid_copy_region(Grid* destination, Grid* source, int x1, int y1, int x2, int y2);
-void	grid_set_value(Grid* g, int x, int y, double value);
-double	grid_get_value(Grid* g, int x, int y);
+static inline void grid_set_value(Grid* g, int x, int y, double value) {
+	g->values[y * g->width + x] = value;
+}
+static inline double grid_get_value(Grid* g, int x, int y) {
+	return g->values[y * g->width + x];
+}
 double	grid_get_max(Grid* g);
 double	grid_get_min(Grid* g);
 Point	grid_get_maxLoc(Grid* g);

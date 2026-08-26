@@ -349,7 +349,9 @@ int main(int argc, char **argv){
 		/* if (smooth) grid_smooth_boxcar(image->data, 2); */
 		/* if (smooth) grid_smooth_boxcar(image->data, 1); */
 		/* if (smooth) grid_smooth_median(image->data, 1);						// median smooth, uses a 3x3 box to get rid of isolated noise spikes */
-		List* blobs = blobsearch(image->data, threshold, (int)min_size, true);
+		int helper_status = 0;
+		List* blobs = blobsearch(image->data, threshold, (int)min_size, true, &helper_status);
+		if (!blobs || helper_status) { fprintf(stderr,"peak search allocation failed\n"); exit(ENOMEM); }
 		#ifdef DEBUG
 			ListNode* blob = blobs->head;
 			i = 0;
@@ -361,10 +363,11 @@ int main(int argc, char **argv){
 		#endif
 
 	// #warning "Added sorListPoints() to speed up program when threshold is too low"
-	sorListPoints(blobs);		/* sort Points in blobs so that they are ordered from most to least intens */
+	if (sorListPoints(blobs)) { fprintf(stderr,"peak sorting allocation failed\n"); exit(ENOMEM); }
 
 //printf("\nstart processBlobs at %.2f seconds with %d blobs\n",((double)(clock() - tstart)) /((double)CLOCKS_PER_SEC),blobs->size);
-		peaks = processBlobs(blobs,image,ginf,NpeakMax);	/* list of peaks */
+		peaks = processBlobs(blobs,image,ginf,NpeakMax,grid_get_average(image->data),&helper_status);	/* list of peaks */
+		if (!peaks || helper_status) { fprintf(stderr,"peak fitting failed\n"); exit(helper_status == 1 ? ENOMEM : 1); }
 //printf("\nfinish processBlobs at %.2f seconds\n",((double)(clock() - tstart)) /((double)CLOCKS_PER_SEC));
 		list_delete_nodes(blobs);
 	#endif

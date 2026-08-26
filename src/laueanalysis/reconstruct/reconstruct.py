@@ -57,6 +57,7 @@ def _find_executable(name: str = 'reconstructN_cpu') -> str:
     )
 
 
+@functools.lru_cache(maxsize=4)
 def _validate_executable(exe_path: str) -> None:
     """
     Validate that executable works by running with --help.

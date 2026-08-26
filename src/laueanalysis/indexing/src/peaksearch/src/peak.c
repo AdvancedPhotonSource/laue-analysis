@@ -24,7 +24,7 @@ Peak* peak_new_initialized(
   double chisq){
 	
 	Peak* p = malloc(sizeof(Peak));
-	if (!p) exit(ENOMEM);		/* Not enough space. */
+	if (!p) return NULL;		/* Not enough space. */
 	p->x = x;
 	p->y = y;
 	p->intens=intens;
@@ -45,7 +45,7 @@ Peak* peak_new_initialized(
 Peak* peak_new(void){
 
 	Peak* p = malloc(sizeof(Peak));
-	if (!p) exit(ENOMEM);		/* Not enough space. */
+	if (!p) return NULL;		/* Not enough space. */
 	p->x = 0.;
 	p->y = 0.;
         p->intens=0.;

@@ -25,6 +25,7 @@ long XMLtagContents2ListDouble(char* tag, char* buf, int occurance, char* delimi
 long XMLtagContents2ListFloat(char* tag, char* buf, int occurance, char* delimiters, float** vec);
 long XMLtagContents2ListInt(char* tag, char* buf, int occurance, char* delimiters, int** vec);
 int XMLtagExists(char* tag, char* buf);
+char *startOfxmltag(char *tag, char *buf, int occurance);
 //	char ***XMLNodeList(char *buf);
 //	double *XMLtagContents2ListDouble(char* tag, char* buf, int occurance, char* delimiters);
 //	float *XMLtagContents2ListFloat(char* tag, char* buf, int occurance, char* delimiters);

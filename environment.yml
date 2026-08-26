@@ -5,6 +5,15 @@ channels:
 dependencies:
   - python=3.12.1
   - numpy=2.3.1
+  - pytest
+  - pyyaml
+  - cffi
+  - pip
+  - c-compiler
+  - make
   - gsl=2.8
   - hdf5=1.12.2
   - hdf5-static=1.12.2
+  - zlib
+  - pip:
+      - h5py

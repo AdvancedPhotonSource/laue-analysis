@@ -355,7 +355,7 @@ struct crystalStructure *xtal)			/* lattice */
 	SG = xtal->SpaceGroup;
 	if (xtal->equiv.SpaceGroup != SG || SG<1 || SG>230 || xtal->equiv.N<1 || !(xtal->equiv.equivXYZM) || !(xtal->equiv.equivXYZB)) {
 		fprintf(stderr,"the equivOpsStructure has not been set in setAtomXYZs(SG=%d, eqiv.SG=%d, eqiv.N=%d)\n",SG,xtal->equiv.SpaceGroup,xtal->equiv.N);
-		exit(1);
+		return 1;
 	}
 	Neq = xtal->equiv.N;				/* number of equivalent atom operations, the largest possible number of atoms of each type */
 
@@ -374,13 +374,13 @@ struct crystalStructure *xtal)			/* lattice */
 	}
 
 	xyz = calloc(Neq,sizeof(double*));
-	if (!(xyz)) { fprintf(stderr,"unable to allocate xyz space for %ld atoms in setAtomXYZs\n",Neq); exit(1); }
+	if (!(xyz)) return 1;
 	for (i=0;i<Neq;i++) {
 		xyz[i] = calloc(3,sizeof(double));
-		if (!(xyz[i])) { fprintf(stderr,"unable to allocate space for xyz[%ld] (one atom position) setAtomXYZs\n",i); exit(1); }
+		if (!(xyz[i])) goto allocation_error;
 	}
 	xtal->atom = calloc(Ntype*Neq,sizeof(*atom));	/* allocate for the max possible number of atoms */
-	if (!(xtal->atom)) { fprintf(stderr,"unable to allocate space for %ld atoms in setAtomXYZs()\n",Ntype*Neq); exit(1); }
+	if (!(xtal->atom)) goto allocation_error;
 	atom = xtal->atom;						/* atom is just a local copy of xtal->atom, for convienence */
 
 	for (m=N=0; m<Ntype; m++) {				/* loop over each atom type */
@@ -403,8 +403,14 @@ struct crystalStructure *xtal)			/* lattice */
 		}
 		N += j;
 	}
-	atom = realloc(atom,N*sizeof(*atom));	/* remove extra space (due to duplicate atom positions) */
-	if (!(atom)) { fprintf(stderr,"unable to re-allocate space for %ld atoms in setAtomXYZs()\n",N); exit(1); }
+	if (N) {
+		struct atomStructure *resized = realloc(atom,N*sizeof(*atom));
+		if (!(resized)) goto allocation_error;
+		atom = resized;
+	} else {
+		free(atom);
+		atom = NULL;
+	}
 	xtal->atom = atom;						/* make sure that xtal->atom stays in sych with atom */
 	xtal->N = N;
 
@@ -416,6 +422,12 @@ struct crystalStructure *xtal)			/* lattice */
 	for (i=0;i<Neq;i++) CHECK_FREE(xyz[i])
 	CHECK_FREE(xyz)
 	return 0;
+
+allocation_error:
+	for (i=0;i<Neq;i++) CHECK_FREE(xyz[i])
+	CHECK_FREE(xyz)
+	CHECK_FREE(xtal->atom)
+	return 1;
 }
 
 
@@ -435,10 +447,7 @@ double	**xyz)							/* returned, list of all equiv posiitions for this atom in f
 	size_t	N;							/* counter, number of distinct real atoms */
 	size_t	i, m;
 
-	if ((eq->SpaceGroup)<1 || (eq->SpaceGroup)>230 || (eq->N)<1 || !(eq->equivXYZM) || !(eq->equivXYZB)) {
-		fprintf(stderr,"the equivOpsStructure is wrong in positionsOfOneAtomType(SG=%d, eqiv.N=%d)\n",eq->SpaceGroup,eq->N);
-		exit(1);
-	}
+	if ((eq->SpaceGroup)<1 || (eq->SpaceGroup)>230 || (eq->N)<1 || !(eq->equivXYZM) || !(eq->equivXYZB)) return 0;
 	Neq = eq->N;
 	mats = eq->equivXYZM;
 	bvecs = eq->equivXYZB;
@@ -543,9 +552,9 @@ struct crystalStructure *xtal)			/* lattice */
 int UpdateInternalsOfCrystalStructure(				/* update all of the parts of the crystalStructure */
 struct crystalStructure *xtal)
 {
-	setDirectRecip(xtal);							/* update Vc, direct and recip, (NOT density or atom positions) */
-	SetSymOpsForSpaceGroup(xtal->SpaceGroup,&(xtal->equiv));	/* update eqivalent atom positions, does NOT generate the real atom positions */
-	setAtomXYZs(xtal);								/* lattice */
+	if (setDirectRecip(xtal)) return 1;
+	if (!SetSymOpsForSpaceGroup(xtal->SpaceGroup,&(xtal->equiv))) return 1;
+	if (setAtomXYZs(xtal)) return 1;
 	xtal->density = densityOfCrystalStructure(xtal);/* this needs Vc and all atom positions */
 	return 0;
 }
@@ -638,7 +647,7 @@ struct crystalStructure *xtal)			/* lattice */
 
 
 /* copy one crystalStructure to another */
-void copyCrystalStructure(
+int copyCrystalStructure(
 struct crystalStructure *destLat,		/* destination lattice */
 struct crystalStructure *sourceLat)		/* source lattice */
 {
@@ -720,7 +729,7 @@ struct crystalStructure *sourceLat)		/* source lattice */
 		struct atomTypeStructure *atomD=NULL;					/* pointer to destination atoms */
 		if (destLat->atomType == NULL) {						/* allocate space for atoms */
 			destLat->atomType = calloc(Ntype,sizeof(*atomS));
-			if (!(destLat->atomType)) { fprintf(stderr,"unable to allocate space for %ld atom types in copyCrystalStructure\n",Ntype); exit(1); }
+			if (!(destLat->atomType)) return 1;
 		}
 		atomD = destLat->atomType;	/* pointer to destination atoms */
 		for (i=0;i<Ntype;i++) {
@@ -740,7 +749,7 @@ struct crystalStructure *sourceLat)		/* source lattice */
 		struct atomStructure *atomD=NULL;				/* pointer to destination atoms */
 		if (destLat->atom == NULL) {					/* allocate space for atoms */
 			destLat->atom = calloc(N,sizeof(*atomS));
-			if (!(destLat->atom)) { fprintf(stderr,"unable to allocate space for %ld atoms in copyCrystalStructure\n",N); exit(1); }
+			if (!(destLat->atom)) return 1;
 		}
 		atomD = destLat->atom;							/* pointer to destination atoms */
 		for (i=0;i<N;i++) {
@@ -761,7 +770,7 @@ struct crystalStructure *sourceLat)		/* source lattice */
 		size_t	m,j;
 		double	***matsS, ***matsD;						/* these are for convienence */
 		double	**bvecS,  **bvecD;
-		allocateEquivAtomOps(&(destLat->equiv));
+		if (allocateEquivAtomOps(&(destLat->equiv))) return 1;
 		matsS = sourceLat->equiv.equivXYZM;				/* mats and bvec are for convienence */
 		bvecS = sourceLat->equiv.equivXYZB;
 		matsD = destLat->equiv.equivXYZM;
@@ -774,6 +783,7 @@ struct crystalStructure *sourceLat)		/* source lattice */
 		}
 	}
 
+	return 0;
 }
 
 
@@ -849,8 +859,7 @@ struct equivOpsStructure *eq)			/* allocate all of the space here */
 	return 0;							/* success */
 
 	errPath:
-		fprintf(stderr,"unable to allocate space for equivXYZM and equivXYZB in allocateEquivAtomOps()\n");
-		exit(1);
+		freeEquivOpsStructure(eq);
 	return 1;
 }
 
@@ -866,9 +875,11 @@ struct equivOpsStructure *eq)			/* equivalent atom operations */
 	N = eq->N;
 
 	for (i=0;i<N;i++) {
-		for (j=0;j<3;j++) CHECK_FREE(mats[i][j])
-		CHECK_FREE(mats[i])
-		CHECK_FREE(bvec[i])
+		if (mats && mats[i]) {
+			for (j=0;j<3;j++) CHECK_FREE(mats[i][j])
+			CHECK_FREE(mats[i])
+		}
+		if (bvec) CHECK_FREE(bvec[i])
 	}
 	CHECK_FREE(eq->equivXYZM)
 	CHECK_FREE(eq->equivXYZB)
@@ -992,9 +1003,10 @@ struct equivOpsStructure *sym)			/* all of the symmetry operations, to be filled
 
 	sym->SpaceGroup = 0;				/* init to error */
 	if (SpaceGroup<1 || 230<SpaceGroup) { fprintf(stderr,"Bad Space Group = %d, in SetSymOpsForSpaceGroup()",SpaceGroup); return 0; }
-	sym->N = N = setSymLine(SpaceGroup,&symOperations);	/* a string like "x,y,z;-x,-y,z;-x,y,-z;x,-y,-z;x+1/2,y+1/2,z;-x+1/2,-y+1/2,z;-x+1/2,y+1/2,-z;x+1/2,-y+1/2,-z" */
+	sym->N = N = setSymLine(SpaceGroup,&symOperations);	/* a string like "x,y,z;-x,-y,z;-x,y,-z;x+1/2,y+1/2,z;-x+1/2,-y+1/2,z;-x+1/2,y+1/2,-z;x+1/2,-y+1/2,-z" */
+	if (N < 1 || !symOperations) return 0;
 	sym->SpaceGroup = SpaceGroup;
-	allocateEquivAtomOps(sym);			/* allocate all of the space here */
+	if (allocateEquivAtomOps(sym)) { free(symOperations); return 0; }
 	mats = sym->equivXYZM;				/* mats and bvec are for convienence */
 	bvec = sym->equivXYZB;
 
@@ -1004,7 +1016,11 @@ struct equivOpsStructure *sym)			/* all of the symmetry operations, to be filled
 	for (i=0;i<N;i+=1) {
 		s1 = strchr(s0,';');			/* find next semi-colon */
 		if (s1) *s1 = '\0';				/* and change the semi-colon to a null */
-		if (make1MatrixAndVecFromSymLine(s0,mat,vec)) { fprintf(stderr,"error making symmetry matricies in SetSymOpsForSpaceGroup()\n"); exit(1); }
+		if (make1MatrixAndVecFromSymLine(s0,mat,vec)) {
+			free(symOperations);
+			freeEquivOpsStructure(sym);
+			return 0;
+		}
 		mats[i][0][0] = mat[0][0];		mats[i][0][1] = mat[0][1];		mats[i][0][2] = mat[0][2];
 		mats[i][1][0] = mat[1][0];		mats[i][1][1] = mat[1][1];		mats[i][1][2] = mat[1][2];
 		mats[i][2][0] = mat[2][0];		mats[i][2][1] = mat[2][1];		mats[i][2][2] = mat[2][2];
@@ -1765,7 +1781,7 @@ z+1/4,y+3/4,-x+3/4;-x,y+1/2,-z+1/2;-z+3/4,y+1/4,x+3/4;z+1/2,x+1/2,y+1/2;y+1/2,z+
 
 	len = strlen(symLines[SpaceGroup-1]);
 	*str = (char *)calloc(len+1,sizeof(char));
-	if (!(*str)) { fprintf(stderr,"unable to allocate space for symLines[%d] in setSymLine()\n",SpaceGroup); exit(1); }
+	if (!(*str)) return 0;
 	strncpy(*str,symLines[SpaceGroup-1],len);
 	Nops = 0;
 	p = *str;

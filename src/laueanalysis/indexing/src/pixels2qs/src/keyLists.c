@@ -133,7 +133,7 @@ int		maxLen)				/* maximum length allowed for the result */
 	if ((nr+1)>maxLen) return NULL;						/* value too long */
 
 	result = (char*)calloc((size_t)nr+1,1);				/* space for value and terminating NULL */
-	if (!result) exit(ENOMEM);							/* allocation error */
+	if (!result) return NULL;
 	strncpy(result,ptr,(size_t)nr);
 	return result;
 }

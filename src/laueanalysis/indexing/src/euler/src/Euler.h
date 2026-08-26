@@ -21,13 +21,13 @@
 #define THETA_MAX ((135/2)*M_PI/180)		/* maximum theta for the detector (radian).  (max 2-theta = 90+45deg.) */
 #define THETA_MIN ((45/2)*M_PI/180)			/* minimum theta for the detector (radian).  (min 2-theta = 90-45deg.) */
 #define	DETECTOR_HEIGHT 100.				/* detector height, y coordinate */
-/* #define	DETECTOR_HW 50.					// width of detector is ±hw in both x and z */
-#define	DETECTOR_HW 102.					/* width of detector is ±hw in both x and z */
+/* #define	DETECTOR_HW 50.					// width of detector is ÔøΩhw in both x and z */
+#define	DETECTOR_HW 102.					/* width of detector is ÔøΩhw in both x and z */
 /* #define	PI M_PI							// 3.141592653589793238462643 */
 #ifndef hc
-#define	hc 12.3984187						/* ( h*c (keV-Å), from 2006 CODATA,  http://physics.nist.gov/cuu/Constants/index.html */
+#define	hc 12.3984187						/* ( h*c (keV-ÔøΩ), from 2006 CODATA,  http://physics.nist.gov/cuu/Constants/index.html */
 #endif
-#define	ao 4.05								/* lattice constant of aluminum (Å) */
+#define	ao 4.05								/* lattice constant of aluminum (ÔøΩ) */
 
 #define MIN_SPOTS_FOR_1_PATTERN  4			/* minmimum number of spots it takes to identify one Laue pattern */
 #define MAX_GRAINS_PER_PATTERN  20			/* maximum number of grains that can be fit in one Laue pattern */
@@ -42,17 +42,21 @@
 #define DEFAULT_FOLDER ""
 #endif
 
-#define ALPHAMIN (-M_PI)					/* range of alpha [-180°,180°) */
+#define ALPHAMIN (-M_PI)					/* range of alpha [-180ÔøΩ,180ÔøΩ) */
 #define ALPHAMAX M_PI
-#define BETAMIN 0							/* range of beta [0,180°) */
+#define BETAMIN 0							/* range of beta [0,180ÔøΩ) */
 #define BETAMAX M_PI
-#define GAMMAMIN 0							/* range of [0,360°) */
+#define GAMMAMIN 0							/* range of [0,360ÔøΩ) */
 #define GAMMAMAX (M_PI+M_PI)
-/*	alphaMin = -PI/4  ;  alphaMax = PI/4;   // range of alpha	[-45°,45°) */
-/*	betaMin = 0  ;  betaMax = 1;			// range of beta	[0°,57°)   , 57.3°  ~  (001)^(111)	this is for Cubic xtals */
-/*	gammaMin = -PI/2  ;  gammaMax = PI/2;	// range of gamma	[-90°,90°) */
+/*	alphaMin = -PI/4  ;  alphaMax = PI/4;   // range of alpha	[-45ÔøΩ,45ÔøΩ) */
+/*	betaMin = 0  ;  betaMax = 1;			// range of beta	[0ÔøΩ,57ÔøΩ)   , 57.3ÔøΩ  ~  (001)^(111)	this is for Cubic xtals */
+/*	gammaMin = -PI/2  ;  gammaMax = PI/2;	// range of gamma	[-90ÔøΩ,90ÔøΩ) */
 
-extern FILE	*fout;							/* file descriptor, either /dev/null, or stdout */
+#ifdef LIBLAUE_BUILD
+extern __thread FILE *fout;
+#else
+extern FILE *fout;
+#endif
 
 
 struct	EulerAngle_pair {					/* now store the values in AllEulerAngles[] */
@@ -112,14 +116,14 @@ struct	patternOfOneGrain {					/* describes the Laue pattern from one grain */
 
 
 
-void MakeAllPossibleGvectors(long *Nm, double (**Gmhat)[3], double **GmLen, int (**hklm)[3], int hkl0[3], \
+int MakeAllPossibleGvectors(long *Nm, double (**Gmhat)[3], double **GmLen, int (**hklm)[3], int hkl0[3], \
 	double cone, double keVmax,struct crystalStructure *xtal);
 
 /* void MakeListOfAllEulerAngles(struct box_struct abgRange, double angleTolerance, long Ni, double GhatSpots[][3], \
  *	double farDot, long Ndots, struct dotPlusIndicies *dotList, long Nm, double Gmhat[][3], double *GmLen, \
  *	struct EulerAngle_pair **AllEulerAngles, size_t *NAllEulerAngles);
  */
-void MakeListOfAllEulerAngles(struct box_struct abgRange, double angleTolerance, double GhatSpots[][3], \
+int MakeListOfAllEulerAngles(struct box_struct abgRange, double angleTolerance, double GhatSpots[][3], \
 	double farDot, long Ndots, struct dotPlusIndicies *dotList, long Nm, double Gmhat[][3], \
 	struct EulerAngle_pair **AllEulerAngles, size_t *NAllEulerAngles);
 

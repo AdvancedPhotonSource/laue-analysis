@@ -5,6 +5,7 @@ echo "Cleaning C binaries..."
 cd src/laueanalysis/indexing/src/peaksearch && make clean
 cd ../euler && make clean
 cd ../pixels2qs && make clean
+cd ../liblaue && make clean
 cd ../../../reconstruct/source/recon_cpu && make clean
 cd ../recon_gpu && make clean
 

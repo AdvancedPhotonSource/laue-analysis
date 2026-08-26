@@ -29,11 +29,11 @@ typedef  struct {
   double * y;
 } ObservedValues ;
 
-void fitToFunctionLorentz(Grid *image, double *fitx, double *fity, 
+int fitToFunctionLorentz(Grid *image, double *fitx, double *fity,
 		   double *background, double *intens,
 		   double *widthx, double *widthy, double *tilt,double *chisq);
 
-void fitToFunctionGauss(Grid *image, double *fitx, double *fity, 
+int fitToFunctionGauss(Grid *image, double *fitx, double *fity,
 		   double *background, double *intens,
 		   double *widthx, double *widthy, double *tilt,double *chisq);
 

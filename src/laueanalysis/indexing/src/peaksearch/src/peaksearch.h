@@ -50,9 +50,9 @@ struct ExtraOutput_Header {
 
 List* boxsearch(Grid* imageRaw, GridB* mask, int boxsize, long ipeakMax, bool smooth, Genfileinf *ginf);
 //List * processBlobs(List *blobs, WinViewImage *wimage,Genfileinf *ginf);
-List * processBlobs(List *blobs, WinViewImage *wimage,Genfileinf *ginf, int NpeakMax);
+List * processBlobs(List *blobs, WinViewImage *wimage,Genfileinf *ginf, int NpeakMax, double background, int *status);
 //List*	blobsearch(Grid* image, double threshold, int min_size, bool maxima_search, double saturation_level);
-List*	blobsearch(Grid* image, double threshold, int min_size, bool maxima_search);
+List*	blobsearch(Grid* image, double threshold, int min_size, bool maxima_search, int *status);
 List * removeNearbyPeaks(List *peaks, int minSeparation);
 
 //List*	find_maximas(Grid* image, double threshold, int npix, double saturation_level, int shiftx, int shifty);
@@ -66,5 +66,5 @@ List * removeNearbyPeaks(List *peaks, int minSeparation);
 void savePeaksIDL(List *peaks, char * filename);
 void savePeaks(List *peaks, char * filename, WinViewHeader* header, char * inFileName, Genfileinf *ginf, 
 	double threshold, double seconds, int minSeparation, bool smooth, struct ExtraOutput_Header *exH, char *pgm);
-void sorListPoints(List *blobs);
+int sorListPoints(List *blobs);
 #endif

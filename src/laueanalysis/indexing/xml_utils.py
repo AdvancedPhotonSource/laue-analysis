@@ -2,7 +2,6 @@
 
 from typing import List
 from xml.etree import ElementTree
-from xml.dom import minidom
 from pathlib import Path
 
 from laueanalysis.indexing.lau_dataclasses.step import Step
@@ -19,12 +18,9 @@ def write_step_xml(step: Step, xml_file: str) -> None:
     root = ElementTree.Element('AllSteps')
     root.append(step.getXMLElem())
     
-    rough_string = ElementTree.tostring(root, short_empty_elements=False)
-    parsed = minidom.parseString(rough_string)
-    pretty_xml = parsed.toprettyxml(indent='    ')
-    
-    with open(xml_file, 'w') as f:
-        f.write(pretty_xml)
+    ElementTree.indent(root, space='    ')
+    xml = ElementTree.tostring(root, encoding='unicode', short_empty_elements=False)
+    Path(xml_file).write_text('<?xml version="1.0" ?>\n' + xml, encoding='utf-8')
 
 
 def write_combined_xml(steps: List[Step], xml_file: str) -> None:
@@ -39,12 +35,9 @@ def write_combined_xml(steps: List[Step], xml_file: str) -> None:
     for step in steps:
         root.append(step.getXMLElem())
     
-    rough_string = ElementTree.tostring(root, short_empty_elements=False)
-    parsed = minidom.parseString(rough_string)
-    pretty_xml = parsed.toprettyxml(indent='    ')
-    
-    with open(xml_file, 'w') as f:
-        f.write(pretty_xml)
+    ElementTree.indent(root, space='    ')
+    xml = ElementTree.tostring(root, encoding='unicode', short_empty_elements=False)
+    Path(xml_file).write_text('<?xml version="1.0" ?>\n' + xml, encoding='utf-8')
 
 
 def get_default_xml_filename(output_dir: str, input_image: str = '', prefix: str = '') -> str:

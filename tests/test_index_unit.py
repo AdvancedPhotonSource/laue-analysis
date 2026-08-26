@@ -104,6 +104,17 @@ $Nindexed 12
     assert _parse_indexing_output(str(index_file)) == 12
 
 
+def test_indexing_set_supports_multi_digit_pattern_numbers():
+    from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
+
+    indexing = Indexing()
+    indexing.set("goodness10", "42.5")
+
+    assert len(indexing.patterns) == 11
+    assert indexing.patterns[10].num == 10
+    assert indexing.patterns[10].goodness == 42.5
+
+
 def test_parse_indexing_output_without_tag_returns_zero(tmp_path):
     """
     Without $Nindexed header, parser should return 0 even if human-readable lines exist.

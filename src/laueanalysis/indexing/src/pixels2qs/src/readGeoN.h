@@ -60,11 +60,13 @@ struct geoStructure {				/* structure definition */
 
 
 long readGeoFromFile(char *fname, struct geoStructure *geo);
+long readDetectorGeometryFromFile(char *fname, struct geoStructure *geo);
 void printGeometry(FILE *f, struct geoStructure *geo);
 int checkFileTypeOLD(char *lineIn, size_t Nline, char *type);
 void GeometryStructureUpdate(struct geoStructure *geo);
 int printDetector(FILE *f, struct detectorGeometry *d);
 int MicroGeometryBad(struct geoStructure *g);
+int DetectorBad(struct detectorGeometry *d);
 void copyMicroGeometryStructure(struct geoStructure *dest, struct geoStructure *in);
 int strFromTagBuf(char *buffer, char *tagIn, char *value, long maxLen);
 

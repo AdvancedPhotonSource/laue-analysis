@@ -394,7 +394,7 @@ def _override_depth_in_peaks(peaks_file: str, depth_value: float) -> None:
         raise RuntimeError(f"Failed to write peaks file for depth override: {e}")
 
 
-def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
+def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           *,
           # Peak search parameters
           boxsize: int = 5,
@@ -722,3 +722,7 @@ def index(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         error=None,
         command_history=command_history
     )
+
+
+# Backward-compatible name for existing callers.
+index = lauego

@@ -9,6 +9,7 @@
 #include "grid.h"
 
 #include <assert.h>
+#include <stdint.h>
 
 /*
  *	Changed Aug 2009 by Jon Tischler, added the mask parts and also made routines ignore pixels that were NAN
@@ -18,6 +19,7 @@
 /* *********************************** All Grids, Grid & GridB *********************************** */
 
 void grid_delete(Grid* g){
+	if (!g) return;
 	free(g->values);
 	free(g);
 	return;
@@ -29,18 +31,22 @@ void grid_delete(Grid* g){
 
 Grid* grid_new(int width, int height) {
 	/*create the struct*/
-	Grid* g = malloc(sizeof(Grid));
-	if (!g) exit(ENOMEM);				/* Not enough space. */
+	Grid* g;
+	if (width < 1 || height < 1 || (size_t)width > SIZE_MAX / (size_t)height ||
+		(size_t)width * (size_t)height > SIZE_MAX / sizeof(double)) return NULL;
+	g = malloc(sizeof(Grid));
+	if (!g) return NULL;
 	g->height = height;
 	g->width = width;
-	g->values = malloc(sizeof(double) * height * width);
-	if (!g->values) exit(ENOMEM);		/* Not enough space. */
+	g->values = malloc(sizeof(double) * (size_t)height * (size_t)width);
+	if (!g->values) { free(g); return NULL; }
 	return g;
 }
 
 
 Grid* grid_new_copy(Grid* g) {			/* create a new duplicate of g */
 	Grid* g2 = grid_new(g->width, g->height);
+	if (!g2) return NULL;
 	grid_copy(g2, g);
 	return g2;	
 }
@@ -52,6 +58,7 @@ Grid* grid_new_copy_region(Grid* source, int x1, int y1, int x2, int y2){
 	int new_height = y2-y1+1;
 	int new_width = x2-x1+1;
 	Grid* destination = grid_new(new_width, new_height);
+	if (!destination) return NULL;
 	grid_copy_region(destination, source, x1, y1, x2, y2);
 	return destination;
 }
@@ -78,27 +85,6 @@ void grid_copy(Grid* destination, Grid* source) {
 			destination->values[location] = source->values[location];
 		}
 	}
-}
-
-
-void grid_set_value(Grid* g, int x, int y, double value){
-/*
-	if (x > g->width) exit(-1);
-	if (y > g->height) exit(-1);
-*/
-	int location = y * g->width + x;
-	g->values[location] = value;
-	return;
-}
-
-
-double grid_get_value(Grid* g, int x, int y){
-/*
-	if (x > g->width) exit(-1);
-	if (y > g->height) exit(-1);
-*/
-	int location = y*g->width + x;
-	return g->values[location];
 }
 
 
@@ -229,18 +215,21 @@ void grid_subtract(Grid* minuend, Grid* subtrahend, double minimum) {
 /* ************************************* 1-byte Grids, GridB ************************************* */
 
 GridB* gridB_new(int width, int height) {		/* also all points are initialized to zero using calloc */
-	GridB* g = malloc(sizeof(GridB));	/*create the struct*/
-	if (!g) exit(ENOMEM);				/* Not enough space. */
+	GridB* g;
+	if (width < 1 || height < 1 || (size_t)width > SIZE_MAX / (size_t)height) return NULL;
+	g = malloc(sizeof(GridB));	/*create the struct*/
+	if (!g) return NULL;
 	g->height = height;
 	g->width = width;
-	g->values = calloc( height*width, sizeof(bool));
-	if (!g->values) exit(ENOMEM);		/* Not enough space. */
+	g->values = calloc((size_t)height * (size_t)width, sizeof(bool));
+	if (!g->values) { free(g); return NULL; }
 	return g;
 }
 
 
 GridB* gridB_new_copy(GridB* g){
 	GridB* g2 = gridB_new(g->width, g->height);
+	if (!g2) return NULL;
 	gridB_copy(g2, g);
 	return g2;
 }
@@ -252,6 +241,7 @@ GridB* gridB_new_copy_region(GridB* source, int x1, int y1, int x2, int y2){
 	int new_height = y2-y1+1;
 	int new_width = x2-x1+1;
 	GridB* destination = gridB_new(new_width, new_height);
+	if (!destination) return NULL;
 	gridB_copy_region(destination, source, x1, y1, x2, y2);
 	return destination;
 }

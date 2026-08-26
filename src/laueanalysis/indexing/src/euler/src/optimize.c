@@ -96,7 +96,7 @@ struct	patternOfOneGrain *pattern) /* provides G^'s and hkl's for one fitted pat
 	/* T tells what kind of minimizer we are using, select the simplex method */
 	const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex;
 	gsl_multimin_fminimizer *s = NULL;		/* this is the minimizer */
-	gsl_vector *ss, *x;						/* pointers to vectors,  ss is stepsize, x is point */
+	gsl_vector *ss = NULL, *x = NULL;			/* pointers to vectors, ss is stepsize, x is point */
 	gsl_multimin_function minex_func;		/* struct defining parts needed for minimizing */
 	size_t iter=0, i;
 	int status;								/* status of returned gsl function, 0 is OK */
@@ -115,12 +115,14 @@ struct	patternOfOneGrain *pattern) /* provides G^'s and hkl's for one fitted pat
 
 	/* Initial vertex step size vector */
 	ss = gsl_vector_alloc(np);				/* step sizes in x and y */
+	if (!ss) return GSL_ENOMEM;
 
 	/* Set all step sizes to startStep, the starting step size */
 	gsl_vector_set_all(ss, startStep);		/* set ss[0] = ss[1]  = ss[2] = startStep (radian) */
 
 	/* Starting point */
 	x = gsl_vector_alloc(np);				/* allocate space for a vector of length 3 */
+	if (!x) { gsl_vector_free(ss); return GSL_ENOMEM; }
 	gsl_vector_set(x, 0, pattern->alpha);   /* set to starting guess, input (alpha,beta,gamma) */
 	gsl_vector_set(x, 1, pattern->beta);
 	gsl_vector_set(x, 2, pattern->gamma);
@@ -132,13 +134,20 @@ struct	patternOfOneGrain *pattern) /* provides G^'s and hkl's for one fitted pat
 	/* Note: my_func.df, and my_func.fdf are not needed since simplex method does not use derivatives */
 
 	s = gsl_multimin_fminimizer_alloc(T, np);	/* allocate for a 2d simplex minimizer named 's' */
+	if (!s) { gsl_vector_free(x); gsl_vector_free(ss); return GSL_ENOMEM; }
 
 	/* Set starting point for the minimizer:
 		for the minimizer 's',
 		working on a function 'minex_func'
 		starting from the initial guess x[2]
 		using step sizes of ss[2]  */
-	gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
+	status = gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
+	if (status != GSL_SUCCESS) {
+		gsl_multimin_fminimizer_free(s);
+		gsl_vector_free(x);
+		gsl_vector_free(ss);
+		return status;
+	}
 
 #if (DEBUG)		/******************************************************************************/
 	fprintf(fout, "start minimization with Euler angles (%15.10f, %15.10f, %15.10f) (deg.)\n", \

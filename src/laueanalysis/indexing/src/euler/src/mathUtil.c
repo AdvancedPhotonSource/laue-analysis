@@ -276,7 +276,7 @@ double	v[3],
 double	c[3])
 {
 	double v0,v1,v2;
-	if (!a || !v || !c) exit(1);					/* failure, arrays must exist */
+	if (!a || !v || !c) return;					/* failure, arrays must exist */
 	v0 = v[0];  v1 = v[1];  v2 = v[2];				/* in case v and c are the same address, ie 'c = a*c' */
 	c[0] = a[0][0]*v0 + a[0][1]*v1 + a[0][2]*v2;	/* c = a*v */
 	c[1] = a[1][0]*v0 + a[1][1]*v1 + a[1][2]*v2;
@@ -291,7 +291,7 @@ double	a[3][3],
 double	b[3][3],
 double  c[3][3])
 {
-	if (!a || !b || !c) exit(1);	/* failure, arrays must exist */
+	if (!a || !b || !c) return;	/* failure, arrays must exist */
 	else if (a != c && b != c) {	/* c is distinct from a and b, fastest.  ie not a  = a*b */
 		c[0][0] = a[0][0]*b[0][0] + a[0][1]*b[1][0] + a[0][2]*b[2][0];  /* c = a*b */
 		c[1][0] = a[1][0]*b[0][0] + a[1][1]*b[1][0] + a[1][2]*b[2][0];

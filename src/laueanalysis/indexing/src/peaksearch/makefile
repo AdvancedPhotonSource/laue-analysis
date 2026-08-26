@@ -1,5 +1,6 @@
 SRC = $(wildcard src/*.c)
 OBJ = ${SRC:.c=.o}
+HEADERS = $(wildcard src/*.h)
 OUT = peaksearch
 
 # Separate compile flags from link flags
@@ -40,7 +41,7 @@ $(OUT): $(OBJ)
 	@printf "\e[33mLinking\e[90m %s\e[0m\n" $@
 	@printf "\e[34mDone!\e[0m\n"
 
-%.o: %.c
+%.o: %.c $(HEADERS)
 	@$(CC) -c $< -o $@ $(CFLAGS)
 	@printf "\e[36mCompile\e[90m %s\e[0m\n" $@
 

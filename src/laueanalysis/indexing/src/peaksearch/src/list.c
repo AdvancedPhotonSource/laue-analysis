@@ -9,7 +9,7 @@
 List* list_new(void){
 
 	List* l = malloc(sizeof(List));
-	if (!l) exit(ENOMEM);		/* Not enough space. */
+	if (!l) return NULL;
 	l->size = 0;
 	l->head = EMPTY_NODE;
 	l->tail = EMPTY_NODE;
@@ -19,11 +19,13 @@ List* list_new(void){
 
 /*list_append takes a pointer to the data */
 /*we include a pointer to the list so that we can update length*/
-void list_append(List* l, void* value){
+int list_append(List* l, void* value){
 
 	/*create our new node*/
-	ListNode* n = malloc(sizeof(ListNode));
-	if (!n) exit(ENOMEM);		/* Not enough space. */
+	ListNode* n;
+	if (!l) return 1;
+	n = malloc(sizeof(ListNode));
+	if (!n) return 1;
 	n->value = value;			/* assign the data to it */
 	
 	n->next = EMPTY_NODE;		/* this element will be at end, so there is no next element */
@@ -38,15 +40,13 @@ void list_append(List* l, void* value){
 	}
 	
 	l->size++;					/* increment the size of the list */
+	return 0;
 }
 
 /*list_remove removes the given node from the list, and links the ones before and after it*/
 /*we include a pointer to the list so that we can update length, and can handle cases where we're removing the head node*/
-void list_remove(List* l, ListNode* n){
-	if (n==NULL) {
-		fprintf(stderr,"ERROR -- tried to remove null node in list_remove()");
-		exit(1);
-	};
+int list_remove(List* l, ListNode* n){
+	if (!l || !n) return 1;
 
 	/* if this node is both the front and back of the list, then we're going to end up with the empty list */
 	if (n == l->head && n == l->tail){
@@ -73,6 +73,7 @@ void list_remove(List* l, ListNode* n){
 	free(n);
 	n = NULL;
 	l->size -= (l->size>0) ? 1 : 0;				/* reset length, but never less than 0 */
+	return 0;
 }
 
 void list_concat(List* dest, List* source){

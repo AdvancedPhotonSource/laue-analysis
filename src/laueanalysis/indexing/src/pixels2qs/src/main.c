@@ -26,6 +26,7 @@ void pixel2XYZ(struct detectorGeometry *d, double px, double py, double *x, doub
 void writeOutput(long Nq, double *qhats, char *xtalHeaderBuf, char *pixelHeaderBuf, char *geoFile, char *xtalFile, char *outName, const char *pgm);
 int detectorIDfromGeo(struct geoStructure *geo, char *detector_ID);
 
+#ifndef LIBLAUE_BUILD
 int main (int argc, const char * argv[]) {
 	char	geoFile[MAX_FILE_LENGTH+1]="geometry.txt";
 	char	xtalFile[MAX_FILE_LENGTH+1];
@@ -95,6 +96,7 @@ int main (int argc, const char * argv[]) {
 	CHECK_FREE(qhats);
 	return 0;
 }
+#endif
 
 
 
@@ -181,7 +183,7 @@ struct crystalStructure *xtal)
 		else if (strstr(line,"micron")==line) xtal->lengthUnits = 1.e6;	/* using micron */
 		else { fprintf(stderr,"ERROR: invalid $lengthUnit = '%s',  in readDataFromJZT()\n",line); goto badFile; }
 	}
-	units2Angstrom = 1.e9 /xtal->lengthUnits;			/* set conversion factor based on xtal.lengthUnit */
+	units2Angstrom = 1.e10 /xtal->lengthUnits;			/* set conversion factor based on xtal.lengthUnit */
 
 	if (strFromTagBuf(xtalHeaderBuf,"latticeParameters",line,500)) { fprintf(stderr,"ERROR: cannot find tag for lattice parameters in file '%s'\n",fname); goto badFile; }
 	else {
@@ -242,6 +244,7 @@ struct crystalStructure *xtal)
 		else fprintf(stderr,"ERROR: in file '%s', $SpaceGroup is '%s', it must be number in range [1,230], defaulting to FCC\n",fname,line);
 	}
 
+	CHECK_FREE(xtalHeaderBuf);
 	return 0;
 	badFile:
 		CHECK_FREE(xtalHeaderBuf);						/* free allocated space */
@@ -630,8 +633,8 @@ struct geoStructure *geo,
 char	*detector_ID)
 {
 	int		i;
-	for (i=0; i < geo->Ndetectors; i++) {
-		if (strcmp(detector_ID,geo->d[i].detectorID)==0) return i;	/* found a match */
+	for (i=0; i < MAX_Ndetectors; i++) {
+		if (geo->d[i].used && strcmp(detector_ID,geo->d[i].detectorID)==0) return i;	/* found a match */
 	}
 	return 0;				/* default value is 0 */
 }

@@ -46,11 +46,16 @@ class Indexing:
             if key in floats:
                 val = float(val)
             self.__dict__[key] = val
-        elif key[-1].isdigit() and not "Atom" in key:
-            n = int(key[-1])
-            if len(self.patterns) == n:
-               self.patterns.append(Pattern(num=n))
-            self.patterns[n].set(key[:-1], val)
+        elif "Atom" not in key:
+            name = key.rstrip('0123456789')
+            suffix = key[len(name):]
+            if not suffix:
+                self.xtl.set(key, val)
+                return
+            n = int(suffix)
+            while len(self.patterns) <= n:
+                self.patterns.append(Pattern(num=len(self.patterns)))
+            self.patterns[n].set(name, val)
         else:
             self.xtl.set(key, val)
 

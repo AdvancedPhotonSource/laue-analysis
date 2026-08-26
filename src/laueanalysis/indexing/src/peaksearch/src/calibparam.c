@@ -9,6 +9,7 @@
 
 Calibparam * default_calibparam(void){
   Calibparam *cp=malloc(sizeof(Calibparam));
+  if (!cp) return NULL;
   cp->xdim=1042;
   cp->ydim=1042;
   cp->emin=5.;

@@ -20,6 +20,8 @@ classifiers = [
 ]
 
 dependencies = [
+    "cffi>=1.15.0",
+    "h5py>=3.0",
     "numpy>=1.20.0",
     "pyyaml>=5.4",
 ]

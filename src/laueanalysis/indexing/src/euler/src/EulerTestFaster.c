@@ -176,7 +176,7 @@ struct dotPlusIndicies **dotList)	/* pointer to an array of dotPlusIndicies stru
 			n++;
 		}
 	}
-	if (n!=N) { fprintf(stderr,"n=%ld  and  N=%ld in MakeDotList()\n",n,N); exit(1); }
+	if (n!=N) { free(*dotList); *dotList = NULL; return -1; }
 	qsort(*dotList,(size_t)N,sizeof(**dotList),compareDouble);  /* next sort by increasing dot product */
 #if (DEBUG>2)
 fprintf(fout,"in MakeDotList(), made %ld entries\n",N);
@@ -192,7 +192,7 @@ fprintf(fout,"in MakeDotList(), made %ld entries\n",N);
  * also, the angle between hkl0 and each hklm must be < cone.
  * Space for Gmhat, hklm, GmLen is allocated here, it must be freed up later by some other routine.
  */
-void MakeAllPossibleGvectors(
+int MakeAllPossibleGvectors(
 long	*Nm,					/* number of possible hkl being considered (length of GmLen, Gmhat[Nm][3], & hklm[Nm][3]) */
 double  (**Gmhat)[3],			/* all possible Ghats to check, one for each possible hkl (stored in hklm) */
 double	**GmLen,				/* corresponding lengths of Gmhat */
@@ -225,26 +225,26 @@ struct crystalStructure *xtal)	/* lattice parameters */
 	time0=clock();
 #endif
 
-	if (*Gmhat || *GmLen || *hklm) return;				/* since this will be allocated, it needs to be NULL on entry */
+	if (*Gmhat || *GmLen || *hklm) return 1;			/* outputs must be NULL on entry */
 	parallel = cos(cone);								/* dot(hkl,hkl0) must be greater or equal to parallel */
 	hkl[0]=hkl0[0];  hkl[1]=hkl0[1];  hkl[2]=hkl0[2];   /* make ghat0[3], direction vector given by hkl0[3] */
 	MatrixMultiply31(xtal->recip,hkl,ghat0);
 	normalize3(ghat0);
-	dmin = (hc/keVmax)/2/sin(THETA_MAX);				/* maximum 2-theta is 135¡ for our detector */
+	dmin = (hc/keVmax)/2/sin(THETA_MAX);				/* maximum 2-theta is 135ï¿½ for our detector */
 	gmax = 2*M_PI/dmin;
 	hmax = ceil(gmax/MAG3(xtal->recip[0][0],xtal->recip[1][0],xtal->recip[2][0])); /* max range to check */
 	kmax = ceil(gmax/MAG3(xtal->recip[0][1],xtal->recip[1][1],xtal->recip[2][1]));
 	lmax = ceil(gmax/MAG3(xtal->recip[0][2],xtal->recip[1][2],xtal->recip[2][2]));
-	dmax = (hc/KEV_MIN)/2/sin(THETA_MIN);				/* minimum 2-theta is 45¡ for our detector */
+	dmax = (hc/KEV_MIN)/2/sin(THETA_MIN);				/* minimum 2-theta is 45ï¿½ for our detector */
 	gmin = 2*M_PI/dmax;
 	N = (2*hmax+1)*(2*kmax+1)*(2*lmax+1);
 
 	*Gmhat = calloc((size_t)N,3*sizeof(double));
-	if (!(*Gmhat)) { fprintf(stderr,"could not allocate space (%ld bytes) for Gmhat in MakeAllPossibleGvectors()\n",N*3*sizeof(double)); *Nm=0; return;}
+	if (!(*Gmhat)) { *Nm=0; return 1; }
 	*GmLen = calloc((size_t)N,sizeof(double));
-	if (!(*GmLen)) { fprintf(stderr,"could not allocate space for GmLen in MakeAllPossibleGvectors()\n"); *Nm=0; return;}
+	if (!(*GmLen)) goto allocation_error;
 	*hklm = calloc((size_t)N,3*sizeof(int));
-	if (!(*hklm)) { fprintf(stderr,"could not allocate space for hklm in MakeAllPossibleGvectors()\n"); *Nm=0; return;}
+	if (!(*hklm)) goto allocation_error;
 	for (p=0;p<N;p++) (*GmLen)[p] = -1;
 	m = 0;
 	for (l=-lmax;l<=lmax;l++) {
@@ -266,17 +266,9 @@ struct crystalStructure *xtal)	/* lattice parameters */
 		}
 	}
 	*Nm = m;
-	*Gmhat = realloc(*Gmhat,3*(*Nm)*sizeof(double));	/* resize arrays to Nm, what was actually found */
-	*GmLen = realloc(*GmLen,(*Nm)*sizeof(double));
-	*hklm = realloc(*hklm,3*(*Nm)*sizeof(int));
 
 	sortDouble7 = calloc((size_t)*Nm,7*sizeof(double));			/* sort the Gmhat, GmLen, & hklm by increasing GmLen */
-	if (!sortDouble7) {
-		CHECK_FREE(*Gmhat);
-		CHECK_FREE(*GmLen);
-		CHECK_FREE(*hklm);
-		return;
-	}
+	if (!sortDouble7) goto allocation_error;
 	for(i=0;i<(*Nm);i++) {
 		sortDouble7[7*i+0] = (*GmLen)[i];				/* save GmLen (what I will be sorting on */
 		sortDouble7[7*i+1] = (*Gmhat)[i][0];			/* the 3-vector that I really want to sort */
@@ -317,14 +309,19 @@ struct crystalStructure *xtal)	/* lattice parameters */
 
 	/* remove duplicate directions determined by comparing each Gmhat[][3] to each other Gmhat[][3] */
 	*Nm = RemoveDuplicateTripletsPlus(*Nm,*Gmhat,*GmLen,sizeof((*GmLen)[0]),*hklm,sizeof((*hklm)[0]),NULL);
-	*Gmhat = realloc(*Gmhat,3*(*Nm)*sizeof(double));
-	*GmLen = realloc(*GmLen,(*Nm)*sizeof(double));
-	*hklm = realloc(*hklm,3*(*Nm)*sizeof(int));
 
 #if (DEBUG)
 	fprintf(fout,"MakeAllPossibleGvectors() checking out to (hkl)=(%ld,%ld,%ld), found (Nm=)%ld possible hkl's in %.2f sec\n", \
 			hmax,kmax,lmax,*Nm,((double)(clock()-time0))/CLOCKS_PER_SEC);
 #endif
+	return 0;
+
+allocation_error:
+	CHECK_FREE(*Gmhat);
+	CHECK_FREE(*GmLen);
+	CHECK_FREE(*hklm);
+	*Nm = 0;
+	return 1;
 }
 
 
@@ -333,7 +330,7 @@ struct crystalStructure *xtal)	/* lattice parameters */
 /* makes the list of all Euler angles for each pair (m0,m) and (i0,i), this is likely to be a very long list
  * It allocates space for Gmhat & GmLen which are freed here, AllEulerAngles must be freed up later
  */
-void MakeListOfAllEulerAngles(
+int MakeListOfAllEulerAngles(
 struct box_struct abgRange,		/* structure giving the allowed ranges of alpha, beta, and gamma */
 double  angleTolerance,			/* difference in angles between G-vector pairs to be considered coincident (radians) */
 //long	Ni,						/* number of vectors in GhatSpots */
@@ -355,7 +352,7 @@ size_t	*NAllEulerAngles)		/* number of slots allocated in AllEulerAngles */
 
 	double  cos_closePair;								/* spots are too close together to rotate about one of them */
 	double	alpha, beta, gamma;							/* three Euler angles, loop over alpha, beta, solve for gamma */
-	double	doti, dotm;									/* G^m ¥ G^m0, and G^i ¥ G^i0 */
+	double	doti, dotm;									/* G^m ï¿½ G^m0, and G^i ï¿½ G^i0 */
 
 	double	Ghatm0[3];									/* un-rotated direction of axis hkl, (hkl[m0]) */
 	double	Ghatm[3];									/* G^ for a particular hkl to match */
@@ -381,6 +378,7 @@ size_t	*NAllEulerAngles)		/* number of slots allocated in AllEulerAngles */
 
 	*NAllEulerAngles = 10000;
 	*AllEulerAngles = calloc(*NAllEulerAngles,sizeof(**AllEulerAngles));
+	if (!*AllEulerAngles) { *NAllEulerAngles = 0; return 1; }
 	Neuler=0;
 	for (m0=0;m0<Nm;m0++) {									/* loop over the possibl hkl (hkl[m0] defines the axis) */
 #if (DEBUG)
@@ -432,8 +430,11 @@ size_t	*NAllEulerAngles)		/* number of slots allocated in AllEulerAngles */
 				/* now that we have the EulerAngles increment correct point in EulerSpace
 				 * store the m,m0,i,i0,alpha,beta,gamma in the list */
 				if (Neuler >= (long)(*NAllEulerAngles)) {	/* need to extend AllEulerAngles */
+					struct EulerAngle_pair *resized;
 					*NAllEulerAngles += 10000;
-					*AllEulerAngles = realloc(*AllEulerAngles,sizeof(**AllEulerAngles)*(*NAllEulerAngles));
+					resized = realloc(*AllEulerAngles,sizeof(**AllEulerAngles)*(*NAllEulerAngles));
+					if (!resized) { free(*AllEulerAngles); *AllEulerAngles = NULL; *NAllEulerAngles = 0; return 1; }
+					*AllEulerAngles = resized;
 				}
 				/* now store the values in *AllEulerAngles[][] */
 				(*AllEulerAngles)[Neuler].m0 = m0;
@@ -448,12 +449,16 @@ size_t	*NAllEulerAngles)		/* number of slots allocated in AllEulerAngles */
 		}				/* end loop over m */
 	}					/* end loop over m0 */
 	*NAllEulerAngles = Neuler;
-	*AllEulerAngles = realloc(*AllEulerAngles,sizeof(**AllEulerAngles)*(*NAllEulerAngles));
+	if (Neuler) {
+		struct EulerAngle_pair *resized = realloc(*AllEulerAngles,sizeof(**AllEulerAngles)*(*NAllEulerAngles));
+		if (resized) *AllEulerAngles = resized;
+	}
 #if (DEBUG)
 	seconds = ((double)(clock()-time0))/CLOCKS_PER_SEC;
 	fprintf(fout,"making the list of all Euler angles 'AllEulerAngles[%ld][7]' takes %s  =  (%.2f sec)\n",Neuler,num2sexigesmal(str,seconds,0),seconds);
 #endif
 	/* don't foget to free up GmLen and Gmhat later */
+	return 0;
 }
 
 

@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <errno.h>
+#include <limits.h>
 #include "readGeoN.h"
 #include "keyLists.h"
 #include "checkFileType.h"
@@ -84,9 +86,10 @@ This is an example of what the input file looks like (this one only has 2 of the
 
 
 /* read geometry parameters from front of a file, returns 0 if OK */
-long readGeoFromFile(
+static long readGeoFromFileInternal(
 char	*fname,
-struct geoStructure *geo)
+struct geoStructure *geo,
+int detectorOnly)
 {
 	char	*buf=NULL;								/* string with tag values */
 	FILE	*f=NULL;								/* file descriptor */
@@ -97,6 +100,7 @@ struct geoStructure *geo)
 	int		itype;									/* file type, 1=old, 2=xml */
 	
 	/* some defaults */
+	memset(geo, 0, sizeof(*geo));
 	geo->Ndetectors = 1;							/* # of detectors in structure */
 
 	/* pre-sets for wire */
@@ -109,12 +113,11 @@ struct geoStructure *geo)
 	geo->wire.R[0] = geo->wire.R[1] = geo->wire.R[2] = 0;	/* rotation vector for the wire positioner (length is angle in radians) */
 
 	/* pre-sets for sample */
-	geo->s.O[0] = geo->s.O[0] = geo->s.O[0] = 0;	/* PM500 frame coordinates where sample is at origin, (the Si position), (micron) */
-	geo->s.R[0] = geo->s.R[0] = geo->s.R[0] = 0;	/* rotation vector for the sample positioner (length is angle in radians) */
+	geo->s.O[0] = geo->s.O[1] = geo->s.O[2] = 0;	/* PM500 frame coordinates where sample is at origin, (the Si position), (micron) */
+	geo->s.R[0] = geo->s.R[1] = geo->s.R[2] = 0;	/* rotation vector for the sample positioner (length is angle in radians) */
 
 	/* pre-sets for first detector */
 	geo->d[0].used = 1;								/* TRUE=detector used, FALSE=detector un-used */
-	geo->d[1].used = geo->d[2].used = 0;
 	geo->d[0].Nx = geo->d[0].Ny = 2048;				/* # of un-binned pixels in full detector */
 	geo->d[0].sizeX = geo->d[0].sizeY = 409.6e3;	/* outside size of detector (sizeX = Nx*pitchX), measured to outer edge of outer pixels (micron) */
 	geo->d[0].R[0] = geo->d[0].R[1] = geo->d[0].R[2] =  -2/3*M_PI/sqrt(3.);	/* rotation of detector, theta = -120° about (111) */
@@ -137,21 +140,42 @@ struct geoStructure *geo)
 	fclose(f);
 	f = NULL;
 	if (len<1) { fprintf(stderr,"unable to read buffer in readGeoFromFile()\n"); goto exitPoint; }
-	buf[len-1] = '\0';								/* ensure null terminated */
+	buf[len] = '\0';								/* ensure null terminated */
 	p = buf;
 	while(((p=strchr(p,'\r')))) *p = '\n';			/* convert all carriage returns to new lines */
 
 	if (itype==1) n = tagValBuf2GeoN(buf,geo);		/* interpret old file type with "$tag value" pairs */
 	else if(itype==2) n = xmlBuf2GeoN(buf,geo);		/* interpret new xml file type */
 	else n = 0;
-	if (n != (1<<10)-1) goto exitPoint;				/* did not find all of the required parameters */
+	if (n < 0 || (!detectorOnly && n != (1<<10)-1)) goto exitPoint;
+	if (detectorOnly && (n & ((1<<7)-1)) != (1<<7)-1) goto exitPoint;
 
-	GeometryStructureUpdate(geo);					/* set the computed geometry parameters */
+	if (detectorOnly) {
+		int i, active = 0;
+		for (i=0;i<MAX_Ndetectors;i++) {
+			if (geo->d[i].used) {
+				DetectorUpdateCalc(&geo->d[i]);
+				active++;
+			}
+		}
+		geo->Ndetectors = active;
+	}
+	else GeometryStructureUpdate(geo);			/* set all computed geometry parameters */
 	err = 0;
 	exitPoint:
 		CHECK_FREE(buf);							/* free allocated space */
 		if (f != NULL) fclose(f);					/* ensure an opened file gets closed */
 	return err;
+}
+
+long readGeoFromFile(char *fname, struct geoStructure *geo)
+{
+	return readGeoFromFileInternal(fname, geo, 0);
+}
+
+long readDetectorGeometryFromFile(char *fname, struct geoStructure *geo)
+{
+	return readGeoFromFileInternal(fname, geo, 1);
 }
 
 
@@ -162,64 +186,124 @@ struct geoStructure *geo)
 {
 	int 	n;										/* flags geometry parameters as they are read */
 	char	*geoN;
-	char	*keyVals;
+	char	*keyVals = NULL;
 	int		Ndetectors;
-	char	*Detectors=NULL, *Wire=NULL, *Sample=NULL, *detector;
+	char	*Detectors=NULL, *Wire=NULL, *Sample=NULL, *detector=NULL;
 	char	*str;
-	int		i, id;
+	int		i, id, detectorFields, detectorParseError = 0;
+	int		seen[MAX_Ndetectors] = {0};
+	long		parsedInteger;
+	char		*integerText, *integerEnd;
 	
 	n = 0;
 	geoN = XMLtagContents("geoN",buf,0);			/* allocates space for geoN, does NOT free it */
+	if (!geoN) return -1;
 	XMLattibutes2KeyList("Detectors",geoN,0,&keyVals);
-	Ndetectors = (int)IntByKey("Ndetectors",keyVals,'=',';');
+	if (!keyVals) {
+		CHECK_FREE(geoN);
+		return -1;
+	}
+	integerText = StringByKey("Ndetectors",keyVals,'=',';',32);
 	CHECK_FREE(keyVals)
-	if (Ndetectors>=1 && Ndetectors<=3)		{ geo->Ndetectors = Ndetectors; n = n|1<<0; }	/* # of detectors */
+	errno = 0;
+	parsedInteger = integerText ? strtol(integerText,&integerEnd,10) : 0;
+	if (!integerText || errno || *integerEnd || parsedInteger < INT_MIN || parsedInteger > INT_MAX) {
+		CHECK_FREE(integerText);
+		CHECK_FREE(geoN);
+		return -1;
+	}
+	CHECK_FREE(integerText);
+	Ndetectors = (int)parsedInteger;
+	if (Ndetectors<1 || Ndetectors>MAX_Ndetectors) {
+		CHECK_FREE(geoN);
+		return -1;
+	}
+	geo->Ndetectors = Ndetectors;
+	n = n|1<<0;
 	Detectors = XMLtagContents("Detectors",geoN,0);
-	geo->d[0].used = geo->d[1].used = geo->d[2].used = 0;	/* init to all unused */
+	if (!Detectors) {
+		CHECK_FREE(geoN);
+		return -1;
+	}
+	for (i=0;i<MAX_Ndetectors;i++) geo->d[i].used = 0;	/* init to all unused */
 
 	for (i=0;i<Ndetectors;i++) {
-		XMLattibutes2KeyList("Detector",Detectors,i,&keyVals);
-		id = (int)IntByKey("N",keyVals,'=',';');
-		CHECK_FREE(keyVals)
-		
-		detector = XMLtagContents("Detector",Detectors,i);
-		if (id>=0 && id <=3) {
-			/* detector id description */
-			geo->d[id].used = 1;
-			if ((str=XMLtagContents("Npixels",detector,0))) {
-				if (sscanf(str,"%ld %ld",&(geo->d[id].Nx),&(geo->d[id].Ny))==2) { n = n|1<<1; n = n|1<<2; }
-			}
-			CHECK_FREE(str);
-			
-			if ((str=XMLtagContents("size",detector,0))) {
-				if (sscanf(str,"%lg %lg",&(geo->d[id].sizeX),&(geo->d[id].sizeY))==2) { n = n|1<<3; n = n|1<<4; }
-				geo->d[id].sizeX *= 1000.;					/* file is in mm, I need micron in the geoN structure */
-				geo->d[id].sizeY *= 1000.;
-			}
-			CHECK_FREE(str);
-			
-			if ((str=XMLtagContents("R",detector,0))) {
-				if (!stringTo3Vector(str,geo->d[id].R,1.)) n = n|1<<5;
-			}
-			CHECK_FREE(str);
-			
-			if ((str=XMLtagContents("P",detector,0))) {
-				if (!stringTo3Vector(str,geo->d[id].P,1e3)) n = n|1<<6;
-			}
-			CHECK_FREE(str);
+		struct detectorGeometry parsed = {0};
 
-			if ((str=XMLtagContents("timeMeasured",detector,0))) strncpy(geo->d[id].timeMeasured,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-			if ((str=XMLtagContents("geoNote",detector,0))) strncpy(geo->d[id].geoNote,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-			if ((str=XMLtagContents("ID",detector,0))) strncpy(geo->d[id].detectorID,str,READGEON_MAXlen);
-			CHECK_FREE(str);
-			if ((str=XMLtagContents("distortionMap",detector,0))) strncpy(geo->d[id].distortionMapFile,str,READGEON_MAXlen);
-			CHECK_FREE(str);
+		XMLattibutes2KeyList("Detector",Detectors,i,&keyVals);
+		if (!keyVals) {
+			detectorParseError = 1;
+			break;
 		}
+		integerText = StringByKey("N",keyVals,'=',';',32);
+		CHECK_FREE(keyVals)
+		errno = 0;
+		parsedInteger = integerText ? strtol(integerText,&integerEnd,10) : -1;
+		if (!integerText || errno || *integerEnd || parsedInteger < 0 || parsedInteger >= MAX_Ndetectors) {
+			CHECK_FREE(integerText);
+			detectorParseError = 1;
+			break;
+		}
+		CHECK_FREE(integerText);
+		id = (int)parsedInteger;
+		if (seen[id]) {
+			detectorParseError = 1;
+			break;
+		}
+		seen[id] = 1;
+		detector = XMLtagContents("Detector",Detectors,i);
+		if (!detector) {
+			detectorParseError = 1;
+			break;
+		}
+		parsed.used = 1;
+		detectorFields = 0;
+		if ((str=XMLtagContents("Npixels",detector,0))) {
+			if (sscanf(str,"%ld %ld",&(parsed.Nx),&(parsed.Ny))==2) detectorFields |= 1<<0;
+		}
+		CHECK_FREE(str);
+		if ((str=XMLtagContents("size",detector,0))) {
+			if (sscanf(str,"%lg %lg",&(parsed.sizeX),&(parsed.sizeY))==2) {
+				parsed.sizeX *= 1000.;
+				parsed.sizeY *= 1000.;
+				detectorFields |= 1<<1;
+			}
+		}
+		CHECK_FREE(str);
+		if ((str=XMLtagContents("R",detector,0))) {
+			if (!stringTo3Vector(str,parsed.R,1.)) detectorFields |= 1<<2;
+		}
+		CHECK_FREE(str);
+		if ((str=XMLtagContents("P",detector,0))) {
+			if (!stringTo3Vector(str,parsed.P,1e3)) detectorFields |= 1<<3;
+		}
+		CHECK_FREE(str);
+
+		if ((str=XMLtagContents("timeMeasured",detector,0))) snprintf(parsed.timeMeasured,sizeof(parsed.timeMeasured),"%s",str);
+		CHECK_FREE(str);
+		if ((str=XMLtagContents("geoNote",detector,0))) snprintf(parsed.geoNote,sizeof(parsed.geoNote),"%s",str);
+		CHECK_FREE(str);
+		if ((str=XMLtagContents("ID",detector,0))) snprintf(parsed.detectorID,sizeof(parsed.detectorID),"%s",str);
+		CHECK_FREE(str);
+		if ((str=XMLtagContents("distortionMap",detector,0))) snprintf(parsed.distortionMapFile,sizeof(parsed.distortionMapFile),"%s",str);
+		CHECK_FREE(str);
 		CHECK_FREE(detector);
+
+		if (detectorFields != (1<<4)-1 || DetectorBad(&parsed)) {
+			detectorParseError = 1;
+			break;
+		}
+		geo->d[id] = parsed;
 	}
+	CHECK_FREE(keyVals);
+	CHECK_FREE(detector);
+	if (!detectorParseError && startOfxmltag("Detector",Detectors,Ndetectors)) detectorParseError = 1;
 	CHECK_FREE(Detectors);
+	if (detectorParseError) {
+		CHECK_FREE(geoN);
+		return -1;
+	}
+	n |= (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<6);
 
 	Wire = XMLtagContents("Wire",geoN,0);
 	if (Wire) {
@@ -262,7 +346,7 @@ struct geoStructure *geo)
 		CHECK_FREE(str);
 		
 		str = XMLtagContents("R",Sample,0);
-		if (str) stringTo3Vector(str,geo->s.O,1.);
+		if (str) stringTo3Vector(str,geo->s.R,1.);
 		CHECK_FREE(str);
 		CHECK_FREE(Sample);
 	}
@@ -279,10 +363,20 @@ struct geoStructure *geo)
 {
 	char	line[READGEON_MAXlen+2];				/* line of data read from file */
 	int		n;										/* a bit flag used to make sure that essential values have been read */
+	int		i, active;
+	char	*end;
+	long	count;
 	
 	n = 0;
 	/*	1<<2 == 4 */
-	if (!strFromTagBuf(buf,"Ndetectors",line,READGEON_MAXlen))	{ geo->Ndetectors = (int)strtol(line,NULL,10); n=n|1<<0; }	/* # of detectors */
+	if (!strFromTagBuf(buf,"Ndetectors",line,READGEON_MAXlen)) {
+		errno = 0;
+		count = strtol(line,&end,10);
+		if (!errno && !*end && count>=1 && count<=MAX_Ndetectors) {
+			geo->Ndetectors = (int)count;
+			n=n|1<<0;
+		}
+	}
 
 	if (!strFromTagBuf(buf,"d0_Nx",line,READGEON_MAXlen))		{ geo->d[0].Nx = strtol(line,NULL,10); n=n|1<<1; }	/* detector 0 description */
 	if (!strFromTagBuf(buf,"d0_Ny",line,READGEON_MAXlen))		{ geo->d[0].Ny = strtol(line,NULL,10); n=n|1<<2; }
@@ -319,6 +413,15 @@ struct geoStructure *geo)
 	if (!strFromTagBuf(buf,"d2_detectorID",line,READGEON_MAXlen))		{ strncpy(geo->d[2].detectorID,line,READGEON_MAXlen); }
 	if (!strFromTagBuf(buf,"d2_distortionMapFile",line,READGEON_MAXlen))	{ strncpy(geo->d[2].distortionMapFile,line,READGEON_MAXlen); }
 	geo->d[2].used = (strlen(geo->d[2].detectorID)>0);
+
+	active = 0;
+	for (i=0;i<MAX_Ndetectors;i++) {
+		if (geo->d[i].used) {
+			active++;
+			if (DetectorBad(&geo->d[i])) return -1;
+		}
+	}
+	if (!(n & (1<<0)) || active != geo->Ndetectors) return -1;
 
 	if (!strFromTagBuf(buf,"wireDia",line,READGEON_MAXlen))		{ geo->wire.dia = strtod(line,NULL); n=n|1<<7; }	/* wire description */
 	if (!strFromTagBuf(buf,"wireKnife",line,READGEON_MAXlen))	{ geo->wire.knife = (int)strtol(line,NULL,10); n=n|1<<8; }
@@ -787,14 +890,13 @@ struct detectorGeometry *d)
 
 	if (!(d->used)) return 1;
 	value = d->sizeX + d->sizeY + d->R[0] + d->R[1] + d->R[2] + d->P[0] + d->P[1] + d->P[2];
-	bad += (value != value);
-	bad = (d->Nx<1 || d->Ny<1);
+	bad = !isfinite(value);
 	bad += (d->Nx<1 || d->Nx>5000);												/* detector cannot have more than 5000 pixels along one edge */
 	bad += (d->Ny<1 || d->Ny>5000);
 	bad += (d->sizeX<1e3 || d->sizeX>1e6);										/* detector cannot be larger than 1m */
 	bad += (d->sizeY<1e3 || d->sizeY>1e6);
 	bad += (fabs(d->R[0])>2*M_PI || fabs(d->R[1])>2*M_PI || fabs(d->R[2])>2*M_PI);	/* rotation cannot be more than 2π */
-	bad += (fabs(d->P[0])>2e6 || fabs(d->P[0])>2e6 || fabs(d->P[0])>2e6);		/* P cannot be more than 2m in any direction */
+	bad += (fabs(d->P[0])>2e6 || fabs(d->P[1])>2e6 || fabs(d->P[2])>2e6);		/* P cannot be more than 2m in any direction */
 	return (bad>0);
 }
 
