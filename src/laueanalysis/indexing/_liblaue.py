@@ -152,7 +152,23 @@ class NativeCrystal:
 
 @dataclass(frozen=True)
 class DetectorGeometry:
-    """Validated dimensions and identity for one detector in a geometry file."""
+    """Validated metadata for one detector in a geometry file.
+
+    Parameters
+    ----------
+    nx, ny
+        Detector dimensions in unbinned pixels.
+    size_x, size_y
+        Detector dimensions in micrometres.
+    detector_id
+        Detector identifier stored in the geometry file.
+
+    Notes
+    -----
+    Instances are returned by :meth:`Geometry.detector`. Detector slots may be
+    sparse, so a detector's physical slot cannot be inferred from
+    :attr:`Geometry.detector_count`.
+    """
 
     nx: int
     ny: int
@@ -162,7 +178,27 @@ class DetectorGeometry:
 
 
 class Geometry:
-    """Parsed detector geometry retained for repeated in-process conversions."""
+    """Parsed detector geometry retained for repeated in-process conversion.
+
+    Parameters
+    ----------
+    path
+        Path to a Laue geometry XML file. Only detector geometry is loaded by
+        this public interface.
+
+    Raises
+    ------
+    ValueError
+        If the detector declarations are malformed, incomplete, duplicated, or
+        contain invalid dimensions or physical parameters.
+    ImportError
+        If the native ``liblaue`` library is unavailable.
+
+    Notes
+    -----
+    Detector indices are physical slots from the geometry file, not ordinal
+    positions among active detectors. Slots may therefore be sparse.
+    """
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -177,13 +213,42 @@ class Geometry:
 
     @property
     def detector_count(self) -> int:
+        """Number of active detectors in the geometry."""
         return self._library.laue_geometry_detector_count(self._handle)
 
     def find_detector(self, detector_id: str) -> int:
+        """Find the physical slot for a detector identifier.
+
+        Parameters
+        ----------
+        detector_id
+            Exact detector identifier from the geometry file.
+
+        Returns
+        -------
+        int
+            Physical detector slot, or ``-1`` if the identifier is absent.
+        """
         return self._library.laue_geometry_find_detector(self._handle, detector_id.encode())
 
     def detector(self, detector_index: int = 0) -> DetectorGeometry:
-        """Return validated metadata for a detector."""
+        """Return metadata for an active detector slot.
+
+        Parameters
+        ----------
+        detector_index
+            Physical detector slot from the geometry file.
+
+        Returns
+        -------
+        DetectorGeometry
+            Validated detector dimensions and identity.
+
+        Raises
+        ------
+        ValueError
+            If the slot is outside the supported range or is inactive.
+        """
         info = ffi.new("laue_detector_info *")
         error = ffi.new("char[256]")
         status = self._library.laue_geometry_detector_info(
@@ -209,7 +274,42 @@ class Geometry:
         group: tuple[int, int] = (1, 1),
         depth: Optional[float] = None,
     ) -> np.ndarray:
-        """Convert an ``(n, 2)`` array of zero-based binned pixels to q-hat vectors."""
+        """Convert peak coordinates to unit scattering vectors.
+
+        Parameters
+        ----------
+        peaks
+            Array-like peak coordinates with shape ``(n, 2)``. Columns are
+            zero-based ``(x, y)`` coordinates in the supplied frame.
+        detector_index
+            Physical detector slot from the geometry file.
+        start
+            Zero-based detector ``(x, y)`` origin of the frame.
+        group
+            Positive detector-pixel grouping factors as ``(x, y)``.
+        depth
+            Optional finite sample depth in micrometres passed to the geometry
+            calculation.
+
+        Returns
+        -------
+        numpy.ndarray
+            Unit scattering vectors with shape ``(n, 3)`` and ``float64``
+            dtype.
+
+        Raises
+        ------
+        ValueError
+            If coordinates, region parameters, depth, or detector selection
+            are invalid.
+        RuntimeError
+            If native pixel-to-q conversion fails.
+
+        Notes
+        -----
+        Grouped coordinates are mapped to the center of the corresponding
+        detector-pixel group before bounds validation and conversion.
+        """
         pixels = np.asarray(peaks, dtype=np.float64)
         if pixels.ndim != 2 or pixels.shape[1] != 2:
             raise ValueError("peaks must have shape (n, 2)")
@@ -255,7 +355,25 @@ class Geometry:
 
 
 def load_geometry(path: str | Path) -> Geometry:
-    """Load detector geometry for reuse by one or more Indexers."""
+    """Load detector geometry for reuse.
+
+    Parameters
+    ----------
+    path
+        Path to a Laue geometry XML file.
+
+    Returns
+    -------
+    Geometry
+        Parsed detector geometry backed by native state.
+
+    Raises
+    ------
+    ValueError
+        If the detector geometry is invalid.
+    ImportError
+        If the native ``liblaue`` library is unavailable.
+    """
     return Geometry(path)
 
 

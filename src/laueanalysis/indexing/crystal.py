@@ -12,6 +12,30 @@ _LENGTH_TO_ANGSTROM = {"angstrom": 1.0, "a": 1.0, "nm": 10.0, "micron": 1e4}
 
 @dataclass(frozen=True)
 class Cell:
+    """Crystallographic unit-cell parameters.
+
+    Parameters
+    ----------
+    a, b, c
+        Positive unit-cell lengths in ``unit``.
+    alpha, beta, gamma
+        Unit-cell angles in degrees. Each angle must be strictly between zero
+        and 180 degrees.
+    unit
+        Length unit for ``a``, ``b``, and ``c``. Supported values are
+        ``"angstrom"``, ``"A"``, ``"nm"``, and ``"micron"``.
+
+    Raises
+    ------
+    ValueError
+        If a length or angle is invalid, or the unit is unsupported.
+
+    Notes
+    -----
+    Instances are immutable. Use :func:`dataclasses.replace` to derive a cell
+    with changed parameters.
+    """
+
     a: float
     b: float
     c: float
@@ -30,6 +54,13 @@ class Cell:
 
     @property
     def in_angstrom(self) -> "Cell":
+        """Copy the cell with lengths converted to angstroms.
+
+        Returns
+        -------
+        Cell
+            A new cell with ``unit="angstrom"``. Angles are unchanged.
+        """
         scale = _LENGTH_TO_ANGSTROM[self.unit.lower()]
         return Cell(
             self.a * scale, self.b * scale, self.c * scale,
@@ -39,6 +70,31 @@ class Cell:
 
 @dataclass(frozen=True)
 class Atom:
+    """Atom site in a crystal description.
+
+    Parameters
+    ----------
+    symbol
+        Chemical element symbol passed to the native crystal model.
+    position
+        Three fractional coordinates within the unit cell.
+    occupancy
+        Site occupancy from zero through one, inclusive.
+    label
+        Optional site label. If omitted, XML output uses ``symbol``.
+
+    Raises
+    ------
+    ValueError
+        If ``position`` does not contain three coordinates or occupancy is
+        outside the supported range.
+
+    Notes
+    -----
+    Instances are immutable. Use :func:`dataclasses.replace` to derive a site
+    with changed values.
+    """
+
     symbol: str
     position: tuple[float, float, float]
     occupancy: float = 1.0
@@ -53,6 +109,32 @@ class Atom:
 
 @dataclass(frozen=True)
 class Crystal:
+    """Immutable crystal description used for orientation indexing.
+
+    Parameters
+    ----------
+    name
+        Human-readable crystal or material name.
+    space_group
+        International Tables space-group number from 1 through 230.
+    cell
+        Crystallographic unit cell.
+    atoms
+        Atom sites. Any iterable supplied at construction is stored as a tuple.
+    source
+        Optional source XML path retained as provenance.
+
+    Raises
+    ------
+    ValueError
+        If ``space_group`` is outside the range 1 through 230.
+
+    Notes
+    -----
+    Instances are immutable. Use :func:`dataclasses.replace` to derive a
+    modified crystal description.
+    """
+
     name: str
     space_group: int
     cell: Cell
@@ -66,6 +148,14 @@ class Crystal:
 
     @property
     def crystal_system(self) -> str:
+        """Crystal system inferred from the space-group number.
+
+        Returns
+        -------
+        str
+            One of ``"triclinic"``, ``"monoclinic"``, ``"orthorhombic"``,
+            ``"tetragonal"``, ``"trigonal"``, ``"hexagonal"``, or ``"cubic"``.
+        """
         number = self.space_group
         if number <= 2:
             return "triclinic"
@@ -83,7 +173,33 @@ class Crystal:
 
 
 def load_crystal(path: str | Path) -> Crystal:
-    """Load a Laue crystal XML file into an editable immutable description."""
+    """Load a Laue crystal XML file.
+
+    Parameters
+    ----------
+    path
+        Path to a crystal XML file containing a cell and space-group number.
+
+    Returns
+    -------
+    Crystal
+        Immutable crystal description with ``source`` set to ``path``.
+
+    Raises
+    ------
+    OSError
+        If the file cannot be read.
+    xml.etree.ElementTree.ParseError
+        If the file is not well-formed XML.
+    ValueError
+        If required crystal data is missing, nonnumeric, or outside the
+        supported ranges.
+
+    Notes
+    -----
+    Atom sites without fractional coordinates are ignored. Missing occupancy
+    defaults to one, and a missing chemical name defaults to the file stem.
+    """
     path = Path(path)
     root = ET.parse(path).getroot()
     cell_node = root.find("cell")

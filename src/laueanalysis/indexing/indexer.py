@@ -48,6 +48,40 @@ PEAK_DTYPE = np.dtype([
 
 @dataclass(frozen=True)
 class PeakParams:
+    """Peak-search configuration.
+
+    Parameters
+    ----------
+    boxsize
+        Half-width, in pixels, of the square region used to fit each peak.
+    max_rfactor
+        Maximum fit residual factor accepted for a peak. Must be positive.
+    min_size
+        Minimum peak size in pixels. Must be positive.
+    min_separation
+        Minimum separation between accepted peaks in pixels. Must be positive.
+    threshold
+        Absolute intensity threshold. If `None`, derive a threshold from the
+        image statistics and ``threshold_ratio``.
+    threshold_ratio
+        Scale applied to the image standard deviation when deriving an
+        automatic threshold.
+    peak_shape
+        Peak model, either ``"Lorentzian"`` or ``"Gaussian"``.
+    max_peaks
+        Maximum number of peaks returned from one frame. Must be positive.
+    smooth
+        Whether to smooth the image before peak detection and fitting.
+    detect_binning
+        Peak-detection binning factor. Only ``1`` is currently supported.
+
+    Notes
+    -----
+    Instances are immutable. Use :func:`dataclasses.replace` to derive a
+    configuration with changed values. Parameter validation occurs when an
+    :class:`Indexer` is constructed.
+    """
+
     boxsize: int = 5
     max_rfactor: float = 2.0
     min_size: int = 3
@@ -62,7 +96,48 @@ class PeakParams:
 
 @dataclass(frozen=True)
 class FrameMetadata:
-    """Optional experiment provenance for an in-memory frame."""
+    """Optional experiment provenance attached to a frame result.
+
+    Parameters
+    ----------
+    title
+        Experiment or scan title.
+    sample_name
+        Sample name.
+    user_name
+        User name recorded with the acquisition.
+    beamline
+        Beamline identifier.
+    scan_number
+        Scan number.
+    date_exposed
+        Exposure date or timestamp as recorded by the source file.
+    beam_bad
+        Source beam-quality flag.
+    ccd_shutter
+        CCD shutter state.
+    light_on
+        Illumination-state flag.
+    mono_mode
+        Monochromator mode.
+    sample_position
+        Sample ``(x, y, z)`` position in the acquisition coordinate system.
+    energy_kev
+        Incident energy in keV.
+    hutch_temperature
+        Hutch temperature in the units supplied by the acquisition metadata.
+    sample_distance
+        Sample distance in the units supplied by the acquisition metadata.
+    detector_id
+        Detector identifier expected to match the selected geometry detector.
+    exposure_seconds
+        Detector exposure time in seconds.
+
+    Notes
+    -----
+    Instances are immutable. Values supplied explicitly to
+    :meth:`Indexer.index` override metadata read from an HDF5 frame.
+    """
 
     title: str | None = None
     sample_name: str | None = None
@@ -82,6 +157,13 @@ class FrameMetadata:
     exposure_seconds: float | None = None
 
     def as_dict(self) -> dict[str, object]:
+        """Return the metadata fields whose values are not `None`.
+
+        Returns
+        -------
+        dict[str, object]
+            A new mapping containing the populated fields.
+        """
         return {
             name: value for name, value in self.__dict__.items() if value is not None
         }
@@ -89,6 +171,37 @@ class FrameMetadata:
 
 @dataclass(frozen=True)
 class Pattern:
+    """One crystal orientation identified in a diffraction frame.
+
+    Parameters
+    ----------
+    euler_deg
+        Euler angles in degrees, with shape ``(3,)``.
+    rotation
+        Orientation rotation matrix with shape ``(3, 3)``.
+    recip
+        Reciprocal-lattice matrix with shape ``(3, 3)``.
+    goodness
+        Native indexer's goodness score for the pattern.
+    rms_error_deg
+        Root-mean-square angular indexing error in degrees.
+    hkl
+        Integer Miller indices with shape ``(n, 3)``.
+    pk_index
+        Zero-based indices into the frame's peak array, with shape ``(n,)``.
+    err_deg
+        Per-peak angular errors in degrees, with shape ``(n,)``.
+    energy_kev
+        Per-peak photon energies in keV, with shape ``(n,)``.
+    pred_intens
+        Per-peak predicted intensities, with shape ``(n,)``.
+
+    Notes
+    -----
+    The dataclass is frozen, but its NumPy arrays remain mutable. Each pattern
+    owns Python arrays copied from the native result.
+    """
+
     euler_deg: np.ndarray
     rotation: np.ndarray
     recip: np.ndarray
@@ -102,11 +215,39 @@ class Pattern:
 
     @property
     def n_indexed(self) -> int:
+        """Number of peaks assigned to this pattern."""
         return len(self.pk_index)
 
 
 @dataclass(frozen=True)
 class IndexParams:
+    """Crystal-orientation indexing configuration.
+
+    Parameters
+    ----------
+    kev_max_calc
+        Maximum photon energy in keV used to calculate candidate reflections.
+        Must be positive.
+    kev_max_test
+        Maximum photon energy in keV used to test candidate reflections. Must
+        be positive.
+    angle_tolerance_deg
+        Angular matching tolerance in degrees. Must be positive.
+    cone_deg
+        Search cone angle in degrees. Must be positive.
+    hkl_prefer
+        Preferred Miller-index direction as exactly three integers.
+    max_data
+        Maximum number of detected peaks supplied to the orientation indexer.
+        Must be at least two.
+
+    Notes
+    -----
+    Instances are immutable. Use :func:`dataclasses.replace` to derive a
+    configuration with changed values. Parameter validation occurs when an
+    :class:`Indexer` is constructed.
+    """
+
     kev_max_calc: float = 30.0
     kev_max_test: float = 35.0
     angle_tolerance_deg: float = 0.12
@@ -117,6 +258,53 @@ class IndexParams:
 
 @dataclass(frozen=True)
 class FrameResult:
+    """Self-contained result of processing one diffraction frame.
+
+    Parameters
+    ----------
+    peaks
+        Structured peak array with shape ``(n,)``. Fields are ``fit_x``,
+        ``fit_y``, ``intens``, ``integral``, ``hwhm_x``, ``hwhm_y``, ``tilt``,
+        ``chisq``, ``background``, and the three-component ``qhat`` vector.
+    patterns
+        Crystal orientations identified in the frame.
+    threshold_used
+        Intensity threshold used by peak search.
+    total_sum
+        Sum of all frame pixel values.
+    sum_above_threshold
+        Sum of pixel values above ``threshold_used``.
+    num_above_threshold
+        Number of pixels above ``threshold_used``.
+    peaksearch_seconds
+        Elapsed peak-search time in seconds.
+    indexing_seconds
+        Elapsed orientation-indexing time in seconds. Pixel-to-q conversion is
+        not included in either timing field.
+    metadata
+        Experiment metadata copied into the result.
+    input_image
+        Source HDF5 path, or `None` for an in-memory frame.
+    image_shape
+        Frame shape as ``(rows, columns)``.
+    start
+        Zero-based detector ``(x, y)`` origin of the frame.
+    group
+        Detector-pixel grouping factors as ``(x, y)``.
+    depth
+        Optional sample depth in micrometres passed to the geometry conversion.
+    image
+        Retained contiguous ``uint16`` frame, or `None` when image retention
+        was disabled.
+
+    Notes
+    -----
+    Native result memory is released before this object is returned. The
+    dataclass is frozen, but contained arrays and the metadata mapping may
+    remain mutable. A result with no patterns is valid and has ``indexed`` set
+    to `False`.
+    """
+
     peaks: np.ndarray
     patterns: tuple[Pattern, ...]
     threshold_used: float
@@ -136,40 +324,91 @@ class FrameResult:
 
     @property
     def indexed(self) -> bool:
+        """Whether at least one crystal pattern was identified."""
         return bool(self.patterns)
 
     @property
     def n_peaks(self) -> int:
+        """Number of detected peaks."""
         return len(self.peaks)
 
     @property
     def n_indexed(self) -> int:
+        """Total peak assignments across all identified patterns."""
         return sum(pattern.n_indexed for pattern in self.patterns)
 
     @property
     def n_patterns(self) -> int:
+        """Number of identified crystal patterns."""
         return len(self.patterns)
 
     @property
     def elapsed_seconds(self) -> float:
+        """Sum of the recorded peak-search and indexing times in seconds."""
         return self.peaksearch_seconds + self.indexing_seconds
 
     @property
     def indexed_peak_indices(self) -> np.ndarray:
+        """Sorted unique peak indices assigned to any pattern.
+
+        Returns
+        -------
+        numpy.ndarray
+            One-dimensional array of zero-based indices into ``peaks``.
+        """
         if not self.patterns:
             return np.empty(0, dtype=np.int32)
         return np.unique(np.concatenate([pattern.pk_index for pattern in self.patterns]))
 
     @property
     def unindexed_peak_indices(self) -> np.ndarray:
+        """Sorted peak indices not assigned to a pattern.
+
+        Returns
+        -------
+        numpy.ndarray
+            One-dimensional array of zero-based indices into ``peaks``.
+        """
         return np.setdiff1d(np.arange(self.n_peaks), self.indexed_peak_indices)
 
     def to_step(self) -> Step:
+        """Return a copy of the internal legacy XML snapshot.
+
+        Returns
+        -------
+        Step
+            A deep copy of the serialization model captured when this result
+            was created.
+
+        Raises
+        ------
+        RuntimeError
+            If the result was constructed manually without an XML snapshot.
+
+        Notes
+        -----
+        ``Step`` is a compatibility representation used for legacy XML output,
+        not the preferred result API.
+        """
         if self._step is None:
             raise RuntimeError("FrameResult has no XML step snapshot")
         return deepcopy(self._step)
 
     def write_xml(self, path: str | Path) -> None:
+        """Write this result in the legacy Laue XML format.
+
+        Parameters
+        ----------
+        path
+            Destination XML file. An existing file is replaced.
+
+        Raises
+        ------
+        RuntimeError
+            If the result was constructed manually without an XML snapshot.
+        OSError
+            If the destination cannot be written.
+        """
         write_step_xml(self.to_step(), str(path))
 
 
@@ -185,7 +424,53 @@ def index_frame(
     cosmic_filter: bool = False,
     **kwargs,
 ) -> FrameResult:
-    """Index one frame without explicitly constructing an Indexer."""
+    """Index one frame with a temporary :class:`Indexer`.
+
+    Parameters
+    ----------
+    frame
+        Two-dimensional ``uint16`` NumPy array or path to a supported HDF5
+        frame.
+    geometry
+        Parsed detector geometry or path to a geometry XML file.
+    crystal
+        Crystal description or crystal XML path. If `None`, peak search and
+        pixel-to-q conversion run without orientation indexing.
+    peak_params
+        Peak-search configuration. Defaults to :class:`PeakParams`.
+    index_params
+        Orientation-indexing configuration. Defaults to :class:`IndexParams`.
+    detector_index
+        Physical detector slot in the geometry. This is not the ordinal
+        position among active detectors.
+    detector_id
+        Detector identifier to select instead of ``detector_index``.
+    cosmic_filter
+        Value recorded in XML output for cosmic-ray filtering provenance.
+        This option does not apply an additional Python-side filter.
+    **kwargs
+        Frame options accepted by :meth:`Indexer.index`: ``start``, ``group``,
+        ``depth``, ``mask``, ``metadata``, and ``keep_image``.
+
+    Returns
+    -------
+    FrameResult
+        A self-contained frame result. The input image is retained by default.
+
+    Raises
+    ------
+    InputError
+        If configuration, detector selection, or frame input is invalid.
+    MemoryError
+        If a native stage cannot allocate required memory.
+    IndexingError
+        If a native numerical or internal indexing stage fails.
+
+    Notes
+    -----
+    Construct :class:`Indexer` directly when processing multiple frames so
+    parsed geometry and crystal state can be reused.
+    """
     return Indexer(
         geometry,
         crystal,
@@ -198,10 +483,45 @@ def index_frame(
 
 
 class Indexer:
-    """Reusable in-process processor, separate from the legacy ``index()`` API.
+    """Reusable in-process Laue frame indexer.
 
-    Peak search, pixel-to-q conversion, and crystal indexing run through
-    ``liblaue`` without intermediate files or subprocesses.
+    Peak search, pixel-to-q conversion, and crystal indexing run through the
+    native library without subprocesses or per-frame intermediate text files.
+
+    Parameters
+    ----------
+    geo_file
+        Parsed detector geometry or path to a geometry XML file.
+    crystal_file
+        Crystal description or crystal XML path. If `None`, frames are peak
+        searched and converted to q space without orientation indexing.
+    peak_params
+        Peak-search configuration. Defaults to :class:`PeakParams`.
+    index_params
+        Orientation-indexing configuration. Defaults to :class:`IndexParams`.
+    detector_index
+        Physical detector slot in the geometry. This is not the ordinal
+        position among active detectors.
+    detector_id
+        Detector identifier to select instead of ``detector_index``.
+    cosmic_filter
+        Value recorded in XML output for cosmic-ray filtering provenance.
+        This option does not apply an additional Python-side filter.
+
+    Raises
+    ------
+    InputError
+        If parameters or detector selection are invalid.
+    ValueError
+        If a geometry or crystal description is invalid.
+    ImportError
+        If the native indexing library is unavailable.
+
+    Notes
+    -----
+    Reuse one instance for frames that share geometry, crystal, detector, and
+    processing parameters. Use :meth:`replace` to create a separately validated
+    instance with changed configuration.
     """
 
     def __init__(
@@ -267,7 +587,55 @@ class Indexer:
         metadata: FrameMetadata | Mapping[str, object] | None = None,
         keep_image: bool = True,
     ) -> FrameResult:
-        """Process one NumPy frame or HDF5 file without subprocesses."""
+        """Process one NumPy frame or HDF5 file without subprocesses.
+
+        Parameters
+        ----------
+        frame
+            Two-dimensional ``uint16`` NumPy array or path to a supported HDF5
+            frame.
+        start
+            Zero-based detector ``(x, y)`` origin for an in-memory frame.
+        group
+            Positive detector-pixel grouping factors as ``(x, y)``.
+        depth
+            Optional finite sample depth in micrometres passed to pixel-to-q
+            conversion.
+        mask
+            Array with the same shape as ``frame``. Values are converted to
+            ``uint8`` and passed to native peak search, where nonzero pixels
+            are masked.
+        metadata
+            Experiment metadata for XML output. Explicit values override
+            metadata loaded from an HDF5 file.
+        keep_image
+            Retain the contiguous input image in :attr:`FrameResult.image`.
+
+        Returns
+        -------
+        FrameResult
+            A self-contained result whose native backing allocations have
+            already been released.
+
+        Raises
+        ------
+        InputError
+            If the frame, region, mask, metadata, or selected detector is
+            invalid.
+        KeyError
+            If a required HDF5 image dataset is missing.
+        OSError
+            If an HDF5 input file cannot be opened.
+        MemoryError
+            If a native stage cannot allocate required memory.
+        IndexingError
+            If a native numerical or internal stage fails.
+
+        Notes
+        -----
+        For HDF5 input, detector ``start`` and ``group`` values from the file
+        take precedence over method arguments when present.
+        """
         input_image = None
         file_detector_id = None
         supplied_metadata = metadata.as_dict() if isinstance(metadata, FrameMetadata) else dict(metadata or {})
@@ -422,13 +790,71 @@ class Indexer:
             library.laue_frame_result_free(result)
 
     def index(self, frame: np.ndarray | str | Path, **kwargs) -> FrameResult:
-        """Index one frame. This is the preferred public method."""
+        """Index one frame using the reusable configuration.
+
+        Parameters
+        ----------
+        frame
+            Two-dimensional ``uint16`` NumPy array or path to a supported HDF5
+            frame.
+        **kwargs
+            Frame options accepted by ``process``: ``start``, ``group``,
+            ``depth``, ``mask``, ``metadata``, and ``keep_image``.
+
+        Returns
+        -------
+        FrameResult
+            The processed frame result.
+
+        Raises
+        ------
+        InputError
+            If the frame or frame options are invalid.
+        MemoryError
+            If a native stage cannot allocate required memory.
+        IndexingError
+            If a native numerical or internal stage fails.
+
+        Notes
+        -----
+        This is the preferred single-frame method. ``keep_image`` defaults to
+        `True`.
+        """
         return self.process(frame, **kwargs)
 
     def index_many(
         self, frames: Iterable[np.ndarray | str | Path], *, keep_images: bool = False
     ) -> list[FrameResult]:
-        """Index frames in order while reusing parsed geometry and crystal data."""
+        """Index frames in order while reusing parsed configuration.
+
+        Parameters
+        ----------
+        frames
+            Iterable of two-dimensional ``uint16`` arrays or supported HDF5
+            paths.
+        keep_images
+            Retain each input image in its result. Defaults to `False` to limit
+            batch memory use.
+
+        Returns
+        -------
+        list[FrameResult]
+            Results in the same order as the input iterable.
+
+        Raises
+        ------
+        InputError
+            If a frame or its metadata is invalid.
+        MemoryError
+            If a native stage cannot allocate required memory.
+        IndexingError
+            If a native numerical or internal stage fails.
+
+        Notes
+        -----
+        Frames are processed sequentially. Processing stops on the first
+        exception.
+        """
         return [self.index(frame, keep_image=keep_images) for frame in frames]
 
     def process_many(self, frames: Iterable[np.ndarray | str | Path]) -> list[FrameResult]:
@@ -436,7 +862,32 @@ class Indexer:
         return self.index_many(frames)
 
     def replace(self, **changes) -> "Indexer":
-        """Return an Indexer with validated replacement configuration."""
+        """Create an indexer with selected configuration values replaced.
+
+        Parameters
+        ----------
+        **changes
+            Constructor arguments to replace. Supported names are ``geo_file``,
+            ``crystal_file``, ``peak_params``, ``index_params``,
+            ``detector_index``, ``detector_id``, and ``cosmic_filter``.
+
+        Returns
+        -------
+        Indexer
+            A new, independently validated indexer.
+
+        Raises
+        ------
+        TypeError
+            If an unknown constructor argument is supplied.
+        InputError
+            If replacement parameters or detector selection are invalid.
+
+        Notes
+        -----
+        Native geometry and crystal state is constructed for the new instance;
+        it is not shared with the original indexer.
+        """
         values = {
             "geo_file": self.geo_file,
             "crystal_file": self.crystal_model,
@@ -449,9 +900,41 @@ class Indexer:
         return type(self)(**values)
 
     def write_xml(self, result: FrameResult, path: str | Path) -> None:
+        """Write one result in the legacy Laue XML format.
+
+        Parameters
+        ----------
+        result
+            Result produced by an indexer.
+        path
+            Destination XML file. An existing file is replaced.
+
+        Raises
+        ------
+        RuntimeError
+            If ``result`` has no XML snapshot.
+        OSError
+            If the destination cannot be written.
+        """
         write_step_xml(result.to_step(), str(path))
 
     def write_many_xml(self, results: Iterable[FrameResult], path: str | Path) -> None:
+        """Write multiple results to one legacy Laue XML document.
+
+        Parameters
+        ----------
+        results
+            Frame results written in iteration order.
+        path
+            Destination XML file. An existing file is replaced.
+
+        Raises
+        ------
+        RuntimeError
+            If any result has no XML snapshot.
+        OSError
+            If the destination cannot be written.
+        """
         write_combined_xml([result.to_step() for result in results], str(path))
 
     @staticmethod

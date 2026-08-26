@@ -15,6 +15,7 @@ calibration/*.yml
 laue_indexing.egg-info
 laueanalysis.egg-info
 /build
+/docs/_build/
 
 standard xtals
 

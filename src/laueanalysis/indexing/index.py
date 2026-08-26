@@ -16,9 +16,42 @@ from laueanalysis.indexing.xml_utils import write_step_xml, get_default_xml_file
 
 
 class IndexingResult(NamedTuple):
-    """Result from an indexing operation."""
+    """Result returned by the legacy subprocess indexing interface.
+
+    Parameters
+    ----------
+    success
+        Whether the pipeline produced its expected result for the completed
+        stages.
+    output_files
+        Mapping from intermediate output type to generated file path.
+    n_peaks_found
+        Number of peaks reported by peak search.
+    n_indexed
+        Number of indexed peaks.
+    n_patterns_found
+        Number of orientation patterns found.
+    indexing_data
+        Parsed legacy indexing data, if indexing output was available.
+    step_data
+        Parsed legacy XML serialization model, if XML generation succeeded.
+    xml_file
+        Generated XML path, or `None` when XML was disabled or failed.
+    log
+        Combined pipeline log.
+    error
+        Failure description, or `None` when no error was reported.
+    command_history
+        Subprocess commands and output operations performed by the pipeline.
+
+    Notes
+    -----
+    This type belongs to the legacy subprocess API. New code should use
+    :class:`FrameResult` from :func:`index_frame` or :class:`Indexer`.
+    """
+
     success: bool
-    output_files: Dict[str, str]  # e.g., {'peaks': 'path/to/peaks.txt', ...}
+    output_files: Dict[str, str]
     n_peaks_found: int
     n_indexed: int
     n_patterns_found: int
@@ -421,45 +454,73 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           generate_xml: bool = True,
           xml_output_file: Optional[str] = None,
           timeout: int = 300) -> IndexingResult:
-    """
-    Perform complete Laue indexing on an input image.
-    
-    This function runs the full indexing pipeline:
-    1. Peak search to find reflections in the image
-    2. Pixel-to-q conversion using geometry
-    3. Indexing against crystal structure
-    4. XML generation with complete results (optional)
-    
-    Args:
-        input_image: Path to input diffraction image.
-        output_dir: Directory for all output files.
-        geo_file: Path to geometry file.
-        crystal_file: Path to crystal structure file.
-        boxsize: Box size for peak search (default: 5).
-        max_rfactor: Maximum R-factor for peak validation (default: 2.0).
-        min_size: Minimum peak size in pixels (default: 3).
-        min_separation: Minimum separation between peaks (default: 10).
-        threshold: Intensity threshold for peak detection (default: 100).
-        peak_shape: Peak shape model - 'L' for Lorentzian, 'G' for Gaussian (default: 'L').
-        max_peaks: Maximum number of peaks to find (default: 50).
-        mask_file: Optional path to mask file.
-        threshold_ratio: Threshold ratio, -1 to disable (default: -1).
-        smooth: Apply smoothing before peak search (default: False).
-        index_kev_max_calc: Maximum keV for indexing calculation (default: 30.0).
-        index_kev_max_test: Maximum keV for indexing test (default: 35.0).
-        index_angle_tolerance: Angle tolerance in degrees for indexing (default: 0.12).
-        index_cone: Cone angle in degrees for indexing (default: 72.0).
-        index_h: H component of reference vector (default: 0).
-        index_k: K component of reference vector (default: 0).
-        index_l: L component of reference vector (default: 1).
-        depth_override: Optional depth value to override in peaks file (microns).
-        cosmic_filter: Whether cosmic ray filtering was applied (default: False).
-        generate_xml: Whether to generate XML output with full data (default: True).
-        xml_output_file: Path for XML output (default: output_dir/indexed.xml).
-        timeout: Timeout for each subprocess in seconds (default: 300).
-        
-    Returns:
-        IndexingResult containing success status, output files, statistics, and parsed data.
+    """Run the legacy file- and subprocess-based indexing pipeline.
+
+    Parameters
+    ----------
+    input_image
+        Path to the input diffraction image.
+    output_dir
+        Root directory for intermediate and final output files.
+    geo_file
+        Path to the geometry file.
+    crystal_file
+        Path to the crystal structure file.
+    boxsize
+        Peak-search fitting box size in pixels.
+    max_rfactor
+        Maximum peak-fit residual factor.
+    min_size
+        Minimum peak size in pixels.
+    min_separation
+        Minimum separation between peaks in pixels.
+    threshold
+        Intensity threshold for peak detection.
+    peak_shape
+        Peak model: ``"L"`` for Lorentzian or ``"G"`` for Gaussian.
+    max_peaks
+        Maximum number of peaks to report.
+    mask_file
+        Optional path to a peak-search mask file.
+    threshold_ratio
+        Automatic threshold ratio. ``-1`` disables the corresponding command
+        option in the legacy executable.
+    smooth
+        Apply the legacy peak-search smoothing option.
+    index_kev_max_calc
+        Maximum photon energy in keV for reflection calculation.
+    index_kev_max_test
+        Maximum photon energy in keV for reflection testing.
+    index_angle_tolerance
+        Angular indexing tolerance in degrees.
+    index_cone
+        Indexing cone angle in degrees.
+    index_h, index_k, index_l
+        Components of the preferred Miller-index direction.
+    depth_override
+        Optional depth in microns written into the intermediate peaks file.
+    cosmic_filter
+        Cosmic-filter provenance value written to XML. This function does not
+        itself apply a cosmic-ray filter.
+    generate_xml
+        Generate parsed XML output after the subprocess stages.
+    xml_output_file
+        Explicit XML destination. By default a filename is derived beneath
+        ``output_dir``.
+    timeout
+        Timeout in seconds for each subprocess.
+
+    Returns
+    -------
+    laueanalysis.indexing.IndexingResult
+        Status, output paths, counts, parsed legacy data, logs, and any error.
+
+    Notes
+    -----
+    This compatibility API writes per-frame intermediate files and invokes the
+    ``peaksearch``, ``pix2qs``, and ``euler`` executables. New code should use
+    :func:`index_frame` or :class:`Indexer`. ``index`` is an alias for this
+    function.
     """
     
     # Set up output directories
