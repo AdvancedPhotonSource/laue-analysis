@@ -1,0 +1,200 @@
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import plotly.graph_objects as go
+import pytest
+
+from laueanalysis.indexing import FrameResult, Pattern, load_crystal, load_geometry
+from laueanalysis.indexing.indexer import PEAK_DTYPE
+from laueanalysis.visualization import (
+    DataScope,
+    PlotlySelection,
+    ResultSet,
+    plot_detector_view,
+    plot_map,
+    plot_pole_figure,
+    prepare_detector_view,
+    prepare_map,
+    selection_from_plotly,
+)
+
+
+DATA = Path(__file__).resolve().parents[1] / "sandbox/data/i71"
+
+
+def _pattern(count):
+    return Pattern(
+        euler_deg=np.zeros(3),
+        rotation=np.eye(3),
+        recip=np.eye(3),
+        goodness=10 + count,
+        rms_error_deg=0.1,
+        hkl=np.tile([1, 0, -1], (count, 1)),
+        pk_index=np.arange(count, dtype=np.int32),
+        err_deg=np.arange(count, dtype=float) / 10,
+        energy_kev=np.arange(count, dtype=float) + 10,
+        pred_intens=np.arange(count, dtype=float) + 100,
+    )
+
+
+def _result(patterns, position):
+    peaks = np.zeros(4, dtype=PEAK_DTYPE)
+    peaks["fit_x"] = [10, 20, 30, 40]
+    peaks["fit_y"] = [11, 21, 31, 41]
+    peaks["intens"] = [100, 200, 300, 400]
+    return FrameResult(
+        peaks=peaks,
+        patterns=patterns,
+        threshold_used=10,
+        total_sum=100,
+        sum_above_threshold=50,
+        num_above_threshold=4,
+        peaksearch_seconds=0.1,
+        indexing_seconds=0.2,
+        metadata={"sample_position": position, "detector_id": "PE1621 723-3335"},
+        image_shape=(8, 10),
+        image=np.arange(80, dtype=np.uint16).reshape(8, 10),
+    )
+
+
+def _result_set():
+    return ResultSet(
+        (
+            _result((_pattern(3), _pattern(2)), (0, 1, 2)),
+            _result((_pattern(4),), (3, 4, 5)),
+        ),
+        frame_ids=("a", "b"),
+        crystal=load_crystal(DATA / "Ni.xml"),
+        geometry=load_geometry(DATA / "geoN_2026-07-07_16-30-21.xml"),
+    )
+
+
+def _roles(figure):
+    return [trace.meta["role"] for trace in figure.data]
+
+
+def test_plot_map_renders_prepared_2d_data_with_stable_identity():
+    figure = plot_map(
+        prepare_map(_result_set(), axes=("x", "h"), color="goodness"),
+        marker_size=12,
+        trace_update={"data": {"marker": {"symbol": "circle"}}},
+        layout_update={"template": "plotly_white"},
+    )
+
+    assert isinstance(figure, go.Figure)
+    assert figure.data[0].type == "scattergl"
+    assert _roles(figure) == ["data"]
+    assert list(figure.data[0].customdata[0]) == ["a", 0, None]
+    assert figure.data[0].marker.size == 12
+    assert figure.data[0].marker.symbol == "circle"
+    assert figure.layout.xaxis.title.text == "X motor (um)"
+
+
+def test_plot_map_3d_uses_opaque_markers_and_validates_updates():
+    figure = plot_map(_result_set(), axes=("x", "y", "z"), color="ipf")
+
+    assert figure.data[0].type == "scatter3d"
+    assert figure.data[0].marker.opacity is None
+    assert figure.layout.scene.aspectmode == "data"
+    with pytest.raises(ValueError, match="unknown trace roles"):
+        plot_map(_result_set(), trace_update={"boundary": {"visible": False}})
+    with pytest.raises(TypeError, match="mapping"):
+        plot_map(_result_set(), layout_update=[])
+
+
+def test_plot_map_empty_scope_returns_annotated_figure():
+    figure = plot_map(_result_set(), scope=DataScope(min_indexed=100))
+
+    assert len(figure.data) == 0
+    assert "No patterns" in figure.layout.annotations[0].text
+
+
+def test_plot_pole_figure_has_semantic_roles_and_hover_limit():
+    figure = plot_pole_figure(
+        _result_set(),
+        hover_point_limit=0,
+        trace_update={"boundary": {"line": {"color": "white"}}},
+    )
+
+    assert _roles(figure) == ["data", "boundary", "reference", "reference"]
+    assert list(figure.data[0].customdata[0]) == ["a", 0, None]
+    assert figure.data[0].hoverinfo == "skip"
+    assert figure.data[1].line.color == "white"
+    assert figure.layout.dragmode == "lasso"
+    assert "hover disabled" in figure.layout.annotations[0].text
+
+
+def test_plot_pole_figure_empty_scope_retains_boundary_and_message():
+    figure = plot_pole_figure(_result_set(), scope=DataScope(min_indexed=100))
+
+    assert "data" not in _roles(figure)
+    assert "boundary" in _roles(figure)
+    assert "No poles" in figure.layout.annotations[0].text
+
+
+def test_plot_detector_view_preserves_detector_conventions_and_ids():
+    data = prepare_detector_view(_result_set(), frame_id="a", image=True)
+    figure = plot_detector_view(
+        data,
+        show_hkl_labels=True,
+        image_limits=(0, 100),
+        trace_update={"indexed": {"marker": {"size": 20}}},
+    )
+
+    assert _roles(figure)[:3] == ["image", "boundary", "detected"]
+    detected = figure.data[2]
+    assert list(detected.customdata[0]) == ["a", None, 0]
+    indexed = next(trace for trace in figure.data if trace.meta["role"] == "indexed")
+    assert list(indexed.customdata[0][:3]) == ["a", 0, 0]
+    assert indexed.marker.size == 20
+    assert figure.layout.yaxis.range == (8.0, 0)
+    assert figure.layout.xaxis.scaleanchor == "y"
+    assert figure.data[0].zmin == 0
+    assert figure.data[0].zmax == 100
+
+
+def test_plot_detector_view_requires_frame_for_unprepared_source():
+    with pytest.raises(TypeError, match="frame_id"):
+        plot_detector_view(_result_set())
+
+
+def test_plot_detector_view_annotates_empty_frame():
+    empty = replace(
+        _result_set().results[0],
+        peaks=np.zeros(0, dtype=PEAK_DTYPE),
+        patterns=(),
+    )
+    figure = plot_detector_view(
+        ResultSet((empty,), frame_ids=("empty",), geometry=_result_set().geometry),
+        frame_id="empty",
+    )
+
+    assert _roles(figure) == ["boundary"]
+    assert "no detected peaks" in figure.layout.annotations[0].text
+
+
+def test_selection_from_plotly_deduplicates_stable_identities():
+    event = {
+        "points": [
+            {"customdata": ["a", 0, None]},
+            {"customdata": ["a", 0, 2]},
+            {"customdata": ["a", 0, 2, 1, 0, -1]},
+            {"customdata": ["b", None, 1]},
+            {},
+        ]
+    }
+
+    assert selection_from_plotly(event) == PlotlySelection(
+        frame_ids=("a", "b"),
+        pattern_ids=(("a", 0),),
+        peak_ids=(("a", 2), ("b", 1)),
+    )
+    assert selection_from_plotly(None) == PlotlySelection()
+
+
+def test_selection_from_plotly_rejects_invalid_payloads():
+    with pytest.raises(TypeError, match="mapping"):
+        selection_from_plotly([])
+    with pytest.raises(ValueError, match="frame, pattern, and peak"):
+        selection_from_plotly({"points": [{"customdata": ["a"]}]})

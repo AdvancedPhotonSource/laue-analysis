@@ -12,6 +12,7 @@ configuration
 results
 geometry
 crystals
+visualization
 errors
 legacy
 ```

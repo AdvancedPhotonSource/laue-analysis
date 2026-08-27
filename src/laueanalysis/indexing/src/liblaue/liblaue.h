@@ -32,6 +32,9 @@ typedef struct {
 typedef struct {
     int nx, ny;
     double size_x, size_y;
+    double translation[3];
+    double rotation_vector[3];
+    double rotation[3][3];
     char detector_id[256];
 } laue_detector_info;
 

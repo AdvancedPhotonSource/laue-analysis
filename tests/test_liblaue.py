@@ -65,15 +65,50 @@ def test_pixels_to_q_accepts_empty_input():
 
 
 def test_geometry_exposes_detector_metadata():
-    from laueanalysis.indexing._liblaue import Geometry
+    from laueanalysis.indexing import DetectorGeometry, Geometry
 
     geometry = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml")
     detector = geometry.detector(0)
 
+    assert isinstance(detector, DetectorGeometry)
     assert (detector.nx, detector.ny) == (2048, 2048)
     assert detector.detector_id == "PE1621 723-3335"
     assert detector.size_x == pytest.approx(409600)
     assert detector.size_y == pytest.approx(409600)
+    np.testing.assert_allclose(detector.translation, [28834, 2715, 513399])
+    assert detector.rotation_vector.shape == (3,)
+    np.testing.assert_allclose(detector.rotation @ detector.rotation.T, np.eye(3), atol=1e-12)
+    assert not detector.translation.flags.writeable
+    assert not detector.rotation.flags.writeable
+
+
+def test_detector_projection_round_trip():
+    from laueanalysis.indexing._liblaue import Geometry
+
+    geometry = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml")
+    detector = geometry.detector(0)
+    pixels = np.asarray([[100.25, 300.5], [1024.0, 1024.0], [1900.0, 1700.0]])
+    lab = detector.pixel_to_lab(pixels)
+    outgoing = lab / np.linalg.norm(lab, axis=1)[:, None]
+    q = outgoing - np.array([0.0, 0.0, 1.0])
+
+    np.testing.assert_allclose(detector.q_to_pixel(q), pixels, atol=1e-10)
+    assert detector.pixel_to_lab(np.asarray([100.25, 300.5])).shape == (3,)
+    assert detector.q_to_pixel(q[0]).shape == (2,)
+
+
+def test_detector_projection_handles_invalid_and_off_detector_rays():
+    from laueanalysis.indexing._liblaue import Geometry
+
+    detector = Geometry(ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml").detector(0)
+
+    assert np.isnan(detector.q_to_pixel([0.0, 0.0, 0.0])).all()
+    off_detector = detector.q_to_pixel([1.0, 0.0, -1.0], on_detector=True)
+    assert np.isnan(off_detector).all()
+    with pytest.raises(ValueError, match="shape"):
+        detector.pixel_to_lab(np.zeros(3))
+    with pytest.raises(ValueError, match="shape"):
+        detector.q_to_pixel(np.zeros(2))
 
 
 def test_geometry_rejects_invalid_detector_parameters(tmp_path):

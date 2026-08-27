@@ -30,6 +30,9 @@ ffi.cdef(
     typedef struct {
         int nx, ny;
         double size_x, size_y;
+        double translation[3];
+        double rotation_vector[3];
+        double rotation[3][3];
         char detector_id[256];
     } laue_detector_info;
     typedef struct {
@@ -162,6 +165,12 @@ class DetectorGeometry:
         Detector dimensions in micrometres.
     detector_id
         Detector identifier stored in the geometry file.
+    translation
+        Detector-frame translation vector in micrometres.
+    rotation_vector
+        Axis-angle rotation vector in radians.
+    rotation
+        Rotation matrix from detector coordinates to beamline coordinates.
 
     Notes
     -----
@@ -175,6 +184,129 @@ class DetectorGeometry:
     size_x: float
     size_y: float
     detector_id: str
+    translation: np.ndarray
+    rotation_vector: np.ndarray
+    rotation: np.ndarray
+
+    def __post_init__(self) -> None:
+        shapes = {
+            "translation": (3,),
+            "rotation_vector": (3,),
+            "rotation": (3, 3),
+        }
+        for name, shape in shapes.items():
+            value = np.array(getattr(self, name), dtype=np.float64, copy=True)
+            if value.shape != shape or not np.isfinite(value).all():
+                raise ValueError(f"{name} must be a finite array with shape {shape}")
+            value.setflags(write=False)
+            object.__setattr__(self, name, value)
+
+    def pixel_to_lab(self, pixels: np.ndarray) -> np.ndarray:
+        """Convert full-detector pixels to beamline coordinates.
+
+        Parameters
+        ----------
+        pixels
+            Zero-based pixel coordinates with shape ``(..., 2)`` in ``(x, y)``
+            order.
+
+        Returns
+        -------
+        numpy.ndarray
+            Beamline coordinates in micrometres with shape ``(..., 3)``.
+        """
+        pixels = np.asarray(pixels, dtype=np.float64)
+        if pixels.shape[-1:] != (2,):
+            raise ValueError("pixels must have shape (..., 2)")
+        if not np.isfinite(pixels).all():
+            raise ValueError("pixel coordinates must be finite")
+
+        detector = np.empty(pixels.shape[:-1] + (3,), dtype=np.float64)
+        detector[..., 0] = (
+            (pixels[..., 0] - 0.5 * (self.nx - 1)) * self.size_x / self.nx
+            + self.translation[0]
+        )
+        detector[..., 1] = (
+            (pixels[..., 1] - 0.5 * (self.ny - 1)) * self.size_y / self.ny
+            + self.translation[1]
+        )
+        detector[..., 2] = self.translation[2]
+        return detector @ self.rotation.T
+
+    def q_to_pixel(
+        self,
+        q: np.ndarray,
+        *,
+        depth: float | None = None,
+        on_detector: bool = False,
+    ) -> np.ndarray:
+        """Project reciprocal-space vectors onto this detector.
+
+        Invalid rays and, when requested, off-detector intersections are
+        returned as ``NaN`` coordinates.
+
+        Parameters
+        ----------
+        q
+            Reciprocal-space vectors with shape ``(..., 3)``.
+        depth
+            Sample depth in micrometres. `None` places the source at the
+            beamline origin.
+        on_detector
+            Replace intersections outside the detector with ``NaN``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Zero-based full-detector ``(x, y)`` coordinates with shape
+            ``(..., 2)``.
+        """
+        q = np.asarray(q, dtype=np.float64)
+        if q.shape[-1:] != (3,):
+            raise ValueError("q must have shape (..., 3)")
+        if depth is not None and not np.isfinite(depth):
+            raise ValueError("depth must be finite when provided")
+
+        flat = q.reshape((-1, 3))
+        result = np.full((len(flat), 2), np.nan, dtype=np.float64)
+        norms = np.linalg.norm(flat, axis=1)
+        finite = np.isfinite(flat).all(axis=1) & (norms > 0)
+        if np.any(finite):
+            qhat = flat[finite] / norms[finite, None]
+            q_length = -2.0 * qhat[:, 2]
+            outgoing = qhat * q_length[:, None] + np.array([0.0, 0.0, 1.0])
+            source = np.array([0.0, 0.0, 0.0 if depth is None else depth])
+            source_detector = self.rotation.T @ source
+            outgoing_detector = outgoing @ self.rotation
+            denominator = outgoing_detector[:, 2]
+            valid_ray = (q_length >= 0) & (np.abs(denominator) > 1e-15)
+            distance = np.full(len(qhat), np.nan)
+            distance[valid_ray] = (
+                self.translation[2] - source_detector[2]
+            ) / denominator[valid_ray]
+            valid_ray &= distance >= 0
+
+            intersection = source_detector + distance[:, None] * outgoing_detector
+            xy = np.empty((len(qhat), 2), dtype=np.float64)
+            xy[:, 0] = (
+                (intersection[:, 0] - self.translation[0]) * self.nx / self.size_x
+                + 0.5 * (self.nx - 1)
+            )
+            xy[:, 1] = (
+                (intersection[:, 1] - self.translation[1]) * self.ny / self.size_y
+                + 0.5 * (self.ny - 1)
+            )
+            valid_ray &= np.isfinite(xy).all(axis=1)
+            if on_detector:
+                valid_ray &= (
+                    (xy[:, 0] >= 0)
+                    & (xy[:, 0] <= self.nx - 1)
+                    & (xy[:, 1] >= 0)
+                    & (xy[:, 1] <= self.ny - 1)
+                )
+            finite_indices = np.flatnonzero(finite)
+            result[finite_indices[valid_ray]] = xy[valid_ray]
+        return result.reshape(q.shape[:-1] + (2,))
 
 
 class Geometry:
@@ -263,6 +395,9 @@ class Geometry:
             info.size_x,
             info.size_y,
             ffi.string(info.detector_id).decode(errors="replace"),
+            np.asarray(list(info.translation)),
+            np.asarray(list(info.rotation_vector)),
+            np.asarray([list(row) for row in info.rotation]),
         )
 
     def pixels_to_q(

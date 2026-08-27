@@ -11,7 +11,8 @@ frame-input
 parameters
 results
 batch-indexing
+visualization
 error-handling
 ```
 
-Read [Geometry](geometry.md), [Crystals](crystals.md), and [Frame input](frame-input.md) when preparing a new experiment. Use [Parameters](parameters.md) after the default processing behavior is understood. [Results](results.md) defines the returned arrays and their relationships. [Batch indexing](batch-indexing.md) and [Error handling](error-handling.md) cover application-level processing.
+Read [Geometry](geometry.md), [Crystals](crystals.md), and [Frame input](frame-input.md) when preparing a new experiment. Use [Parameters](parameters.md) after the default processing behavior is understood. [Results](results.md) defines the returned arrays and their relationships. [Batch indexing](batch-indexing.md), [Visualization data](visualization.md), and [Error handling](error-handling.md) cover application-level processing.

@@ -9,7 +9,7 @@ This submodule contains the core indexing functionality including:
 - Compiled C binaries for peak search, q-space conversion, and indexing
 """
 
-from ._liblaue import Geometry, load_geometry
+from ._liblaue import DetectorGeometry, Geometry, load_geometry
 from .crystal import Atom, Cell, Crystal, load_crystal
 from .errors import IndexingError, InputError, LaueError
 from .index import IndexingResult, index, lauego
@@ -28,6 +28,7 @@ __all__ = [
     'Atom',
     'Crystal',
     'load_crystal',
+    'DetectorGeometry',
     'Geometry',
     'load_geometry',
     'LaueError',

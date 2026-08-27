@@ -196,6 +196,7 @@ int laue_geometry_detector_info(const laue_geometry *geometry, int detector_inde
                                 laue_detector_info *info, char *err, size_t errlen)
 {
     const struct detectorGeometry *detector;
+    int i;
 
     if (!geometry || !info || detector_index < 0 || detector_index >= MAX_Ndetectors ||
         !geometry->value.d[detector_index].used) {
@@ -211,6 +212,19 @@ int laue_geometry_detector_info(const laue_geometry *geometry, int detector_inde
     info->ny = detector->Ny;
     info->size_x = detector->sizeX;
     info->size_y = detector->sizeY;
+    for (i = 0; i < 3; ++i) {
+        info->translation[i] = detector->P[i];
+        info->rotation_vector[i] = detector->R[i];
+    }
+    info->rotation[0][0] = detector->rho00;
+    info->rotation[0][1] = detector->rho01;
+    info->rotation[0][2] = detector->rho02;
+    info->rotation[1][0] = detector->rho10;
+    info->rotation[1][1] = detector->rho11;
+    info->rotation[1][2] = detector->rho12;
+    info->rotation[2][0] = detector->rho20;
+    info->rotation[2][1] = detector->rho21;
+    info->rotation[2][2] = detector->rho22;
     snprintf(info->detector_id, sizeof(info->detector_id), "%s", detector->detectorID);
     set_error(err, errlen, "");
     return 0;
