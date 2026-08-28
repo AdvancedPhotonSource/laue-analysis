@@ -193,7 +193,7 @@ The renderer applies these mappings after its defaults. An unknown role raises `
 |---|---|
 | `plot_map` | `data`, `unindexed` |
 | `plot_pole_figure` | `data`, `boundary`, `reference` |
-| `plot_detector_view` | `image`, `boundary`, `detected`, `indexed` |
+| `plot_detector_view` | `image`, `boundary`, `detected`, `indexed`, `simulated` |
 
 A role can update several traces. For example, the `indexed` role updates every selected detector pattern, including its on-detector and off-detector traces.
 
@@ -214,9 +214,10 @@ selection = selection_from_plotly(event_data)
 print(selection.frame_ids)
 print(selection.pattern_ids)
 print(selection.peak_ids)
+print(selection.reflection_ids)
 ```
 
-The helper removes duplicate identities in event order. It does not store selection state or depend on Dash.
+The helper removes duplicate identities in event order. Simulated points add stable `(frame_id, pattern_index, h, k, l)` values to `reflection_ids`. It does not store selection state or depend on Dash.
 
 ## Plot prepared data with Matplotlib
 
@@ -279,6 +280,8 @@ detector_data = prepare_detector_view(
 `image=True` uses a retained modern image. For XML data, it reads the recorded input path. Image loading is opt-in. You can also pass a two-dimensional NumPy array, a `.npy` path, or a supported HDF5 path.
 
 Measured and predicted positions use frame pixel `(x, y)` coordinates. `measured_xy` contains every detected peak. Each item in `patterns` contains `predicted_xy`, `hkl`, and the corresponding frame-local peak indices. Back-projection applies the frame's region origin and grouping so predicted positions align with the supplied frame.
+
+Pass `simulation_energy_range_kev=(low, high)` to add predicted missing reflections. Simulation is opt-in. See [Add simulation to a detector view](detector-simulation.md) for coordinate conversion, prepared-data reuse, Plotly traces, and reflection selection.
 
 ## Work with tables
 

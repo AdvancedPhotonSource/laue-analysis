@@ -2,6 +2,12 @@
 
 This page records the current local workflow for Python, native, test, and documentation changes.
 
+```{toctree}
+:maxdepth: 1
+
+simulation-performance
+```
+
 ## Build the project
 
 Install the system dependencies listed in [Installation](../installation.md), then create an editable environment:

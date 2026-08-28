@@ -27,11 +27,13 @@ from .projection import (
     pole_color_radius,
     pole_figure_points,
 )
+from .simulation import SimulationResult, simulate_reflections
 
 __all__ = [
     "CUBIC_SYMMETRY",
     "HEXAGONAL_SYMMETRY",
     "SurfaceFrame",
+    "SimulationResult",
     "closest_pole_colors",
     "crystal_direction",
     "cubic_hkl_family",
@@ -50,4 +52,5 @@ __all__ = [
     "rodrigues_colors",
     "symmetry_operations",
     "symmetry_reduce_orientation",
+    "simulate_reflections",
 ]

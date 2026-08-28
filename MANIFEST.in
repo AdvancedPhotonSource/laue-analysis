@@ -2,14 +2,14 @@
 include README.md
 include requirements.txt
 
-# Configuration files
-recursive-include src/laueanalysis/config *.yml *.yaml *.json *.xml *.npy
-
 # Native sources and compiled binaries
 recursive-include src/laueanalysis/indexing/bin *
 recursive-include src/laueanalysis/indexing/src *.c *.h makefile
 recursive-include src/laueanalysis/reconstruct/bin *
 recursive-include src/laueanalysis/reconstruct/source *.c *.cu *.h Makefile
+
+# Scientific parity fixtures and their provenance generator
+recursive-include tests/data/simulation *.md *.npz *.py
 
 # Exclude build artifacts and cache
 global-exclude *.pyc *.pyo *.pyd __pycache__ .DS_Store *.o *.a

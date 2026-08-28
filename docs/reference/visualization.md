@@ -36,6 +36,8 @@ See [Visualization data](../guides/visualization.md) for workflows, coordinate c
 
 .. autoclass:: DetectorPatternData
 
+.. autoclass:: DetectorSimulationData
+
 .. autoclass:: DetectorViewData
 
 .. autofunction:: prepare_map

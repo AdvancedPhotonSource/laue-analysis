@@ -17,6 +17,7 @@ from laueanalysis.analysis import (
     pole_color_radius,
     pole_figure_points,
     rodrigues_colors,
+    simulate_reflections,
     symmetry_operations,
     symmetry_reduce_orientation,
 )
@@ -146,6 +147,79 @@ class DetectorPatternData:
 
 
 @dataclass(frozen=True)
+class DetectorSimulationData:
+    """Prepared missing simulated reflections for one indexed pattern.
+
+    Parameters
+    ----------
+    pattern_index
+        Nonnegative frame-local pattern rank.
+    hkl
+        Integer Miller indices with shape ``(n, 3)``.
+    predicted_xy
+        Zero-based frame pixel ``(x, y)`` coordinates with shape ``(n, 2)``.
+        The coordinates include the frame ROI and detector-pixel grouping.
+    energy_kev
+        Photon energies in keV with shape ``(n,)``.
+    relative_intensity
+        Uncalibrated relative intensities with shape ``(n,)``.
+
+    Notes
+    -----
+    Construction copies, validates, and marks every array read-only. A row at
+    the same index across all arrays describes one simulated reflection.
+    """
+
+    pattern_index: int
+    hkl: np.ndarray
+    predicted_xy: np.ndarray
+    energy_kev: np.ndarray
+    relative_intensity: np.ndarray
+
+    def __post_init__(self):
+        if (
+            isinstance(self.pattern_index, (bool, np.bool_))
+            or not isinstance(self.pattern_index, (int, np.integer))
+            or self.pattern_index < 0
+        ):
+            raise ValueError("pattern_index must be a nonnegative integer")
+        hkl_input = np.asarray(self.hkl)
+        if hkl_input.dtype.kind not in "iu":
+            raise TypeError("hkl must have an integer dtype")
+        if hkl_input.ndim != 2 or hkl_input.shape[1:] != (3,):
+            raise ValueError("hkl must have shape (n, 3)")
+        count = len(hkl_input)
+        hkl = _readonly(hkl_input, dtype=int, shape=(count, 3), name="hkl")
+        predicted = _readonly(
+            self.predicted_xy,
+            dtype=float,
+            shape=(count, 2),
+            name="predicted_xy",
+        )
+        energy = _readonly(
+            self.energy_kev, dtype=float, shape=(count,), name="energy_kev"
+        )
+        intensity = _readonly(
+            self.relative_intensity,
+            dtype=float,
+            shape=(count,),
+            name="relative_intensity",
+        )
+        for name, array in (
+            ("predicted_xy", predicted),
+            ("energy_kev", energy),
+            ("relative_intensity", intensity),
+        ):
+            if not np.isfinite(array).all():
+                raise ValueError(f"{name} must contain only finite values")
+        object.__setattr__(self, "pattern_index", int(self.pattern_index))
+        object.__setattr__(self, "hkl", hkl)
+        object.__setattr__(self, "predicted_xy", predicted)
+        object.__setattr__(self, "energy_kev", energy)
+        object.__setattr__(self, "relative_intensity", intensity)
+
+
+@dataclass(frozen=True)
 class DetectorViewData:
     """Prepared detector image, peaks, and indexed-reflection overlays."""
 
@@ -158,6 +232,7 @@ class DetectorViewData:
     measured_indexed: np.ndarray
     patterns: tuple[DetectorPatternData, ...]
     image: np.ndarray | None = None
+    simulations: tuple[DetectorSimulationData, ...] = ()
 
     def __post_init__(self):
         count = len(self.measured_xy)
@@ -166,6 +241,10 @@ class DetectorViewData:
         object.__setattr__(self, "measured_intensity", _readonly(self.measured_intensity, dtype=float, shape=(count,), name="measured_intensity"))
         object.__setattr__(self, "measured_indexed", _readonly(self.measured_indexed, dtype=bool, shape=(count,), name="measured_indexed"))
         object.__setattr__(self, "patterns", tuple(self.patterns))
+        simulations = tuple(self.simulations)
+        if any(not isinstance(value, DetectorSimulationData) for value in simulations):
+            raise TypeError("simulations must contain DetectorSimulationData values")
+        object.__setattr__(self, "simulations", simulations)
         if self.image is not None:
             image = _readonly(self.image, name="image")
             if image.ndim != 2:
@@ -416,8 +495,9 @@ def prepare_detector_view(
     patterns="all",
     image=None,
     detector_index=None,
+    simulation_energy_range_kev=None,
 ):
-    """Prepare measured and indexed-reflection detector overlays."""
+    """Prepare measured, indexed, and optional simulated detector overlays."""
     dataset = _dataset(source)
     frame_index = _frame_index(dataset, frame_id)
     if dataset.geometry is None:
@@ -431,6 +511,8 @@ def prepare_detector_view(
         else:
             detector_index = 0
     detector = dataset.geometry.detector(detector_index)
+    if simulation_energy_range_kev is not None and dataset.crystal is None:
+        raise ValueError("crystal context is required to simulate detector reflections")
 
     peak_rows = np.flatnonzero(dataset.peak_frame_indices == frame_index)
     measured = np.column_stack([
@@ -450,6 +532,7 @@ def prepare_detector_view(
 
     indexed_mask = np.zeros(len(peak_rows), dtype=bool)
     prepared_patterns = []
+    prepared_simulations = []
     depth = None if np.isnan(dataset.depths[frame_index]) else dataset.depths[frame_index]
     start = dataset.starts[frame_index]
     group = dataset.groups[frame_index]
@@ -466,6 +549,32 @@ def prepare_detector_view(
             roi_xy,
             peak_indices,
         ))
+        if simulation_energy_range_kev is not None:
+            simulated = simulate_reflections(
+                dataset.crystal,
+                dataset.pattern_reciprocals[pattern_row],
+                detector,
+                energy_range_kev=simulation_energy_range_kev,
+                depth=0.0 if depth is None else float(depth),
+            ).missing_from(dataset.assignment_hkl[assignment_rows])
+            simulated_xy = (
+                simulated.detector_xy - start - (group - 1) / 2.0
+            ) / group
+            width, height = dataset.image_shapes[frame_index][::-1]
+            valid = (
+                np.isfinite(simulated_xy).all(axis=1)
+                & (simulated_xy[:, 0] >= 0)
+                & (simulated_xy[:, 0] <= width - 1)
+                & (simulated_xy[:, 1] >= 0)
+                & (simulated_xy[:, 1] <= height - 1)
+            )
+            prepared_simulations.append(DetectorSimulationData(
+                pattern_index=int(dataset.pattern_indices[pattern_row]),
+                hkl=simulated.hkl[valid],
+                predicted_xy=simulated_xy[valid],
+                energy_kev=simulated.energy_kev[valid],
+                relative_intensity=simulated.relative_intensity[valid],
+            ))
 
     if image is True:
         retained = dataset.images[frame_index]
@@ -494,4 +603,5 @@ def prepare_detector_view(
         measured_indexed=indexed_mask,
         patterns=tuple(prepared_patterns),
         image=image_data,
+        simulations=tuple(prepared_simulations),
     )

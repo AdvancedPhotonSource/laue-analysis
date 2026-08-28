@@ -92,3 +92,15 @@ Do not retry unchanged input after `InputError`. A numerical `IndexingError` als
 A transient file-access failure can be retried only when the application can identify a transient cause. `laueanalysis` does not classify I/O failures as transient.
 
 No peaks or no patterns is not a failure and does not raise an exception. Apply a separate scientific acceptance policy to those results.
+
+## Reflection simulation failures
+
+{func}`~laueanalysis.analysis.simulate_reflections` uses built-in exception types because its public result does not expose backend status:
+
+- `TypeError` reports unsupported package objects or numeric types.
+- `ValueError` reports invalid scientific inputs, including array shapes, non-finite values, atomless crystals, and invalid energy intervals.
+- `RuntimeError` reports private simulator loading, resource, execution, numerical, projection, or candidate-limit failures.
+
+A valid simulation with no on-detector reflections returns an empty {class}`~laueanalysis.analysis.SimulationResult`. It does not raise. The simulator has no fallback, so a `RuntimeError` never means that a simpler calculation replaced the requested one.
+
+Detector-view preparation and rendering propagate these exceptions. Missing crystal context raises only when `simulation_energy_range_kev` is not `None`.

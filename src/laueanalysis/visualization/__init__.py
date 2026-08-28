@@ -6,6 +6,7 @@ from .options import AXIS_OPTIONS, COLOR_MODES, PALETTE_OPTIONS, SURFACE_PRESETS
 from .preparation import (
     Axis,
     DetectorPatternData,
+    DetectorSimulationData,
     DetectorViewData,
     MapData,
     PoleFigureData,
@@ -27,6 +28,7 @@ __all__ = [
     "Choice",
     "DataScope",
     "DetectorPatternData",
+    "DetectorSimulationData",
     "DetectorViewData",
     "MapData",
     "PlotlySelection",

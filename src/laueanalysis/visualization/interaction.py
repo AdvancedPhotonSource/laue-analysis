@@ -14,6 +14,7 @@ class PlotlySelection:
     frame_ids: tuple[FrameId, ...] = ()
     pattern_ids: tuple[tuple[FrameId, int], ...] = ()
     peak_ids: tuple[tuple[FrameId, int], ...] = ()
+    reflection_ids: tuple[tuple[FrameId, int, int, int, int], ...] = ()
 
 
 def selection_from_plotly(event_data) -> PlotlySelection:
@@ -36,6 +37,7 @@ def selection_from_plotly(event_data) -> PlotlySelection:
     frames = []
     patterns = []
     peaks = []
+    reflections = []
     for point in points:
         if not isinstance(point, dict):
             raise ValueError("each Plotly event point must be a mapping")
@@ -61,4 +63,13 @@ def selection_from_plotly(event_data) -> PlotlySelection:
             identity = (frame_id, peak_index)
             if identity not in peaks:
                 peaks.append(identity)
-    return PlotlySelection(tuple(frames), tuple(patterns), tuple(peaks))
+        if peak_index is None and pattern_index is not None and len(customdata) >= 6:
+            reflection = customdata[3:6]
+            if any(isinstance(value, bool) or not isinstance(value, int) for value in reflection):
+                raise ValueError("customdata Miller indices must be integers")
+            identity = (frame_id, pattern_index, *reflection)
+            if identity not in reflections:
+                reflections.append(identity)
+    return PlotlySelection(
+        tuple(frames), tuple(patterns), tuple(peaks), tuple(reflections)
+    )

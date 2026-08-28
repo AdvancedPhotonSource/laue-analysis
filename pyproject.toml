@@ -49,6 +49,7 @@ where = ["src"]
 include = ["laueanalysis*"]
 
 [tool.setuptools.package-data]
+"laueanalysis.analysis._vendor.jzt" = ["README.md", "elementData.xml"]
 "laueanalysis.indexing" = ["bin/*"]
 "laueanalysis.reconstruct" = ["bin/*"]
 

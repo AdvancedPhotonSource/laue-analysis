@@ -26,6 +26,7 @@ Install the package from source, then follow one frame through the in-process in
 - [Install laueanalysis](installation.md)
 - [Index your first frame](quickstart.md)
 - [Prepare visualization data](guides/visualization.md)
+- [Simulate detector reflections](guides/simulation.md)
 
 The in-process API accepts a two-dimensional `numpy.uint16` frame or a supported 34-ID-E HDF5 file. It returns a {class}`~laueanalysis.indexing.FrameResult` containing detected peaks, scattering vectors, candidate crystal patterns, timing, and provenance.
 

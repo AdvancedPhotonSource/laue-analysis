@@ -4,12 +4,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from laueanalysis.analysis import SurfaceFrame
+from laueanalysis.analysis import SimulationResult, SurfaceFrame
 from laueanalysis.indexing import FrameResult, Pattern, load_crystal, load_geometry
 from laueanalysis.indexing.indexer import PEAK_DTYPE
 from laueanalysis.visualization import (
     Axis,
     DataScope,
+    DetectorSimulationData,
     DetectorViewData,
     MapData,
     PoleFigureData,
@@ -204,3 +205,154 @@ def test_prepare_detector_view_validates_frame_and_image():
         prepare_detector_view(result_set, frame_id="a", image=np.zeros(3))
     with pytest.raises(ValueError, match="patterns"):
         prepare_detector_view(result_set, frame_id="a", patterns="first")
+
+
+def test_detector_simulation_data_normalizes_validates_and_owns_arrays():
+    hkl = np.array([[1, 2, 3]], dtype=np.int32)
+    prepared = DetectorSimulationData(
+        pattern_index=np.int64(2),
+        hkl=hkl,
+        predicted_xy=[[4, 5]],
+        energy_kev=[12.5],
+        relative_intensity=[0.75],
+    )
+    hkl[0, 0] = 99
+
+    assert prepared.pattern_index == 2
+    assert prepared.hkl.tolist() == [[1, 2, 3]]
+    assert prepared.hkl.dtype.kind == "i"
+    assert prepared.predicted_xy.dtype == np.float64
+    assert all(
+        not value.flags.writeable
+        for value in (
+            prepared.hkl,
+            prepared.predicted_xy,
+            prepared.energy_kev,
+            prepared.relative_intensity,
+        )
+    )
+    with pytest.raises(ValueError, match="shape"):
+        replace(prepared, predicted_xy=np.zeros((2, 2)))
+    with pytest.raises(ValueError, match="finite"):
+        replace(prepared, energy_kev=[np.nan])
+    with pytest.raises(TypeError, match="integer dtype"):
+        replace(prepared, hkl=np.array([[1.0, 2.0, 3.0]]))
+
+
+def test_prepare_detector_view_simulates_selected_patterns_in_roi_coordinates(monkeypatch):
+    import laueanalysis.visualization.preparation as preparation
+
+    context = _result_set(with_context=True)
+    frame = replace(
+        context.results[0], start=(100, 200), group=(2, 4), depth=12.5
+    )
+    source = ResultSet(
+        (frame,),
+        frame_ids=("a",),
+        crystal=context.crystal,
+        geometry=context.geometry,
+    )
+    simulated = SimulationResult(
+        hkl=np.array([[2, 0, -2], [0, 1, -1], [0, 2, -1]]),
+        q=np.zeros((3, 3)),
+        detector_xy=np.array([
+            [100.5, 201.5],
+            [118.5, 229.5],
+            [120.5, 201.5],
+        ]),
+        energy_kev=np.array([10.0, 11.0, 12.0]),
+        relative_intensity=np.array([1.0, 0.5, 0.25]),
+    )
+    calls = []
+
+    def fake_simulate(crystal, reciprocal, detector, **kwargs):
+        calls.append((crystal, reciprocal.copy(), detector, kwargs))
+        return simulated
+
+    monkeypatch.setattr(preparation, "simulate_reflections", fake_simulate)
+    prepared = prepare_detector_view(
+        source,
+        frame_id="a",
+        simulation_energy_range_kev=(7.0, 25.0),
+    )
+
+    assert len(calls) == 2
+    assert all(call[0] is context.crystal for call in calls)
+    assert all(call[3] == {"energy_range_kev": (7.0, 25.0), "depth": 12.5} for call in calls)
+    assert [value.pattern_index for value in prepared.simulations] == [0, 1]
+    for value in prepared.simulations:
+        assert value.hkl.tolist() == [[0, 1, -1]]
+        np.testing.assert_allclose(value.predicted_xy, [[9.0, 7.0]])
+        np.testing.assert_allclose(value.energy_kev, [11.0])
+        np.testing.assert_allclose(value.relative_intensity, [0.5])
+
+
+def test_prepare_detector_view_simulation_is_opt_in_and_errors_propagate(monkeypatch):
+    import laueanalysis.visualization.preparation as preparation
+
+    source = _result_set(with_context=True)
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("simulation should not run")
+
+    monkeypatch.setattr(preparation, "simulate_reflections", unexpected)
+    assert prepare_detector_view(source, frame_id="a").simulations == ()
+
+    missing_crystal = ResultSet(
+        source.results,
+        frame_ids=source.frame_ids,
+        geometry=source.geometry,
+    )
+    assert prepare_detector_view(missing_crystal, frame_id="a").simulations == ()
+    with pytest.raises(ValueError, match="crystal context"):
+        prepare_detector_view(
+            missing_crystal,
+            frame_id="a",
+            simulation_energy_range_kev=(6.0, 30.0),
+        )
+
+    monkeypatch.setattr(
+        preparation,
+        "simulate_reflections",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("backend failed")),
+    )
+    with pytest.raises(RuntimeError, match="backend failed"):
+        prepare_detector_view(
+            source,
+            frame_id="a",
+            simulation_energy_range_kev=(6.0, 30.0),
+        )
+
+
+@pytest.mark.parametrize(
+    ("patterns", "expected"),
+    [("best", [0]), ("all", [0, 1]), ((1,), [1])],
+)
+def test_prepare_detector_view_simulates_only_selected_patterns(
+    monkeypatch, patterns, expected
+):
+    import laueanalysis.visualization.preparation as preparation
+
+    empty = SimulationResult(
+        hkl=np.empty((0, 3), dtype=int),
+        q=np.empty((0, 3)),
+        detector_xy=np.empty((0, 2)),
+        energy_kev=np.empty(0),
+        relative_intensity=np.empty(0),
+    )
+    depths = []
+
+    def fake_simulate(*args, **kwargs):
+        depths.append(kwargs["depth"])
+        return empty
+
+    monkeypatch.setattr(preparation, "simulate_reflections", fake_simulate)
+    prepared = prepare_detector_view(
+        _result_set(with_context=True),
+        frame_id="a",
+        patterns=patterns,
+        simulation_energy_range_kev=(6.0, 30.0),
+    )
+
+    assert [value.pattern_index for value in prepared.simulations] == expected
+    assert depths == [0.0] * len(expected)

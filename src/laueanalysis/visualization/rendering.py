@@ -309,8 +309,10 @@ def plot_detector_view(
     patterns="all",
     image=None,
     detector_index=None,
+    simulation_energy_range_kev=None,
     show_detected=True,
     show_indexed=True,
+    show_simulated=True,
     show_hkl_labels=False,
     marker_size=8,
     image_colorscale="Gray",
@@ -321,8 +323,8 @@ def plot_detector_view(
 ):
     """Render a detector image and reflection overlays with Plotly.
 
-    Semantic trace roles are ``"image"``, ``"boundary"``, ``"detected"``, and
-    ``"indexed"``.
+    Semantic trace roles are ``"image"``, ``"boundary"``, ``"detected"``,
+    ``"indexed"``, and ``"simulated"``.
     """
     if isinstance(source, DetectorViewData):
         data = source
@@ -335,6 +337,7 @@ def plot_detector_view(
             patterns=patterns,
             image=image,
             detector_index=detector_index,
+            simulation_energy_range_kev=simulation_energy_range_kev,
         )
     if isinstance(marker_size, bool) or not np.isfinite(marker_size) or marker_size <= 0:
         raise ValueError("marker_size must be positive and finite")
@@ -348,7 +351,13 @@ def plot_detector_view(
         raise ValueError("image_limits must contain two finite increasing values")
 
     figure = go.Figure()
-    roles = {"image": [], "boundary": [], "detected": [], "indexed": []}
+    roles = {
+        "image": [],
+        "boundary": [],
+        "detected": [],
+        "indexed": [],
+        "simulated": [],
+    }
     if data.image is not None:
         heatmap = {
             "z": data.image,
@@ -463,6 +472,56 @@ def plot_detector_view(
                 ))
                 roles["indexed"].append(len(figure.data) - 1)
 
+    if show_simulated:
+        for simulation in data.simulations:
+            if not len(simulation.predicted_xy):
+                continue
+            stable = _customdata(
+                [data.frame_id] * len(simulation.predicted_xy),
+                [simulation.pattern_index] * len(simulation.predicted_xy),
+            )
+            customdata = [
+                identity
+                + [int(value) for value in reflection]
+                + [float(energy), float(intensity)]
+                for identity, reflection, energy, intensity in zip(
+                    stable,
+                    simulation.hkl,
+                    simulation.energy_kev,
+                    simulation.relative_intensity,
+                    strict=True,
+                )
+            ]
+            labels = [
+                f"({value[0]} {value[1]} {value[2]})"
+                for value in simulation.hkl
+            ]
+            figure.add_trace(go.Scattergl(
+                x=simulation.predicted_xy[:, 0],
+                y=simulation.predicted_xy[:, 1],
+                mode="markers+text" if show_hkl_labels else "markers",
+                text=labels if show_hkl_labels else None,
+                textposition="top right",
+                name=f"Pattern {simulation.pattern_index} simulated missing",
+                marker={
+                    "size": marker_size + 4,
+                    "symbol": "triangle-up-open",
+                    "color": "rgb(128,0,128)",
+                    "line": {"width": 1.5, "color": "rgb(128,0,128)"},
+                },
+                customdata=customdata,
+                hovertemplate=(
+                    "frame: %{customdata[0]}<br>pattern: %{customdata[1]}<br>"
+                    "hkl: (%{customdata[3]} %{customdata[4]} %{customdata[5]})<br>"
+                    "energy: %{customdata[6]:.4g} keV<br>"
+                    "relative intensity: %{customdata[7]:.4g}<br>"
+                    "x: %{x:.2f} px<br>y: %{y:.2f} px<extra></extra>"
+                ),
+                meta={"role": "simulated"},
+                uid=f"detector-simulated-{simulation.pattern_index}",
+            ))
+            roles["simulated"].append(len(figure.data) - 1)
+
     figure.update_layout(
         xaxis={
             "title": {"text": "X pixel"},
@@ -484,12 +543,17 @@ def plot_detector_view(
         margin={"l": 55, "r": 30, "t": 40, "b": 50},
         uirevision=f"detector-{width:g}x{height:g}",
     )
-    if not len(data.measured_xy) and not data.patterns:
-        _add_empty_annotation(figure, "This frame has no detected peaks or indexed patterns.")
+    has_indexed = any(len(pattern.hkl) for pattern in data.patterns)
+    has_simulated = any(len(simulation.hkl) for simulation in data.simulations)
+    if not len(data.measured_xy) and not has_indexed and not has_simulated:
+        message = "This frame has no detected peaks or indexed patterns."
+        if data.simulations:
+            message += " Simulation found no missing reflections."
+        _add_empty_annotation(figure, message)
     return _apply_updates(
         figure,
         roles,
-        ("image", "boundary", "detected", "indexed"),
+        ("image", "boundary", "detected", "indexed", "simulated"),
         trace_update,
         layout_update,
     )

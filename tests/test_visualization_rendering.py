@@ -9,6 +9,7 @@ from laueanalysis.indexing import FrameResult, Pattern, load_crystal, load_geome
 from laueanalysis.indexing.indexer import PEAK_DTYPE
 from laueanalysis.visualization import (
     DataScope,
+    DetectorSimulationData,
     PlotlySelection,
     ResultSet,
     plot_detector_view,
@@ -154,6 +155,88 @@ def test_plot_detector_view_preserves_detector_conventions_and_ids():
     assert figure.data[0].zmax == 100
 
 
+def test_plot_detector_view_renders_simulated_reflections_and_updates_by_role():
+    data = prepare_detector_view(_result_set(), frame_id="a")
+    simulation = DetectorSimulationData(
+        pattern_index=0,
+        hkl=np.array([[0, 1, -1], [1, 1, -2]]),
+        predicted_xy=np.array([[1.5, 2.5], [3.5, 4.5]]),
+        energy_kev=np.array([11.25, 14.5]),
+        relative_intensity=np.array([0.75, 0.25]),
+    )
+    prepared = replace(data, simulations=(simulation,))
+    figure = plot_detector_view(
+        prepared,
+        show_hkl_labels=True,
+        trace_update={"simulated": {"marker": {"size": 23}}},
+    )
+
+    simulated = next(trace for trace in figure.data if trace.meta["role"] == "simulated")
+    assert simulated.type == "scattergl"
+    assert simulated.marker.symbol == "triangle-up-open"
+    assert simulated.marker.color == "rgb(128,0,128)"
+    assert simulated.marker.size == 23
+    assert list(simulated.customdata[0]) == ["a", 0, None, 0, 1, -1, 11.25, 0.75]
+    assert simulated.text[0] == "(0 1 -1)"
+    assert "relative intensity" in simulated.hovertemplate
+
+    hidden = plot_detector_view(prepared, show_simulated=False)
+    assert "simulated" not in _roles(hidden)
+
+
+def test_plot_detector_view_raw_simulation_argument_is_prepared_once(monkeypatch):
+    import laueanalysis.visualization.rendering as rendering
+
+    prepared = prepare_detector_view(_result_set(), frame_id="a")
+    calls = []
+
+    def fake_prepare(source, **kwargs):
+        calls.append(kwargs)
+        return prepared
+
+    monkeypatch.setattr(rendering, "prepare_detector_view", fake_prepare)
+    plot_detector_view(
+        object(),
+        frame_id="a",
+        simulation_energy_range_kev=(8.0, 20.0),
+        show_simulated=False,
+    )
+    assert calls == [{
+        "frame_id": "a",
+        "patterns": "all",
+        "image": None,
+        "detector_index": None,
+        "simulation_energy_range_kev": (8.0, 20.0),
+    }]
+
+    monkeypatch.setattr(
+        rendering,
+        "prepare_detector_view",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("reran")),
+    )
+    plot_detector_view(
+        prepared,
+        simulation_energy_range_kev=(9.0, 19.0),
+        show_simulated=False,
+    )
+
+
+def test_plot_detector_view_propagates_preparation_errors(monkeypatch):
+    import laueanalysis.visualization.rendering as rendering
+
+    monkeypatch.setattr(
+        rendering,
+        "prepare_detector_view",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("simulation failed")),
+    )
+    with pytest.raises(RuntimeError, match="simulation failed"):
+        plot_detector_view(
+            object(),
+            frame_id="a",
+            simulation_energy_range_kev=(6.0, 30.0),
+        )
+
+
 def test_plot_detector_view_requires_frame_for_unprepared_source():
     with pytest.raises(TypeError, match="frame_id"):
         plot_detector_view(_result_set())
@@ -174,12 +257,35 @@ def test_plot_detector_view_annotates_empty_frame():
     assert "no detected peaks" in figure.layout.annotations[0].text
 
 
+def test_plot_detector_view_distinguishes_empty_simulation_result():
+    source = _result_set()
+    empty = replace(source.results[0], peaks=np.zeros(0, dtype=PEAK_DTYPE), patterns=())
+    data = prepare_detector_view(
+        ResultSet((empty,), frame_ids=("empty",), geometry=source.geometry),
+        frame_id="empty",
+    )
+    attempted = replace(data, simulations=(DetectorSimulationData(
+        pattern_index=0,
+        hkl=np.empty((0, 3), dtype=int),
+        predicted_xy=np.empty((0, 2)),
+        energy_kev=np.empty(0),
+        relative_intensity=np.empty(0),
+    ),))
+
+    figure = plot_detector_view(attempted)
+    assert _roles(figure) == ["boundary"]
+    assert "no missing reflections" in figure.layout.annotations[0].text
+
+
 def test_selection_from_plotly_deduplicates_stable_identities():
     event = {
         "points": [
             {"customdata": ["a", 0, None]},
             {"customdata": ["a", 0, 2]},
             {"customdata": ["a", 0, 2, 1, 0, -1]},
+            {"customdata": ["a", 0, None, 0, 1, -1, 11.0, 0.5]},
+            {"customdata": ["a", 0, None, 0, 1, -1, 11.0, 0.5]},
+            {"customdata": ["a", 1, None, 1, 1, -2, 12.0, 0.25]},
             {"customdata": ["b", None, 1]},
             {},
         ]
@@ -187,8 +293,9 @@ def test_selection_from_plotly_deduplicates_stable_identities():
 
     assert selection_from_plotly(event) == PlotlySelection(
         frame_ids=("a", "b"),
-        pattern_ids=(("a", 0),),
+        pattern_ids=(("a", 0), ("a", 1)),
         peak_ids=(("a", 2), ("b", 1)),
+        reflection_ids=(("a", 0, 0, 1, -1), ("a", 1, 1, 1, -2)),
     )
     assert selection_from_plotly(None) == PlotlySelection()
 
@@ -198,3 +305,7 @@ def test_selection_from_plotly_rejects_invalid_payloads():
         selection_from_plotly([])
     with pytest.raises(ValueError, match="frame, pattern, and peak"):
         selection_from_plotly({"points": [{"customdata": ["a"]}]})
+    with pytest.raises(ValueError, match="Miller indices"):
+        selection_from_plotly({
+            "points": [{"customdata": ["a", 0, None, 1.0, 0, -1]}]
+        })

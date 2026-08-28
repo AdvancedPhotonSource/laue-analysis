@@ -12,6 +12,7 @@ configuration
 results
 geometry
 crystals
+simulation
 visualization
 errors
 legacy
