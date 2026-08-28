@@ -4,7 +4,7 @@ The visualization API normalizes indexing output before it prepares a specific v
 
 ```text
 FrameResult sequence -> ResultSet -> VisualizationDataset
-legacy XML -----------------------> VisualizationDataset
+LaueGo XML ----------------------> VisualizationDataset
 
 VisualizationDataset -> prepare_*() -> immutable NumPy data
 VisualizationDataset -> plot_*()    -> Plotly Figure
@@ -45,7 +45,7 @@ result = indexer.index(
 
 Call `result_set.to_visualization()` when you need the normalized arrays. Preparation and table functions also accept `ResultSet` directly.
 
-## Load legacy XML
+## Load LaueGo XML
 
 {func}`~laueanalysis.visualization.load_visualization_xml` reads an `AllSteps` indexing XML document into the same normalized model:
 

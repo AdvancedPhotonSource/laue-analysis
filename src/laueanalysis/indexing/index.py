@@ -16,7 +16,7 @@ from laueanalysis.indexing.xml_utils import write_step_xml, get_default_xml_file
 
 
 class IndexingResult(NamedTuple):
-    """Result returned by the legacy subprocess indexing interface.
+    """Result returned by the LaueGo subprocess indexing interface.
 
     Parameters
     ----------
@@ -32,9 +32,9 @@ class IndexingResult(NamedTuple):
     n_patterns_found
         Number of orientation patterns found.
     indexing_data
-        Parsed legacy indexing data, if indexing output was available.
+        Parsed LaueGo indexing data, if indexing output was available.
     step_data
-        Parsed legacy XML serialization model, if XML generation succeeded.
+        Parsed LaueGo XML serialization model, if XML generation succeeded.
     xml_file
         Generated XML path, or `None` when XML was disabled or failed.
     log
@@ -46,7 +46,7 @@ class IndexingResult(NamedTuple):
 
     Notes
     -----
-    This type belongs to the legacy subprocess API. New code should use
+    This type belongs to the LaueGo subprocess API. New code should use
     :class:`FrameResult` from :func:`index_frame` or :class:`Indexer`.
     """
 
@@ -454,7 +454,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           generate_xml: bool = True,
           xml_output_file: Optional[str] = None,
           timeout: int = 300) -> IndexingResult:
-    """Run the legacy file- and subprocess-based indexing pipeline.
+    """Run the LaueGo file- and subprocess-based indexing pipeline.
 
     Parameters
     ----------
@@ -484,9 +484,9 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         Optional path to a peak-search mask file.
     threshold_ratio
         Automatic threshold ratio. ``-1`` disables the corresponding command
-        option in the legacy executable.
+        option in the LaueGo executable.
     smooth
-        Apply the legacy peak-search smoothing option.
+        Apply the LaueGo peak-search smoothing option.
     index_kev_max_calc
         Maximum photon energy in keV for reflection calculation.
     index_kev_max_test
@@ -513,7 +513,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     Returns
     -------
     laueanalysis.indexing.IndexingResult
-        Status, output paths, counts, parsed legacy data, logs, and any error.
+        Status, output paths, counts, parsed LaueGo data, logs, and any error.
 
     Notes
     -----

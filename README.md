@@ -31,7 +31,7 @@ result = index_frame(
 print(result.n_peaks, result.n_indexed, result.n_patterns)
 ```
 
-Use `Indexer` to reuse one geometry and crystal configuration across frames. The subprocess-based `index()` and `lauego()` functions remain available for legacy workflows.
+Use `Indexer` to reuse one geometry and crystal configuration across frames. The subprocess-based `index()` and `lauego()` functions remain available for existing LaueGo workflows.
 
 ## Test
 

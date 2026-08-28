@@ -58,7 +58,7 @@ Pixel-to-q conversion <--- Detector geometry
 Crystal indexing <--------- Crystal description
     |
     v
-FrameResult --------------> Legacy XML (explicit export)
+FrameResult --------------> LaueGo XML (explicit export)
 ```
 
 Native memory is released before `FrameResult` is returned. Peak and pattern data are copied into NumPy arrays owned by Python.

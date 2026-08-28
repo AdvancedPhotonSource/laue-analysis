@@ -1,4 +1,4 @@
-"""Legacy indexing XML adapter for visualization data."""
+"""LaueGo indexing XML adapter for visualization data."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def _load_crystal(steps):
             if len(position) == 3 and atom.get("symbol"):
                 atoms.append(Atom(atom.get("symbol"), tuple(position), label=atom.get("label")))
         return Crystal(
-            _text(node, "structureDesc") or "legacy XML crystal",
+            _text(node, "structureDesc") or "LaueGo XML crystal",
             int(space_group),
             Cell(*parameters, unit=unit),
             tuple(atoms),
@@ -86,7 +86,7 @@ def _resolve_geometry(xml_path, geometry, steps):
 
 
 def load_visualization_xml(path, *, geometry=None, frame_ids=None):
-    """Load a legacy ``AllSteps`` indexing XML document.
+    """Load a LaueGo ``AllSteps`` indexing XML document.
 
     Geometry is optional. An explicit geometry object or path takes precedence;
     otherwise readable paths embedded in the XML are tried. Failure to resolve

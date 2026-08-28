@@ -126,7 +126,7 @@ Existing destination files are replaced. These methods serialize a snapshot capt
 
 ## Compatibility conversion
 
-`result.to_step()` returns a deep copy of the internal legacy XML model. This method is a compatibility bridge for code that must interact with that representation. It is not the preferred analysis model, and the serialization classes are not part of the curated public API.
+`result.to_step()` returns a deep copy of the internal LaueGo XML model. This method is a compatibility bridge for code that must interact with that representation. It is not the preferred analysis model, and the serialization classes are not part of the curated public API.
 
 ## Empty results
 

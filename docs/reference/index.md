@@ -15,5 +15,5 @@ crystals
 simulation
 visualization
 errors
-legacy
+lauego
 ```

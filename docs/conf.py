@@ -76,3 +76,9 @@ html_context = {
     "github_version": "main",
     "doc_path": "docs",
 }
+
+# These standalone pages have no section tree to show in the primary sidebar.
+html_sidebars = {
+    "installation": [],
+    "quickstart": [],
+}

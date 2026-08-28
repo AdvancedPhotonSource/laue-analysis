@@ -67,7 +67,7 @@ Measure process count and memory use with representative detector frames before 
 
 ## Write combined output
 
-Write successful results to one legacy XML document:
+Write successful results to one LaueGo XML document:
 
 ```python
 indexer.write_many_xml(results, "indexed-scan.xml")

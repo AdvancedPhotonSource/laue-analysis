@@ -89,6 +89,27 @@ for pattern in result.patterns:
 
 See [Results](guides/results.md) before interpreting the complete peak and pattern schemas.
 
+## Plot the detector result
+
+Attach the indexer's crystal and geometry to the result, then plot the detector image and indexed reflections:
+
+```python
+from laueanalysis.visualization import ResultSet, plot_detector_view
+
+result_set = ResultSet.from_indexer(indexer, [first])
+figure = plot_detector_view(
+    result_set,
+    frame_id=0,
+    image=True,
+    patterns="best",
+)
+figure.show()
+```
+
+Add `simulation_energy_range_kev=(6.0, 30.0)` to predict missing reflections between 6 and 30 keV. Simulation requires an indexed pattern and is not run unless you supply an energy range.
+
+See [Visualization data](guides/visualization.md) for maps, pole figures, detector views, and tables. See [Detector-view simulation](guides/detector-simulation.md) for simulated overlays and their coordinate conventions.
+
 ## Write XML
 
 XML output is explicit in the in-process API. Writing XML does not create peak, pixel-to-q, or indexing text files.
@@ -126,4 +147,6 @@ Do not retry unchanged invalid input. See [Error handling](guides/error-handling
 - [Configure processing parameters](guides/parameters.md)
 - [Interpret results](guides/results.md)
 - [Process batches](guides/batch-indexing.md)
+- [Visualize indexing results](guides/visualization.md)
+- [Simulate detector reflections](guides/simulation.md)
 - [Read the API reference](reference/index.md)

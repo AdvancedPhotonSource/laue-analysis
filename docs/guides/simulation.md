@@ -112,6 +112,6 @@ The public crystal model accepts International Tables space-group numbers 1 thro
 
 The private simulator uses atom identity, fractional position, and occupancy. The public {class}`~laueanalysis.indexing.Atom` model does not represent thermal displacement, valence, Wyckoff metadata, or other extended structure fields.
 
-The current implementation contains a private legacy JZT snapshot. Normal package imports do not load it. Its types are not public, and a later implementation can replace it without changing `SimulationResult` or `simulate_reflections()`.
+The current implementation contains a private snapshot of the JZT simulation code. Normal package imports do not load it. Its types are not public, and a later implementation can replace it without changing `SimulationResult` or `simulate_reflections()`.
 
 See the [simulation API reference](../reference/simulation.md) for complete signatures.

@@ -20,7 +20,7 @@ detector_data = prepare_detector_view(
 
 The default value of `simulation_energy_range_kev` is `None`. The default performs no simulation and preserves the ordinary detector-view workflow.
 
-Simulation requires the shared `Crystal` and geometry in the source data. {meth}`~laueanalysis.visualization.ResultSet.from_indexer` copies both references from an `Indexer`. Legacy XML input may need explicit geometry and crystal context before it can simulate reflections.
+Simulation requires the shared `Crystal` and geometry in the source data. {meth}`~laueanalysis.visualization.ResultSet.from_indexer` copies both references from an `Indexer`. LaueGo XML input may need explicit geometry and crystal context before it can simulate reflections.
 
 The `patterns` argument controls both indexed and simulated layers:
 

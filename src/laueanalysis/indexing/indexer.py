@@ -372,7 +372,7 @@ class FrameResult:
         return np.setdiff1d(np.arange(self.n_peaks), self.indexed_peak_indices)
 
     def to_step(self) -> Step:
-        """Return a copy of the internal legacy XML snapshot.
+        """Return a copy of the internal LaueGo XML snapshot.
 
         Returns
         -------
@@ -387,7 +387,7 @@ class FrameResult:
 
         Notes
         -----
-        ``Step`` is a compatibility representation used for legacy XML output,
+        ``Step`` is a compatibility representation used for LaueGo XML output,
         not the preferred result API.
         """
         if self._step is None:
@@ -395,7 +395,7 @@ class FrameResult:
         return deepcopy(self._step)
 
     def write_xml(self, path: str | Path) -> None:
-        """Write this result in the legacy Laue XML format.
+        """Write this result in the LaueGo XML format.
 
         Parameters
         ----------
@@ -900,7 +900,7 @@ class Indexer:
         return type(self)(**values)
 
     def write_xml(self, result: FrameResult, path: str | Path) -> None:
-        """Write one result in the legacy Laue XML format.
+        """Write one result in the LaueGo XML format.
 
         Parameters
         ----------
@@ -919,7 +919,7 @@ class Indexer:
         write_step_xml(result.to_step(), str(path))
 
     def write_many_xml(self, results: Iterable[FrameResult], path: str | Path) -> None:
-        """Write multiple results to one legacy Laue XML document.
+        """Write multiple results to one LaueGo XML document.
 
         Parameters
         ----------

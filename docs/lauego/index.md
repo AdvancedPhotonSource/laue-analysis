@@ -1,8 +1,8 @@
-# Legacy interfaces
+# LaueGo interfaces
 
 The `index` and `lauego` names refer to the same subprocess-based compatibility function. It runs the `peaksearch`, `pix2qs`, and `euler` programs and writes intermediate text files beneath an output directory.
 
-New code should use the in-process API. The legacy function remains documented so existing workflows can migrate without assuming identical behavior.
+New code should use the in-process API. The LaueGo function remains documented so existing workflows can migrate without assuming identical behavior.
 
 ## Current interfaces
 
@@ -12,9 +12,9 @@ from laueanalysis.indexing import index, lauego
 assert index is lauego
 ```
 
-The function returns an `IndexingResult`, documented in the [legacy API reference](../reference/legacy.md). It reports success through fields such as `success` and `error` and stores output paths, logs, command history, counts, parsed legacy structures, and an optional XML path.
+The function returns an `IndexingResult`, documented in the [LaueGo API reference](../reference/lauego.md). It reports success through fields such as `success` and `error` and stores output paths, logs, command history, counts, parsed LaueGo structures, and an optional XML path.
 
-The legacy pipeline can report overall success after a later stage fails or produces no output. Applications must inspect its returned fields and logs. This differs from the exception model used by `Indexer`.
+The LaueGo pipeline can report overall success after a later stage fails or produces no output. Applications must inspect its returned fields and logs. This differs from the exception model used by `Indexer`.
 
 ## Recommended replacement
 
@@ -43,7 +43,7 @@ The in-process path:
 
 ## Parameter mapping
 
-| Legacy argument | In-process replacement |
+| LaueGo argument | In-process replacement |
 |---|---|
 | `geo_file` | `geometry` for `index_frame`, or the first `Indexer` argument |
 | `crystal_file` | `crystal` for `index_frame`, or the second `Indexer` argument |
@@ -57,13 +57,13 @@ The in-process path:
 | `timeout` | No replacement in the in-process API |
 | `mask_file` | Load or construct an array and pass it as `mask` |
 
-The legacy `peak_shape` commonly uses `"L"` or `"G"`. `PeakParams.peak_shape` defaults to the clearer `"Lorentzian"` spelling but accepts either initial.
+The LaueGo `peak_shape` argument commonly uses `"L"` or `"G"`. `PeakParams.peak_shape` defaults to the clearer `"Lorentzian"` spelling but accepts either initial.
 
-Legacy `threshold_ratio=-1` means that the command option is omitted. In the in-process API, `threshold=None` selects automatic thresholding, and `threshold_ratio` controls its scale. Review this setting rather than copying `-1` mechanically.
+In LaueGo, `threshold_ratio=-1` means that the command option is omitted. In the in-process API, `threshold=None` selects automatic thresholding, and `threshold_ratio` controls its scale. Review this setting rather than copying `-1` mechanically.
 
 ## Result mapping
 
-| Legacy result | In-process result |
+| LaueGo result | In-process result |
 |---|---|
 | `n_peaks_found` | `FrameResult.n_peaks` |
 | `n_indexed` | `FrameResult.n_indexed` |
@@ -80,10 +80,10 @@ Legacy `threshold_ratio=-1` means that the command option is omitted. In the in-
 1. Move peak-search values into `PeakParams`.
 2. Move orientation values into `IndexParams`.
 3. Construct one `Indexer` for each shared geometry, crystal, detector, and parameter configuration.
-4. Replace legacy result-field access with `FrameResult` properties and arrays.
+4. Replace LaueGo result-field access with `FrameResult` properties and arrays.
 5. Catch `InputError`, `IndexingError`, and `MemoryError` at the application boundary.
 6. Add explicit XML writes only where a downstream consumer requires them.
 7. Remove assumptions about intermediate peak, pixel-to-q, and indexing files.
-8. Compare migrated results against representative legacy output before changing scientific settings.
+8. Compare migrated results against representative LaueGo output before changing scientific settings.
 
-See the [legacy API reference](../reference/legacy.md) for the complete compatibility signature.
+See the [LaueGo API reference](../reference/lauego.md) for the complete compatibility signature.
