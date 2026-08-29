@@ -10,12 +10,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from laueanalysis.indexing import index, IndexingResult
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
 def config_path():
     """Path to the test config file."""
-    path = os.path.join("tests", "data", "test_config.yaml")
+    path = str(ROOT / "tests/data/test_config.yaml")
     assert os.path.exists(path), f"Config file {path} not found"
     return path
 
@@ -41,9 +44,9 @@ def test_functional_index_with_real_data(test_config):
     temp_dir, config_dict = test_config
     
     # Use the real test data file
-    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
-    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
-    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    test_file = str(ROOT / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5")
+    geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
+    crystal_file = str(ROOT / "tests/config/Ni.xml")
     
     # Verify test files exist
     assert os.path.exists(test_file), f"Test data file not found: {test_file}"
@@ -115,9 +118,9 @@ def test_functional_index_batch_processing_real_data(test_config):
     temp_dir, config_dict = test_config
     
     # Use the real test data file
-    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5") 
-    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
-    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    test_file = str(ROOT / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5") 
+    geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
+    crystal_file = str(ROOT / "tests/config/Ni.xml")
     
     # Create additional test files by copying the original
     input_dir = os.path.join(temp_dir.name, 'input')
@@ -182,8 +185,8 @@ def test_functional_index_error_handling_real_executables(test_config):
     with open(invalid_file, 'wb') as f:
         f.write(b'invalid h5 data that will cause processing to fail')
     
-    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
-    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
+    crystal_file = str(ROOT / "tests/config/Ni.xml")
     
     # Run with invalid data
     result = index(
@@ -224,9 +227,9 @@ def test_functional_index_maintains_compatibility():
     """Test that the functional interface maintains compatibility with existing expectations."""
     
     # Test with real files but minimal configuration
-    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
-    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
-    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    test_file = str(ROOT / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5")
+    geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
+    crystal_file = str(ROOT / "tests/config/Ni.xml")
     
     # Create temporary output directory
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -257,12 +260,12 @@ def test_functional_index_equivalence():
     """Test that the functional interface produces consistent and expected results."""
     
     # This test demonstrates the functional interface capabilities
-    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
-    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
-    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    test_file = str(ROOT / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5")
+    geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
+    crystal_file = str(ROOT / "tests/config/Ni.xml")
     
     # Load real config
-    with open(os.path.join("tests", "data", "test_config.yaml"), 'r') as f:
+    with open(str(ROOT / "tests/data/test_config.yaml"), 'r') as f:
         config_dict = yaml.safe_load(f)
     
     with tempfile.TemporaryDirectory() as temp_dir:
