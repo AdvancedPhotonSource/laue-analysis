@@ -8,6 +8,9 @@ from unittest.mock import patch
 import pytest
 
 from laueanalysis.indexing import index, IndexingResult
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 PEAKS_TEMPLATE_WITH_DEPTH = """$filetype\t\tPixelPeakList
@@ -103,9 +106,9 @@ def _fake_run_p2q(*args, **kwargs):
 @pytest.mark.parametrize("template_has_depth", [True, False])
 def test_depth_override_applied_in_peaks_header(template_has_depth: bool):
     # Use real file paths for consistency with index() naming, but processing is mocked.
-    test_file = os.path.join("tests", "data", "gdata", "Al30_thick_wire_55_50.h5")
-    geo_file = os.path.join("tests", "data", "geo", "geoN_2022-03-29_14-15-05.xml")
-    crystal_file = os.path.join("tests", "data", "crystal", "Al.xtal")
+    test_file = str(ROOT / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5")
+    geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
+    crystal_file = str(ROOT / "tests/config/Ni.xml")
 
     assert os.path.exists(test_file), "Missing test input image"
     assert os.path.exists(geo_file), "Missing geometry file"

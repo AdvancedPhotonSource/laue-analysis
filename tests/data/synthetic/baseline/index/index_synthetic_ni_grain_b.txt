@@ -1,0 +1,96 @@
+$filetype	IndexFile
+// Found 1 patterns, indexed 24 out of 24 spots in 00:00:02 = (1.56 sec)
+// ------------------------------------------------------------
+$peakFile		'<work>/p2q/p2q_synthetic_ni_grain_b.txt'		// input data file
+$keVmaxCalc		17.2 			// max energy (keV) for calculated hkl
+$angleTolerance		0.1 	// how close to vectors have to be considered to have the correct angle (deg)
+$keVmaxTest		35.00		// max energy (keV) matching a spot (for calculating Gtest[][3])
+$hklPrefer		'{0,0,1}'	// preferred hkl, this should be hkl near center of pattern
+$cone		72 				// angle from the preferred hkl to look for acceptable hkl when calculating (deg)
+$NpatternsFound		1		// number of patterns found
+$Nindexed		24 			// number of spots indexed
+$NiData		24 				// total number of data spots
+$executionTime		1.56	// execution time (sec)
+// ------------------------------------------------------------
+// these are parameters from header of $peakFile
+$structureDesc		Ni
+$SpaceGroup		225
+$latticeParameters	{ 0.35238, 0.35238, 0.35238, 90, 90, 90 }
+$lengthUnit		nm
+$AtomDesctiption1	{Ni001  0 0 0 1}
+$xtalFileName	<repo>/tests/config/Ni.xml
+$inputImage		<repo>/tests/data/synthetic/frames/synthetic_ni_grain_b.h5
+$xdim			2048		// number of binned pixels along X
+$ydim			2048		// number of binned pixels along Y
+$xDimDet		2048		// total number of un-binned pixels in detector along X
+$yDimDet		2048		// total number of un-binned pixels in detector along Y
+$startx			0			// starting X of ROI (un-binned pixels)
+$endx			2047		// last X of ROI (un-binned pixels)
+$groupx			1			// binning along X for the ROI (un-binned pixels)
+$starty			0			// starting Y of ROI (un-binned pixels)
+$endy			2047		// last Y of ROI (un-binned pixels)
+$groupy			1			// binning along Y for the ROI (un-binned pixels)
+$exposure		1			// exposure time (sec)
+$CCDshutterIN	1			// CCD shutter, 1=IN, 0=OUT
+$scanNum		2		// scan number
+$dateExposed	2026-08-28T12:00:00-05:00
+$userName		synthetic
+$title			synthetic Laue frame
+$sampleName		synthetic Ni
+$detector_ID	PE1621 723-3335
+$boxsize		18			// box size used for peak fitting
+$minwidth		0.75		// min allowed width of a peak
+$maxwidth		27			// max allowed width of a peak
+$maxCentToFit	18			// max diff between initial & fitted peak position
+$maxRfactor		0.5			// max allowed R-factor
+$threshold		116.092		// threshold for blob searching
+$minSeparation	20			// minimum separation between any two peaks
+$smooth			0			// fit to smoothed image
+$peakShape		Lorentzian	// shape for peak fit
+$totalSum		8.54049e+07		// sum of all pixels in image
+$sumAboveThreshold	1.50573e+06	// sum of all pixels in image above threshold
+$numAboveThreshold	1695	// number of pixels above threshold
+$NpeakMax		200			// limit on number of peaks to search for
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$geoFileName	<repo>/tests/data/geo/geoN_2022-03-29_14-15-05.xml
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/pix2qs
+// ------------------------------------------------------------
+
+$pattern0 
+$EulerAngles0 { -10.17396205,  97.52059493, 126.22328679}	// Euler angles for this pattern (deg)
+$goodness0		1410.8						// goodness of the this pattern
+$rms_error0		0.000143					// rms error of (measured-predicted) (deg)
+$rotation_matrix0		{{0.2186238,-0.0004556,0.9758091}{0.7803737,-0.6002921,-0.1751180}{0.5858503,0.7997807,-0.1308826}}
+//   rotation matrix      0.21862      0.78037      0.58585
+//   column vectors      -0.00046     -0.60029      0.79978
+//                        0.97581     -0.17512     -0.13088
+$recip_lattice0		{{3.8982168,-0.0081243,17.3993687}{13.9146160,-10.7036341,-3.1224781}{10.4461265,14.2606571,-2.3337288}}
+//   reciprocal matrix     3.89822      13.91462      10.44613
+//   column vectors       -0.00812     -10.70363      14.26066
+//                        17.39937      -3.12248      -2.33373
+//
+$array0	 10   24             G^                         (hkl)       intens      E(keV)      err(deg)   PkIndex
+    [  0]   ( 0.0737118  0.6884779 -0.7215017)     ( -3  -1   3)    1.0000,    10.6283,     0.00013      0
+    [  1]   (-0.2534307  0.6794671 -0.6885473)     ( -6  -4   4)    0.0711,    21.0691,     0.00018      6
+    [  2]   (-0.0707032  0.5883018 -0.8055445)     ( -6  -2   4)    0.1435,    16.3429,     0.00016      3
+    [  3]   (-0.0153078  0.7335891 -0.6794208)     ( -4  -2   4)    0.2470,    15.5359,     0.00011      1
+    [  4]   (-0.2515602  0.7038841 -0.6642775)     ( -7  -5   5)    0.0312,    26.3508,     0.00016      13
+    [  5]   (-0.1034246  0.6369595 -0.7639280)     ( -7  -3   5)    0.0587,    20.9803,     0.00014      5
+    [  6]   (-0.0657449  0.7553644 -0.6519987)     ( -5  -3   5)    0.0847,    20.7255,     0.00022      7
+    [  7]   ( 0.1478350  0.6443364 -0.7503169)     ( -5  -1   5)    0.1501,    16.7442,     0.00015      2
+    [  8]   ( 0.2523631  0.7776381 -0.5758401)     ( -3  -1   5)    0.1877,    18.0741,     0.00014      4
+    [  9]   (-0.1454022  0.5843555 -0.7983651)     (-10  -4   6)    0.0191,    27.1672,     0.00016      17
+    [ 10]   (-0.1258450  0.6688287 -0.7326876)     ( -8  -4   6)    0.0277,    25.8604,     0.00005      18
+    [ 11]   (-0.0978746  0.7677990 -0.6331708)     ( -6  -4   6)    0.0359,    26.0643,     0.00013      12
+    [ 12]   ( 0.0201369  0.5886352 -0.8081480)     ( -8  -2   6)    0.0419,    22.1999,     0.00014      8
+    [ 13]   ( 0.1443012  0.8019305 -0.5797281)     ( -4  -2   6)    0.0743,    22.7088,     0.00019      9
+    [ 14]   (-0.0176247  0.6279527 -0.7780519)     ( -9  -3   7)    0.0217,    26.6578,     0.00005      20
+    [ 15]   ( 0.0221823  0.7156306 -0.6981266)     ( -7  -3   7)    0.0295,    26.0665,     0.00009      15
+    [ 16]   ( 0.0731801  0.8124341 -0.5784423)     ( -5  -3   7)    0.0337,    27.7079,     0.00010      22
+    [ 17]   ( 0.1799223  0.6233203 -0.7609860)     ( -7  -1   7)    0.0410,    23.0020,     0.00010      11
+    [ 18]   ( 0.2572039  0.7160351 -0.6489529)     ( -5  -1   7)    0.0519,    23.4770,     0.00017      10
+    [ 19]   ( 0.0725078  0.5866151 -0.8066135)     (-10  -2   8)    0.0160,    28.2692,     0.00016      23
+    [ 20]   ( 0.1198573  0.6617116 -0.7401162)     ( -8  -2   8)    0.0218,    27.3094,     0.00015      16
+    [ 21]   ( 0.1779070  0.7453957 -0.6424440)     ( -6  -2   8)    0.0265,    27.9259,     0.00013      14
+    [ 22]   ( 0.1977463  0.6111339 -0.7664279)     ( -9  -1   9)    0.0153,    29.3054,     0.00013      21
+    [ 23]   ( 0.2587826  0.6816222 -0.6844142)     ( -7  -1   9)    0.0189,    29.4199,     0.00014      19

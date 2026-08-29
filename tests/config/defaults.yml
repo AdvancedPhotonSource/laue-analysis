@@ -16,7 +16,7 @@ detectorCropY2: 2047
 min_size: 1.13
 max_peaks: 50
 smooth: 0
-maskFile: '/clhome/EPIX34ID/dev/hannah-dev/laue-indexing/pipeline/config/0042_denoise_mask_tp.npy'
+maskFile: ''
 indexKeVmaxCalc: 17.2
 indexKeVmaxTest: 30.0
 indexAngleTolerance: 0.1
