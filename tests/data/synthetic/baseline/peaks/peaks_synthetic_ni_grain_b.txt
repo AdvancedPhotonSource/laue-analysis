@@ -1,0 +1,65 @@
+$filetype		PixelPeakList
+$inputImage		<repo>/tests/data/synthetic/frames/synthetic_ni_grain_b.h5
+$xdim			2048		// number of binned pixels along X
+$ydim			2048		// number of binned pixels along Y
+$xDimDet		2048		// total number of un-binned pixels in detector along X
+$yDimDet		2048		// total number of un-binned pixels in detector along Y
+$startx			0			// starting X of ROI (un-binned pixels)
+$endx			2047		// last X of ROI (un-binned pixels)
+$groupx			1			// binning along X for the ROI (un-binned pixels)
+$starty			0			// starting Y of ROI (un-binned pixels)
+$endy			2047		// last Y of ROI (un-binned pixels)
+$groupy			1			// binning along Y for the ROI (un-binned pixels)
+$exposure		1			// exposure time (sec)
+$CCDshutterIN	1			// CCD shutter, 1=IN, 0=OUT
+$scanNum		2		// scan number
+$dateExposed	2026-08-28T12:00:00-05:00
+$userName		synthetic
+$title			synthetic Laue frame
+$sampleName		synthetic Ni
+$detector_ID	PE1621 723-3335
+//
+$boxsize		18			// box size used for peak fitting
+$minwidth		0.75		// min allowed width of a peak
+$maxwidth		27			// max allowed width of a peak
+$maxCentToFit	18			// max diff between initial & fitted peak position
+$maxRfactor		0.5			// max allowed R-factor
+$threshold		116.092		// threshold for blob searching
+$minSeparation	20			// minimum separation between any two peaks
+$smooth			0			// fit to smoothed image
+$peakShape		Lorentzian	// shape for peak fit
+$totalSum		8.54049e+07		// sum of all pixels in image
+$sumAboveThreshold	1.50573e+06	// sum of all pixels in image above threshold
+$numAboveThreshold	1695	// number of pixels above threshold
+$NpeakMax		200			// limit on number of peaks to search for
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$executionTime	3.79		// execution time (sec)
+//
+// fitted peak positions relative to the start of the ROI (not detector origin)
+//    peak positions are in zero based binned pixels
+$Npeaks		24				// number of fitted peaks in following table
+$peakList	8 24			// fitX fitY intens integral hwhmX hwhmY tilt chisq
+      760.337     1281.946       4453.0000        91.77100      1.449      1.461     0.8781   0.063947
+     1067.482      956.875       3611.0000        75.90100      1.441      1.455     0.4063   0.063283
+      528.934     1593.767       3583.0000        73.10900      1.463      1.457     0.8756   0.063865
+       65.518      691.264       3494.0000        73.99900      1.438      1.446   179.9586   0.0629
+     1824.093     1849.595       3390.0000        70.36300      1.458      1.444   179.7531   0.063303
+      432.733      586.921       3194.0000        65.31200      1.454      1.462   178.4565   0.063529
+     1021.354       53.204       3146.0000        65.18100      1.445      1.453   177.8125   0.062992
+     1261.610      789.263       3146.0000        65.71700      1.442      1.447     1.9360   0.062771
+       41.733     1087.624       3044.0000        63.49900      1.447      1.442     3.0758   0.062717
+     1767.810     1478.672       3041.0000        62.77900      1.454      1.447     2.6536   0.063038
+     1294.905     1933.711       3014.0000        61.74200      1.460      1.452     1.0187   0.063325
+      433.607     1744.895       3011.0000        62.37900      1.445      1.457   179.5749   0.063021
+     1395.294      687.029       2863.0000        58.60500      1.452      1.462   179.7098   0.063224
+     1201.015       95.338       2836.0000        58.28400      1.461      1.449     0.1032   0.063091
+     1330.204     1625.033       2785.0000        56.61500      1.459      1.464   179.5519   0.063417
+      933.377     1088.527       2744.0000        58.59000      1.438      1.436     2.2266   0.062105
+      614.246     1470.595       2741.0000        57.25000      1.449      1.441   177.9829   0.062463
+      119.648      361.397       2725.0000        57.39800      1.441      1.439   173.9300   0.062212
+      681.545      523.500       2714.0000        58.83200      1.435      1.435    84.7745   0.06196
+     1032.880     1983.831       2714.0000        55.15200      1.463      1.461     5.6993   0.063346
+      316.429      930.526       2695.0000        57.93900      1.436      1.435   177.7304   0.061985
+      381.642     1834.093       2681.0000        55.26100      1.447      1.459     0.7683   0.062843
+     1768.627     1248.459       2669.0000        56.82800      1.439      1.436   179.9976   0.06205
+       48.404     1317.362       2666.0000        56.26600      1.439      1.440   175.5846   0.062145

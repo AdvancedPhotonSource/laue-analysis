@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Linux x86-64, Python 3.12
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libgsl-dev libhdf5-dev zlib1g-dev
+          gcc --version | head -1
+          h5cc -showconfig | grep -i "HDF5 Version" || true
+          gsl-config --version
+
+      - name: Verify the tree contains no generated artifacts
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '\.(so|o|a|whl|pyc)$|/bin/(peaksearch|pix2qs|euler|reconstructN_[a-z]+)$|egg-info|_build/|^dist/|^build/'; then
+            echo "generated artifacts are tracked in Git"; exit 1
+          fi
+          test ! -e src/laueanalysis/indexing/bin/liblaue.so
+
+      - name: Install the package from source
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[test,docs]' build
+
+      - name: Run the test suite (native required, skip reasons enforced)
+        run: python -m pytest -rs --strict-markers --require-native
+
+      - name: Build documentation (warnings are errors)
+        run: python -m sphinx -E -W --keep-going -b html docs docs/_build/html
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Inspect artifact contents
+        run: python .github/scripts/inspect_artifacts.py dist
+
+      - name: Install the wheel into an isolated environment and smoke-test it
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -m pip install --quiet dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -I "$GITHUB_WORKSPACE/.github/scripts/smoke_test.py"
+
+      - name: Prove the native gate fails when liblaue.so is missing
+        run: |
+          set -euo pipefail
+          lib=$(python -c "from importlib import resources; print(resources.files('laueanalysis.indexing.bin') / 'liblaue.so')")
+          mv "$lib" "$lib.bak"
+          if python -m pytest -q --require-native tests/test_reconstruct.py; then
+            echo "expected --require-native to fail without liblaue.so"; mv "$lib.bak" "$lib"; exit 1
+          fi
+          mv "$lib.bak" "$lib"

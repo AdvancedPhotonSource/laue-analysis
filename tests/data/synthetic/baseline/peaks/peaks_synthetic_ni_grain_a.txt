@@ -1,0 +1,59 @@
+$filetype		PixelPeakList
+$inputImage		<repo>/tests/data/synthetic/frames/synthetic_ni_grain_a.h5
+$xdim			2048		// number of binned pixels along X
+$ydim			2048		// number of binned pixels along Y
+$xDimDet		2048		// total number of un-binned pixels in detector along X
+$yDimDet		2048		// total number of un-binned pixels in detector along Y
+$startx			0			// starting X of ROI (un-binned pixels)
+$endx			2047		// last X of ROI (un-binned pixels)
+$groupx			1			// binning along X for the ROI (un-binned pixels)
+$starty			0			// starting Y of ROI (un-binned pixels)
+$endy			2047		// last Y of ROI (un-binned pixels)
+$groupy			1			// binning along Y for the ROI (un-binned pixels)
+$exposure		1			// exposure time (sec)
+$CCDshutterIN	1			// CCD shutter, 1=IN, 0=OUT
+$scanNum		1		// scan number
+$dateExposed	2026-08-28T12:00:00-05:00
+$userName		synthetic
+$title			synthetic Laue frame
+$sampleName		synthetic Ni
+$detector_ID	PE1621 723-3335
+//
+$boxsize		18			// box size used for peak fitting
+$minwidth		0.75		// min allowed width of a peak
+$maxwidth		27			// max allowed width of a peak
+$maxCentToFit	18			// max diff between initial & fitted peak position
+$maxRfactor		0.5			// max allowed R-factor
+$threshold		115.85		// threshold for blob searching
+$minSeparation	20			// minimum separation between any two peaks
+$smooth			0			// fit to smoothed image
+$peakShape		Lorentzian	// shape for peak fit
+$totalSum		8.52773e+07		// sum of all pixels in image
+$sumAboveThreshold	1.38188e+06	// sum of all pixels in image above threshold
+$numAboveThreshold	1485	// number of pixels above threshold
+$NpeakMax		200			// limit on number of peaks to search for
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$executionTime	3.46		// execution time (sec)
+//
+// fitted peak positions relative to the start of the ROI (not detector origin)
+//    peak positions are in zero based binned pixels
+$Npeaks		18				// number of fitted peaks in following table
+$peakList	8 18			// fitX fitY intens integral hwhmX hwhmY tilt chisq
+       50.719      402.152       4922.0000       101.23000      1.452      1.458     2.4929   0.06411
+     1473.091     1778.692       4754.0000        97.78400      1.460      1.451   178.7682   0.064075
+      859.449     1341.382       3902.0000        83.25500      1.436      1.438   178.0121   0.062803
+      616.439     1115.020       3486.0000        72.64300      1.443      1.459   179.7913   0.063349
+     1059.860       96.787       3417.0000        69.75800      1.460      1.457     4.5005   0.063733
+     1700.994      779.479       3284.0000        68.81900      1.459      1.442     0.1128   0.063227
+      380.083     1835.799       3141.0000        63.93100      1.463      1.459   178.4652   0.063695
+      485.895      976.591       3132.0000        65.03900      1.457      1.444     0.3693   0.063101
+     1081.402     1518.682       3031.0000        63.71800      1.439      1.443     3.9747   0.062527
+      837.081      154.435       3029.0000        63.07600      1.458      1.443     0.3364   0.063026
+     1298.557      708.833       3021.0000        63.17200      1.441      1.453   179.4953   0.062869
+     2015.066     1234.571       2887.0000        60.02800      1.458      1.443   179.9193   0.062941
+      404.382      883.207       2856.0000        59.34100      1.443      1.452   178.2303   0.062714
+      695.790      193.777       2827.0000        57.88600      1.456      1.455    20.5183   0.063101
+      280.200     1598.545       2807.0000        58.86900      1.451      1.440   179.3273   0.062596
+     1059.821      660.599       2804.0000        58.28600      1.453      1.443     1.3006   0.062726
+     1567.310     1106.610       2715.0000        56.89800      1.444      1.440   177.0123   0.0623
+     1899.398      458.317       2613.0000        54.84300      1.440      1.443   177.1260   0.062193

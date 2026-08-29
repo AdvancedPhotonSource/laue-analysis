@@ -5,17 +5,13 @@
 .ipynb_checkpoints
 __pycache__
 
-# TEMP FOR INITIAL PIPELINE
-pipeline/results
-pipeline/xml_index
-pipeline/temp.h5
-pipeline/py_func/linux
 
 
 calibration/*.yml
-laue_indexing.egg-info
 laueanalysis.egg-info
 /build
+/build-skbuild/
+/build-cmake/
 /dist/
 /docs/_build/
 *.so
@@ -30,16 +26,12 @@ data/output
 build
 tests/data/output
 
-# Ignore compiled binaries for indexing submodule
-src/laueanalysis/indexing/src/euler/euler
-src/laueanalysis/indexing/src/peaksearch/peaksearch
-src/laueanalysis/indexing/src/pixels2qs/pix2qs
+# Native outputs never belong under src/ (CMake installs them into the wheel / site-packages)
 src/laueanalysis/indexing/bin/*
 !src/laueanalysis/indexing/bin/__init__.py
 
 src/laueanalysis/reconstruct/bin/reconstructN_cpu
 src/laueanalysis/reconstruct/bin/reconstructN_gpu
-src/laueanalysis/reconstruct/source/recon_cpu/bin/*
 src/laueanalysis/reconstruct/source/recon_gpu/bin/reconstructN_gpu
 src/laueanalysis/reconstruct/source/recon_gpu/bin/*
 
@@ -62,3 +54,7 @@ tmp/
 /sandbox/results/
 sandbox/
 .loglogin
+
+# uv is not a supported workflow (see BUILD_DEPLOYMENT_PLAN.md)
+uv.lock
+.venv/

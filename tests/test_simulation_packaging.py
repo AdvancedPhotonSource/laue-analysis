@@ -19,7 +19,7 @@ def test_installed_wheel_contains_and_runs_private_jzt(tmp_path):
         repository,
         source,
         ignore=shutil.ignore_patterns(
-            ".git", ".pytest_cache", "__pycache__", "build", "dist", "envs", "sandbox"
+            ".git", ".pytest_cache", "__pycache__", "build", "dist", "envs", ".venv", "sandbox", "node_modules"
         ),
     )
     wheel_dir = tmp_path / "wheel"
@@ -30,7 +30,8 @@ def test_installed_wheel_contains_and_runs_private_jzt(tmp_path):
             "pip",
             "wheel",
             "--no-deps",
-            "--no-build-isolation",
+            # Normal build isolation: the backend and patchelf come from
+            # build-system.requires, exactly as for a user's `pip install .`.
             "--wheel-dir",
             str(wheel_dir),
             str(source),

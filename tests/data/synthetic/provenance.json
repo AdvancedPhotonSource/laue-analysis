@@ -1,0 +1,130 @@
+{
+  "generated_at_commit": "5d7ea472edc96764903ff23826e2b00a7f6a1352",
+  "laueanalysis_version": "0.1.0",
+  "liblaue_version": "0.2.0",
+  "numpy": "2.5.2",
+  "h5py": "3.16.0",
+  "seed": 20260828,
+  "geometry_file": "tests/data/geo/geoN_2022-03-29_14-15-05.xml",
+  "crystal_file": "tests/config/Ni.xml",
+  "detector_id": "PE1621 723-3335",
+  "energy_range_kev": [
+    6.0,
+    30.0
+  ],
+  "peak_search": {
+    "boxsize": 18,
+    "max_rfactor": 0.5,
+    "min_size": 3,
+    "min_separation": 20,
+    "threshold": null,
+    "threshold_ratio": 4.0,
+    "peak_shape": "L",
+    "max_peaks": 200
+  },
+  "indexing": {
+    "index_kev_max_calc": 17.2,
+    "index_kev_max_test": 35.0,
+    "index_angle_tolerance": 0.1,
+    "index_cone": 72.0,
+    "index_h": 0,
+    "index_k": 0,
+    "index_l": 1
+  },
+  "frames": {
+    "synthetic_ni_grain_a": {
+      "n_peaks": 18,
+      "n_patterns": 1,
+      "n_indexed": 18,
+      "files": {
+        "peaks": "peaks_synthetic_ni_grain_a.txt",
+        "p2q": "p2q_synthetic_ni_grain_a.txt",
+        "index": "index_synthetic_ni_grain_a.txt"
+      },
+      "simulated_reflections": 21,
+      "sha256": "b46fd851192381f672506811c3be55fdbdd0c49fb3494466fc1ff5b55ef1b896",
+      "roi": null,
+      "size_bytes": 31501,
+      "grains": [
+        [
+          1.0,
+          0.3,
+          -0.2,
+          37.0,
+          1.0
+        ]
+      ]
+    },
+    "synthetic_ni_grain_b": {
+      "n_peaks": 24,
+      "n_patterns": 1,
+      "n_indexed": 24,
+      "files": {
+        "peaks": "peaks_synthetic_ni_grain_b.txt",
+        "p2q": "p2q_synthetic_ni_grain_b.txt",
+        "index": "index_synthetic_ni_grain_b.txt"
+      },
+      "simulated_reflections": 24,
+      "sha256": "33e1b6cb8a6fd0104240c9ccb5c54eee121322d50c1e4fcd74f833013765f9cf",
+      "roi": null,
+      "size_bytes": 32316,
+      "grains": [
+        [
+          -0.4,
+          1.0,
+          0.5,
+          112.0,
+          1.0
+        ]
+      ]
+    },
+    "synthetic_ni_two_grains": {
+      "n_peaks": 41,
+      "n_patterns": 2,
+      "n_indexed": 40,
+      "files": {
+        "peaks": "peaks_synthetic_ni_two_grains.txt",
+        "p2q": "p2q_synthetic_ni_two_grains.txt",
+        "index": "index_synthetic_ni_two_grains.txt"
+      },
+      "simulated_reflections": 45,
+      "sha256": "5531cd491e5467ad346479099167ad7d2b42d36215b7fe790e3bf406d86f95ae",
+      "roi": null,
+      "size_bytes": 37597,
+      "grains": [
+        [
+          1.0,
+          0.3,
+          -0.2,
+          37.0,
+          1.0
+        ],
+        [
+          0.2,
+          -0.7,
+          1.0,
+          64.0,
+          0.6
+        ]
+      ]
+    },
+    "synthetic_ni_empty": {
+      "n_peaks": 0,
+      "n_patterns": 0,
+      "n_indexed": 0,
+      "files": {
+        "peaks": "peaks_synthetic_ni_empty.txt"
+      },
+      "simulated_reflections": 0,
+      "sha256": "746956dd43cc971534bf41729c661164808e1f2b803b68062ca9374c6055c352",
+      "roi": [
+        896,
+        896,
+        256,
+        256
+      ],
+      "size_bytes": 16864,
+      "grains": []
+    }
+  }
+}

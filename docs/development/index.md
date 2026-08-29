@@ -10,15 +10,36 @@ simulation-performance
 
 ## Build the project
 
-Install the system dependencies listed in [Installation](../installation.md), then create an editable environment:
+Install the native dependencies listed in [Installation](../installation.md), then install an editable copy with the test and documentation extras:
 
 ```console
 $ python -m pip install -e '.[test,docs]'
 ```
 
-The build invokes the native makefiles and copies their outputs into the source package. Review all build output because the current build script can continue after a native compilation failure.
+The editable install builds the native files once with CMake and places them in `site-packages`. Python changes under `src/` take effect immediately. After a change to C source or `CMakeLists.txt`, run the install command again.
 
-CUDA is optional. A missing `nvcc` skips the GPU reconstruction build and does not block indexing development.
+`CMakeLists.txt` at the repository root is the only native build definition. It has these options, set with `--config-settings=cmake.define.<OPTION>=<value>` on the pip command line:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `LAUE_BUILD_LAUEGO` | `ON` | Build `peaksearch`, `pix2qs`, and `euler` |
+| `LAUE_BUILD_RECONSTRUCTION` | `ON` | Build `reconstructN_cpu` |
+| `LAUE_NATIVE_OPTIMIZATION` | `OFF` | Add `-march=native` |
+
+Reduced builds are for maintainers. They are not supported user configurations.
+
+```{warning}
+Files built with `LAUE_NATIVE_OPTIMIZATION=ON` are tuned to the build machine and can fail or give different results on other CPUs. Do not copy them to another machine or into a shared environment. Run the complete test suite after enabling it. Parity has been verified only on a host without FMA instructions.
+```
+
+To build without pip, for example to inspect compiler flags:
+
+```console
+$ cmake -S . -B build-cmake -G Ninja
+$ cmake --build build-cmake
+```
+
+CUDA is not part of the package build. See `src/laueanalysis/reconstruct/source/recon_gpu/README.md`.
 
 ## Run tests
 
@@ -34,20 +55,23 @@ Run a focused module while developing a change:
 $ python -m pytest tests/test_indexer.py
 ```
 
-Tests that depend on native indexing skip when `src/laueanalysis/indexing/bin/liblaue.so` is absent. A passing run with skipped native tests does not validate the in-process C path. Review the skip summary.
+Tests run against the installed package, never against `src/` directly. Native tests skip when the installed `laueanalysis` package does not contain `liblaue.so`. A passing run with skipped native tests does not validate the native code. Review the skip summary (`-rs`). The only expected skip is the GPU reconstruction executable check.
 
-The `integration` marker identifies tests that require compiled command-line executables. Exclude them when working in an environment without those programs:
+CI runs with `--require-native`. That option fails the session when `liblaue.so` is missing from the installed package or when any test skips for another reason.
 
-```console
-$ python -m pytest -m "not integration"
-```
+All fixtures are in Git and are synthetic. `tests/data/synthetic/` holds simulated Laue frames and the LaueGo program outputs for them (see its README); the indexing tests compare the in-process indexer against those outputs.
+
+The `integration` marker identifies tests that run compiled command-line programs. Exclude them with `-m "not integration"`.
+
+### CPU reconstruction reference
+
+`tests/data/reconstruction/` holds a synthetic numerical reference for `reconstructN_cpu` and the script that generated it. `tests/test_reconstruct.py` compares the current build against it. Do not regenerate the reference to make a build change pass.
 
 ## Build the documentation
 
-Install the documentation dependencies and treat warnings as failures:
+Install PyPA `build` (`python -m pip install build`) to produce the sdist and wheel with `python -m build`. Build the documentation with warnings treated as errors:
 
 ```console
-$ python -m pip install -e '.[docs]'
 $ python -m sphinx -E -W --keep-going -b html docs docs/_build/html
 ```
 
@@ -76,6 +100,12 @@ Classify examples by what they need:
 
 A code block that demonstrates exact output must have a test that checks that output. Avoid exact values when the example exists only to show control flow.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and push to `main`. The job installs the package from a clean checkout on Ubuntu with Python 3.12, runs the test suite with `--require-native`, builds the documentation with warnings as errors, builds the sdist and wheel, checks their contents with `.github/scripts/inspect_artifacts.py`, installs the wheel into a separate virtual environment, and runs `.github/scripts/smoke_test.py` there. The job then removes `liblaue.so` from the installed package and confirms that the test gate fails.
+
+The workflow does not publish or keep build artifacts.
+
 ## Publish the site
 
-The repository does not yet contain the planned documentation CI and GitHub Pages workflows. Until those workflows are added, build the site locally with the strict command above. Do not commit `docs/_build/`.
+`.github/workflows/docs.yml` builds the documentation for every pull request and deploys it to GitHub Pages after a successful push to `main`. The repository settings must select "GitHub Actions" as the Pages source. Do not commit `docs/_build/`.

@@ -1,0 +1,65 @@
+$filetype		PeaksFile
+// parameters defining the crystal structure:
+$structureDesc		Ni
+$SpaceGroup		225
+$latticeParameters	{ 0.35238, 0.35238, 0.35238, 90, 90, 90 }
+$lengthUnit		nm
+$AtomDesctiption1	{Ni001  0 0 0 1}
+$xtalFileName	<repo>/tests/config/Ni.xml
+// parameters from the peak fitting:
+$inputImage		<repo>/tests/data/synthetic/frames/synthetic_ni_grain_a.h5
+$xdim			2048		// number of binned pixels along X
+$ydim			2048		// number of binned pixels along Y
+$xDimDet		2048		// total number of un-binned pixels in detector along X
+$yDimDet		2048		// total number of un-binned pixels in detector along Y
+$startx			0			// starting X of ROI (un-binned pixels)
+$endx			2047		// last X of ROI (un-binned pixels)
+$groupx			1			// binning along X for the ROI (un-binned pixels)
+$starty			0			// starting Y of ROI (un-binned pixels)
+$endy			2047		// last Y of ROI (un-binned pixels)
+$groupy			1			// binning along Y for the ROI (un-binned pixels)
+$exposure		1			// exposure time (sec)
+$CCDshutterIN	1			// CCD shutter, 1=IN, 0=OUT
+$scanNum		1		// scan number
+$dateExposed	2026-08-28T12:00:00-05:00
+$userName		synthetic
+$title			synthetic Laue frame
+$sampleName		synthetic Ni
+$detector_ID	PE1621 723-3335
+$boxsize		18			// box size used for peak fitting
+$minwidth		0.75		// min allowed width of a peak
+$maxwidth		27			// max allowed width of a peak
+$maxCentToFit	18			// max diff between initial & fitted peak position
+$maxRfactor		0.5			// max allowed R-factor
+$threshold		115.85		// threshold for blob searching
+$minSeparation	20			// minimum separation between any two peaks
+$smooth			0			// fit to smoothed image
+$peakShape		Lorentzian	// shape for peak fit
+$totalSum		8.52773e+07		// sum of all pixels in image
+$sumAboveThreshold	1.38188e+06	// sum of all pixels in image above threshold
+$numAboveThreshold	1485	// number of pixels above threshold
+$NpeakMax		200			// limit on number of peaks to search for
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$geoFileName	<repo>/tests/data/geo/geoN_2022-03-29_14-15-05.xml
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/pix2qs
+
+// the following table contains xyz compotnents of G^ and the integral of the peak
+$N_Ghat+Intens 	18		// number of G^ vectors
+-0.1342000,  0.5768306, -0.8057647,     101.23
+ 0.2233914,  0.7493781, -0.6233207,     97.784
+ 0.0909368,  0.7003385, -0.7079947,     83.255
+ 0.0285809,  0.6711168, -0.7408005,     72.643
+-0.2449899,  0.6878527, -0.6832559,     69.758
+-0.0746038,  0.8048531, -0.5887663,     68.819
+ 0.1980575,  0.6108218, -0.7665963,     63.931
+-0.0070593,  0.6527004, -0.7575833,     65.039
+ 0.1430009,  0.7217765, -0.6771923,     63.718
+-0.2214997,  0.6658232, -0.7124727,     63.076
+-0.0897702,  0.7571957, -0.6469900,     63.172
+ 0.0699723,  0.8360835, -0.5441216,     60.028
+-0.0299962,  0.6401918, -0.7676292,     59.341
+-0.2061572,  0.6509665, -0.7305763,     57.886
+ 0.1416239,  0.6098923, -0.7797269,     58.869
+-0.0989078,  0.7253992, -0.6811852,     58.286
+ 0.0282047,  0.7941544, -0.6070612,     56.898
+-0.1765903,  0.8066854, -0.5639809,     54.843

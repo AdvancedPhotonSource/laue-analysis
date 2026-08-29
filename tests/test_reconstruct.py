@@ -526,3 +526,56 @@ class TestReconstructGPU:
             
         except FileNotFoundError:
             pytest.skip("GPU reconstruction executable not available")
+
+
+class TestReconstructCPUReference:
+    """Numerical parity against the recorded CPU reconstruction reference.
+
+    The reference in ``tests/data/reconstruction`` is an acceptance contract
+    for the native build (see ``BUILD_DEPLOYMENT_PLAN.md``). It must not be
+    regenerated or its tolerance loosened to make a build change pass.
+    """
+
+    REFERENCE_DIR = Path(__file__).resolve().parent / "data" / "reconstruction"
+
+    @pytest.fixture(scope="class")
+    def reference_module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "cpu_reference_generator", self.REFERENCE_DIR / "generate_reference.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @pytest.mark.integration
+    def test_cpu_reconstruction_matches_reference(self, reference_module, tmp_path):
+        try:
+            exe_path = find_executable()
+        except FileNotFoundError:
+            pytest.skip("Reconstruction executable not available")
+
+        import json
+
+        expected = np.load(self.REFERENCE_DIR / "cpu_reference.npz")
+        provenance = json.loads((self.REFERENCE_DIR / "cpu_reference.json").read_text())
+
+        input_file = tmp_path / "synthetic_wire_scan.h5"
+        reference_module.write_input_file(input_file)
+        import hashlib
+
+        assert hashlib.sha256(input_file.read_bytes()).hexdigest() == provenance["input_sha256"], (
+            "synthetic input changed; the generator or its dependencies no longer reproduce the reference input"
+        )
+
+        result = reference_module.run_reconstruction(exe_path, input_file, tmp_path / "out" / "recon_")
+        assert result.success, f"{result.command}\n{result.log}\n{result.error}"
+
+        images, depths = reference_module.load_outputs(tmp_path / "out" / "recon_")
+        tolerance = provenance["comparison"]
+        np.testing.assert_allclose(depths, expected["depth_um"], rtol=0, atol=0)
+        np.testing.assert_allclose(
+            images, expected["images"], rtol=tolerance["rtol"], atol=tolerance["atol"]
+        )
+        assert images.shape == tuple(provenance["output_shape"])

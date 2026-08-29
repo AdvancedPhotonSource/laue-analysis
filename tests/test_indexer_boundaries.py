@@ -4,6 +4,8 @@ import h5py
 import numpy as np
 import pytest
 
+from conftest import requires_liblaue
+
 from laueanalysis.indexing import (
     Indexer,
     IndexingError,
@@ -16,9 +18,8 @@ from laueanalysis.indexing._liblaue import get_library
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LIBRARY = ROOT / "src/laueanalysis/indexing/bin/liblaue.so"
-GEOMETRY = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
-pytestmark = pytest.mark.skipif(not LIBRARY.is_file(), reason="liblaue.so is not built")
+GEOMETRY = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
+pytestmark = requires_liblaue
 
 
 @pytest.mark.parametrize(

@@ -9,13 +9,17 @@ Read the [documentation](https://advancedphotonsource.github.io/laue-analysis/) 
 
 ## Install
 
-The current source build targets Linux and requires Python 3.11 or later, GCC, `make`, HDF5, and GSL.
+The package builds from source on Linux x86-64. It needs GCC, GSL, HDF5, and Python 3.11 or later. The conda environment in `environment.yml` provides all of them.
 
 ```bash
 git clone https://github.com/AdvancedPhotonSource/laue-analysis.git
 cd laue-analysis
+conda env create -f environment.yml
+conda activate laue-analysis
 python -m pip install .
 ```
+
+See the [installation guide](https://advancedphotonsource.github.io/laue-analysis/installation.html) for the virtual-environment path and troubleshooting.
 
 ## Index a frame
 

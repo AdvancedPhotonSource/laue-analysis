@@ -5,14 +5,15 @@ import sys
 
 import pytest
 
+from conftest import requires_liblaue
+
 
 ROOT = Path(__file__).resolve().parents[1]
-LIBRARY = ROOT / "src/laueanalysis/indexing/bin/liblaue.so"
-pytestmark = pytest.mark.skipif(not LIBRARY.is_file(), reason="liblaue.so is not built")
+pytestmark = requires_liblaue
 
 
 def _run_python(script, *arguments):
-    environment = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
+    environment = dict(os.environ)  # child imports the same installed laueanalysis as the test runner
     return subprocess.run(
         [sys.executable, "-c", script, *map(str, arguments)],
         cwd=ROOT,
@@ -71,7 +72,7 @@ lib.laue_crystal_free(ffi.NULL)
 
 
 def test_out_of_range_detector_slot_is_rejected_without_crashing(tmp_path):
-    source = ROOT / "sandbox/data/i71/geoN_2026-07-07_16-30-21.xml"
+    source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     path = tmp_path / "slot-3.xml"
     path.write_text(source.read_text().replace('<Detector N="2">', '<Detector N="3">'))
     script = r'''

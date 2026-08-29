@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+
 from laueanalysis.analysis import SimulationResult, SurfaceFrame
 from laueanalysis.indexing import FrameResult, Pattern, load_crystal, load_geometry
 from laueanalysis.indexing.indexer import PEAK_DTYPE
@@ -22,7 +23,9 @@ from laueanalysis.visualization import (
 )
 
 
-DATA = Path(__file__).resolve().parents[1] / "sandbox/data/i71"
+ROOT = Path(__file__).resolve().parents[1]
+GEOMETRY_FILE = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
+CRYSTAL_FILE = ROOT / "tests/config/Ni.xml"
 
 
 def _pattern(count, rotation=None):
@@ -64,8 +67,8 @@ def _result_set(with_context=False):
     context = {}
     if with_context:
         context = {
-            "crystal": load_crystal(DATA / "Ni.xml"),
-            "geometry": load_geometry(DATA / "geoN_2026-07-07_16-30-21.xml"),
+            "crystal": load_crystal(CRYSTAL_FILE),
+            "geometry": load_geometry(GEOMETRY_FILE),
         }
     return ResultSet(
         (

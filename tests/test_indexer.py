@@ -6,6 +6,8 @@ import h5py
 import numpy as np
 import pytest
 
+from conftest import requires_liblaue
+
 from laueanalysis.indexing import (
     FrameMetadata, Indexer, IndexParams, PeakParams, index_frame, load_crystal,
     load_geometry,
@@ -13,10 +15,11 @@ from laueanalysis.indexing import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LIBRARY = ROOT / "src/laueanalysis/indexing/bin/liblaue.so"
-pytestmark = pytest.mark.skipif(not LIBRARY.is_file(), reason="liblaue.so is not built")
-DATA = ROOT / "sandbox/data/i71"
-BASELINE = ROOT / "sandbox/results/i71_baseline_20"
+pytestmark = requires_liblaue
+GEOMETRY = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
+CRYSTAL = ROOT / "tests/config/Ni.xml"
+FRAMES = ROOT / "tests/data/synthetic/frames"
+BASELINE = ROOT / "tests/data/synthetic/baseline"
 
 
 def _table_after(path: Path, marker: str, delimiter=None) -> np.ndarray:
@@ -32,8 +35,8 @@ def test_lauego_has_explicit_compatibility_interface():
 
 
 def test_geometry_and_crystal_can_be_preloaded():
-    geometry = load_geometry(DATA / "geoN_2026-07-07_16-30-21.xml")
-    crystal = load_crystal(DATA / "Ni.xml")
+    geometry = load_geometry(GEOMETRY)
+    crystal = load_crystal(CRYSTAL)
     indexer = Indexer(geometry, crystal)
 
     assert indexer.geometry is geometry
@@ -41,23 +44,23 @@ def test_geometry_and_crystal_can_be_preloaded():
 
 
 def test_public_crystal_is_editable_by_replacement():
-    crystal = load_crystal(DATA / "Ni.xml")
+    crystal = load_crystal(CRYSTAL)
     modified = replace(crystal, space_group=229)
 
     assert crystal.space_group == 225
     assert crystal.crystal_system == "cubic"
     assert modified.space_group == 229
     assert modified is not crystal
-    Indexer(DATA / "geoN_2026-07-07_16-30-21.xml", modified)
+    Indexer(GEOMETRY, modified)
 
 
-def test_indexer_process_matches_i71_peak_and_q_reference():
-    stem = "Ni_FelixFoil_practice_Probe2_Probe8_fromlefthole_10679"
-    with h5py.File(DATA / "frames" / f"{stem}.h5") as source:
+def test_indexer_process_matches_lauego_peak_and_q_reference():
+    stem = "synthetic_ni_two_grains"
+    with h5py.File(FRAMES / f"{stem}.h5") as source:
         image = source["entry1/data/data"][...]
 
     indexer = Indexer(
-        DATA / "geoN_2026-07-07_16-30-21.xml",
+        GEOMETRY,
         peak_params=PeakParams(
             boxsize=18,
             max_rfactor=0.5,
@@ -75,7 +78,7 @@ def test_indexer_process_matches_i71_peak_and_q_reference():
 
     assert result.indexed is False
     assert result.patterns == ()
-    assert result.n_peaks == len(expected_peaks) == 23
+    assert result.n_peaks == len(expected_peaks) == 41
     np.testing.assert_allclose(result.peaks["fit_x"], expected_peaks[:, 0], atol=5e-4, rtol=0)
     np.testing.assert_allclose(result.peaks["fit_y"], expected_peaks[:, 1], atol=5e-4, rtol=0)
     np.testing.assert_allclose(result.peaks["intens"], expected_peaks[:, 2], atol=5e-4, rtol=1e-8)
@@ -88,13 +91,13 @@ def test_indexer_process_matches_i71_peak_and_q_reference():
     np.testing.assert_allclose(result.peaks["qhat"], expected_q[:, :3], atol=2e-7, rtol=0)
 
 
-def test_indexer_process_matches_i71_index_reference():
-    stem = "Ni_FelixFoil_practice_Probe2_Probe8_fromlefthole_10679"
-    with h5py.File(DATA / "frames" / f"{stem}.h5") as source:
+def test_indexer_process_matches_lauego_index_reference():
+    stem = "synthetic_ni_two_grains"
+    with h5py.File(FRAMES / f"{stem}.h5") as source:
         image = source["entry1/data/data"][...]
     indexer = Indexer(
-        DATA / "geoN_2026-07-07_16-30-21.xml",
-        DATA / "Ni.xml",
+        GEOMETRY,
+        CRYSTAL,
         peak_params=PeakParams(
             boxsize=18, max_rfactor=0.5, min_size=3, min_separation=20,
             threshold=None, threshold_ratio=4.0, max_peaks=200,
@@ -107,17 +110,18 @@ def test_indexer_process_matches_i71_index_reference():
 
     result = indexer.process(image)
     expected = [
-        (np.array([-101.11369418, 123.62147144, 60.31287179]), 10),
-        (np.array([-148.04441816, 93.25320264, 132.68896985]), 5),
-        (np.array([-114.96303786, 96.34447861, 84.93955000]), 5),
+        (np.array([-169.14354065, 143.65364921, 137.25271596]), 23),
+        (np.array([-110.30109407, 143.68406785, 76.90290940]), 17),
     ]
 
     assert result.indexed is True
-    assert len(result.patterns) == 3
-    assert sum(pattern.n_indexed for pattern in result.patterns) == 20
+    assert len(result.patterns) == 2
+    assert sum(pattern.n_indexed for pattern in result.patterns) == 40
     for pattern, (euler, count) in zip(result.patterns, expected):
         assert pattern.n_indexed == count
-        np.testing.assert_allclose(pattern.euler_deg, euler, atol=5e-5, rtol=0)
+        # The LaueGo reference refines orientation from peak positions rounded
+        # to 0.001 px; the in-process path uses unrounded positions.
+        np.testing.assert_allclose(pattern.euler_deg, euler, atol=5e-4, rtol=0)
 
 
 @pytest.mark.parametrize(
@@ -125,13 +129,13 @@ def test_indexer_process_matches_i71_index_reference():
     sorted((BASELINE / "index").glob("index_*.txt")),
     ids=lambda path: path.stem.removeprefix("index_"),
 )
-def test_indexer_matches_all_i71_index_references(index_file):
+def test_indexer_matches_all_lauego_index_references(index_file):
     stem = index_file.stem.removeprefix("index_")
-    with h5py.File(DATA / "frames" / f"{stem}.h5") as source:
+    with h5py.File(FRAMES / f"{stem}.h5") as source:
         image = source["entry1/data/data"][...]
     indexer = Indexer(
-        DATA / "geoN_2026-07-07_16-30-21.xml",
-        DATA / "Ni.xml",
+        GEOMETRY,
+        CRYSTAL,
         peak_params=PeakParams(
             boxsize=18, max_rfactor=0.5, min_size=3, min_separation=20,
             threshold=None, threshold_ratio=4.0, max_peaks=200,
@@ -168,9 +172,9 @@ def test_indexer_matches_all_i71_index_references(index_file):
         np.testing.assert_allclose(pattern.rotation, expected_rotation, atol=2e-6, rtol=0)
 
 
-def test_indexer_matches_peak_positions_for_all_i71_frames():
+def test_indexer_matches_peak_positions_for_all_synthetic_frames():
     indexer = Indexer(
-        DATA / "geoN_2026-07-07_16-30-21.xml",
+        GEOMETRY,
         peak_params=PeakParams(
             boxsize=18,
             max_rfactor=0.5,
@@ -182,7 +186,7 @@ def test_indexer_matches_peak_positions_for_all_i71_frames():
         ),
     )
 
-    for frame_file in sorted((DATA / "frames").glob("*.h5")):
+    for frame_file in sorted((FRAMES).glob("*.h5")):
         with h5py.File(frame_file) as source:
             result = indexer.process(source["entry1/data/data"][...])
         peaks_file = BASELINE / "peaks" / f"peaks_{frame_file.stem}.txt"
@@ -200,20 +204,20 @@ def test_index_frame_and_image_retention_defaults():
     image = np.zeros((8, 12), dtype=np.uint16)
     result = index_frame(
         image,
-        geometry=DATA / "geoN_2026-07-07_16-30-21.xml",
+        geometry=GEOMETRY,
     )
     assert result.image is image
     assert result.n_patterns == 0
     assert result.indexed_peak_indices.size == 0
     np.testing.assert_array_equal(result.unindexed_peak_indices, np.arange(result.n_peaks))
 
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     batch = indexer.index_many([image, image])
     assert all(item.image is None for item in batch)
 
 
 def test_result_is_independent_of_indexer_configuration():
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
     original = result.to_step().detector.peaksXY.boxsize
     first_step = result.to_step()
@@ -224,7 +228,7 @@ def test_result_is_independent_of_indexer_configuration():
 
 
 def test_indexer_requires_no_metadata_for_in_memory_frame():
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     result = indexer.process(np.zeros((8, 12), dtype=np.uint16))
     step = result.to_step()
 
@@ -235,7 +239,7 @@ def test_indexer_requires_no_metadata_for_in_memory_frame():
 
 
 def test_indexer_accepts_optional_manual_metadata():
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     image = np.zeros((8, 12), dtype=np.uint16)
     image[2:6, 3:7] = 100
     result = indexer.process(
@@ -268,7 +272,7 @@ def test_indexer_accepts_partial_hdf5_metadata(tmp_path):
         output.create_dataset("entry1/data/data", data=np.zeros((8, 12), dtype=np.uint16))
         output.create_dataset("entry1/sample/name", data=np.asarray([b"partial"]))
 
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     result = indexer.process(path)
     step = result.to_step()
 
@@ -279,10 +283,10 @@ def test_indexer_accepts_partial_hdf5_metadata(tmp_path):
 
 
 def test_indexer_processes_file_and_builds_step(tmp_path):
-    stem = "Ni_FelixFoil_practice_Probe2_Probe8_fromlefthole_10679"
+    stem = "synthetic_ni_two_grains"
     indexer = Indexer(
-        DATA / "geoN_2026-07-07_16-30-21.xml",
-        DATA / "Ni.xml",
+        GEOMETRY,
+        CRYSTAL,
         peak_params=PeakParams(
             boxsize=18, max_rfactor=0.5, min_size=3, min_separation=20,
             threshold=None, threshold_ratio=4.0, max_peaks=200,
@@ -292,41 +296,41 @@ def test_indexer_processes_file_and_builds_step(tmp_path):
             cone_deg=72.0, hkl_prefer=(0, 0, 1),
         ),
     )
-    result = indexer.process(DATA / "frames" / f"{stem}.h5")
+    result = indexer.process(FRAMES / f"{stem}.h5")
     step = result.to_step()
     output = tmp_path / "result.xml"
     indexer.write_xml(result, output)
 
     assert result.input_image.endswith(f"{stem}.h5")
-    assert step.sampleName == "HZO"
+    assert step.sampleName == "synthetic Ni"
     assert step.detector.detectorID == "PE1621 723-3335"
-    assert step.detector.peaksXY.Npeaks == 23
-    assert step.indexing.NpatternsFound == 3
-    assert step.indexing.Nindexed == 20
+    assert step.detector.peaksXY.Npeaks == 41
+    assert step.indexing.NpatternsFound == 2
+    assert step.indexing.Nindexed == 40
     assert output.read_text().startswith('<?xml version="1.0" ?>')
 
 
 def test_indexer_selects_detector_by_id():
     indexer = Indexer(
-        DATA / "geoN_2026-07-07_16-30-21.xml",
+        GEOMETRY,
         detector_id="PE1621 723-3335",
     )
     assert indexer.detector_index == 0
 
     with pytest.raises(ValueError, match="not present"):
-        Indexer(DATA / "geoN_2026-07-07_16-30-21.xml", detector_id="missing")
+        Indexer(GEOMETRY, detector_id="missing")
 
 
 def test_indexer_validates_index_parameters():
     with pytest.raises(ValueError, match="hkl_prefer"):
         Indexer(
-            DATA / "geoN_2026-07-07_16-30-21.xml",
+            GEOMETRY,
             index_params=IndexParams(hkl_prefer=(0, 1)),
         )
 
 
 def test_indexer_requires_uint16_2d_frame():
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     with pytest.raises(ValueError, match="uint16"):
         indexer.process(np.zeros((4, 4), dtype=np.float64))
 
@@ -347,7 +351,7 @@ def test_native_allocation_failure_maps_to_memory_error():
 
 
 def test_indexer_validates_frame_roi_against_detector():
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     image = np.zeros((8, 12), dtype=np.uint16)
 
     indexer.process(image, start=(2024, 2032), group=(2, 2))
@@ -363,6 +367,6 @@ def test_indexer_validates_hdf5_detector_id(tmp_path):
         output.create_dataset("entry1/data/data", data=np.zeros((8, 12), dtype=np.uint16))
         output.create_dataset("entry1/detector/ID", data=np.asarray([b"wrong detector"]))
 
-    indexer = Indexer(DATA / "geoN_2026-07-07_16-30-21.xml")
+    indexer = Indexer(GEOMETRY)
     with pytest.raises(ValueError, match="does not match selected detector"):
         indexer.process(path)

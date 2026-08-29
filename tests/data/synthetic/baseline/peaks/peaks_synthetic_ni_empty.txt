@@ -1,0 +1,41 @@
+$filetype		PixelPeakList
+$inputImage		<repo>/tests/data/synthetic/frames/synthetic_ni_empty.h5
+$xdim			256		// number of binned pixels along X
+$ydim			256		// number of binned pixels along Y
+$xDimDet		2048		// total number of un-binned pixels in detector along X
+$yDimDet		2048		// total number of un-binned pixels in detector along Y
+$startx			896			// starting X of ROI (un-binned pixels)
+$endx			1151		// last X of ROI (un-binned pixels)
+$groupx			1			// binning along X for the ROI (un-binned pixels)
+$starty			896			// starting Y of ROI (un-binned pixels)
+$endy			1151		// last Y of ROI (un-binned pixels)
+$groupy			1			// binning along Y for the ROI (un-binned pixels)
+$exposure		1			// exposure time (sec)
+$CCDshutterIN	1			// CCD shutter, 1=IN, 0=OUT
+$scanNum		4		// scan number
+$dateExposed	2026-08-28T12:00:00-05:00
+$userName		synthetic
+$title			synthetic Laue frame
+$sampleName		synthetic Ni
+$detector_ID	PE1621 723-3335
+//
+$boxsize		18			// box size used for peak fitting
+$minwidth		0.75		// min allowed width of a peak
+$maxwidth		27			// max allowed width of a peak
+$maxCentToFit	18			// max diff between initial & fitted peak position
+$maxRfactor		0.5			// max allowed R-factor
+$threshold		20		// threshold for blob searching
+$minSeparation	20			// minimum separation between any two peaks
+$smooth			0			// fit to smoothed image
+$peakShape		Lorentzian	// shape for peak fit
+$totalSum		1.31072e+06		// sum of all pixels in image
+$sumAboveThreshold	0	// sum of all pixels in image above threshold
+$numAboveThreshold	0	// number of pixels above threshold
+$NpeakMax		200			// limit on number of peaks to search for
+$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$executionTime	0.89		// execution time (sec)
+//
+// fitted peak positions relative to the start of the ROI (not detector origin)
+//    peak positions are in zero based binned pixels
+$Npeaks		0				// number of fitted peaks in following table
+$peakList	8 0			// fitX fitY intens integral hwhmX hwhmY tilt chisq

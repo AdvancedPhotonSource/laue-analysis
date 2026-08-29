@@ -1,90 +1,146 @@
 # Installation
 
-`laueanalysis` currently builds from source. The build compiles the native indexing library and command-line programs before it installs the Python package.
+`laueanalysis` builds from source. `python -m pip install .` compiles the native indexing library and the command-line programs with CMake, then installs the Python package.
 
-## Requirements
+## Supported platforms
 
-Use Linux and Python 3.11 or later. The repository development environment currently uses Python 3.12.
+- Linux x86-64 with GCC.
+- Python 3.11, 3.12, or 3.13. The maintained environment uses Python 3.12.
 
-Install these build tools and development libraries before you install the package:
+macOS, Windows, Linux ARM, and Clang are not supported.
 
-- `make`
-- GCC with C99 support
-- `h5cc` from an HDF5 development installation
-- GNU Scientific Library (GSL), including headers
-- HDF5, including headers
+## Native dependencies
 
-CUDA and `nvcc` are optional. Without them, the build skips GPU reconstruction. CUDA is not required for the indexing API described in this documentation.
+The build needs these tools and libraries:
 
-A conda environment specification is included in `environment.yml`. It records the versions used by the current development environment:
+| Dependency | Purpose |
+| --- | --- |
+| GCC with C99 support | Compiles all native code |
+| CMake 3.24 or later and Ninja | Build system (pip installs them from PyPI when they are absent) |
+| GSL 2.8 with headers | Indexing and reconstruction |
+| HDF5 1.14 with headers and `h5cc` | Peak search and reconstruction |
+| zlib with headers | HDF5 compression |
+| OpenMP (part of GCC) | CPU reconstruction |
+| `patchelf` | Normalizes library search paths in the installed files (pip installs it from PyPI) |
 
-```console
-$ conda env create -f environment.yml
-$ conda activate laue-analysis
-```
+Other minor versions of GSL and HDF5 can work, but the tests run against the versions above.
 
-## Install the package
+CUDA is not required. See [GPU reconstruction](#gpu-reconstruction).
 
-Clone the repository and install it from the repository root:
+## Install with conda (recommended)
 
-```console
-$ git clone https://github.com/AdvancedPhotonSource/laue-analysis.git
-$ cd laue-analysis
-$ python -m pip install .
-```
+Use this path at APS and on any machine where you do not install system packages. `environment.yml` provides the compiler and all native libraries from conda-forge.
 
-The source build places compiled indexing programs and `liblaue.so` in the installed `laueanalysis.indexing` package.
+1. Clone the repository:
 
-```{warning}
-The current build script reports some native compilation failures as warnings and can continue the Python installation. Run the native verification below before you process data.
-```
+   ```console
+   $ git clone https://github.com/AdvancedPhotonSource/laue-analysis.git
+   $ cd laue-analysis
+   ```
 
-## Install for development
+2. Create and activate the environment:
 
-Install an editable copy with the test and documentation dependencies:
+   ```console
+   $ conda env create -f environment.yml
+   $ conda activate laue-analysis
+   ```
 
-```console
-$ python -m pip install -e '.[test,docs]'
-```
+3. Install the package:
 
-See [Development](development/index.md) for test and documentation build commands.
+   ```console
+   $ python -m pip install .
+   ```
+
+## Install with a virtual environment
+
+Use this path on a Linux system that already provides the native dependencies, for example through the distribution package manager or HPC environment modules.
+
+1. Install the native dependencies. On Debian or Ubuntu:
+
+   ```console
+   $ sudo apt-get install build-essential libgsl-dev libhdf5-dev zlib1g-dev
+   ```
+
+2. Create and activate a virtual environment:
+
+   ```console
+   $ python -m venv .venv
+   $ source .venv/bin/activate
+   ```
+
+3. Install the package:
+
+   ```console
+   $ python -m pip install .
+   ```
+
+Do not run `pip` with `sudo`.
+
+The installed programs find GSL and HDF5 through the dynamic loader's default search path. If the libraries come from environment modules or another non-system prefix, make sure that prefix is in `LD_LIBRARY_PATH` at run time. A virtual environment created on top of a conda environment does not see the conda libraries unless you set `LD_LIBRARY_PATH` to `<conda prefix>/lib`.
 
 ## Verify the installation
 
-First verify the Python package and public indexing API:
+Run these commands after installation.
 
-```console
-$ python -c "from laueanalysis.indexing import Indexer, index_frame; print('import ok')"
-import ok
-```
+1. Check the Python package:
 
-Then verify that the native indexing library can load:
+   ```console
+   $ python -c "from laueanalysis.indexing import Indexer, index_frame; print('import ok')"
+   import ok
+   ```
 
-```console
-$ python -c "from laueanalysis.indexing._liblaue import get_library; get_library(); print('native indexing ok')"
-native indexing ok
-```
+2. Check that the native indexing library loads:
+
+   ```console
+   $ python -c "from laueanalysis.indexing._liblaue import get_library; get_library(); print('native indexing ok')"
+   native indexing ok
+   ```
+
+3. Check that the CPU reconstruction program runs:
+
+   ```console
+   $ python -c "from laueanalysis.reconstruct import find_executable; print(find_executable())"
+   ```
 
 The second command loads a private module only as an installation check. Do not use `_liblaue` as an application API.
 
+## What the build produces
+
+A default installation builds all of these:
+
+| Component | Location in the installed package | Required |
+| --- | --- | --- |
+| `liblaue.so` | `laueanalysis/indexing/bin/` | Yes. The in-process indexing API needs it. |
+| `peaksearch`, `pix2qs`, `euler` | `laueanalysis/indexing/bin/` | Yes by default. Used by the LaueGo compatibility functions. |
+| `reconstructN_cpu` | `laueanalysis/reconstruct/bin/` | Yes by default. Used by `reconstruct()`. |
+
+The build stops with an error when a required dependency is missing or a component fails to compile. It does not install a partial package.
+
+Native code is compiled for the generic x86-64 baseline with SSE2. The same installed files run on any x86-64 Linux machine that has compatible GSL and HDF5 libraries.
+
+(gpu-reconstruction)=
+
+## GPU reconstruction
+
+The package build does not compile the CUDA reconstruction program. `reconstruct_gpu()` remains in the API and raises `FileNotFoundError` when `reconstructN_gpu` is not on `PATH`. The CUDA source and a stand-alone Makefile are kept in `src/laueanalysis/reconstruct/source/recon_gpu/` for users who have an NVIDIA toolchain. Use `reconstruct()` for CPU reconstruction.
+
 ## Troubleshooting
 
-**The build lists `make`, `gcc`, or `h5cc` as missing.** Install the missing tool and confirm that it is available on `PATH`. Run `h5cc -show` to verify the HDF5 compiler wrapper.
+**The build reports that GSL or HDF5 was not found.** Install the development package that provides headers and `gsl-config` or `h5cc`, then run `pip install .` again. In a conda environment, confirm that the environment is active.
 
-**The linker cannot find GSL.** Install the GSL development package, including `libgsl` and `libgslcblas`, then rebuild the package.
+**The build reports that `patchelf` is required.** This appears only with `pip install --no-build-isolation`. Install `patchelf` into the environment (`pip install patchelf` or `conda install -c conda-forge patchelf`).
 
-**The Python import succeeds but native indexing does not.** Review the complete installation output for a failed native compilation. Reinstall after correcting the first compiler or linker error.
+**`liblaue.so` fails to load with "cannot open shared object file".** The dynamic loader cannot find `libgsl` or `libhdf5`. Activate the environment that provides them, or add their directory to `LD_LIBRARY_PATH`.
 
-**The build cannot find `nvcc`.** Ignore this warning if you only need indexing or CPU reconstruction. The warning means that GPU reconstruction was not built.
+**`reconstructN_gpu` is not found.** GPU reconstruction is not built by the package. See [GPU reconstruction](#gpu-reconstruction).
 
 ## Report a problem
 
 Open an issue in the [laue-analysis repository](https://github.com/AdvancedPhotonSource/laue-analysis/issues). Include:
 
 - The `laueanalysis` version or Git commit
-- Operating-system and Python versions
+- Operating system, Python version, and whether you used conda or a virtual environment
 - The installation command
-- Output from the failed verification command
-- The complete compiler or linker error
+- The complete compiler, CMake, or linker error
 
 Remove sample names, user names, local paths, and other sensitive experiment metadata before posting logs.
