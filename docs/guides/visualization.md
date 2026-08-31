@@ -29,10 +29,10 @@ result_set = ResultSet.from_indexer(
     frame_ids=frame_ids,
 )
 
-map_data = prepare_map(result_set, axes=("x", "h"), color="goodness")
+map_data = prepare_map(result_set, axes=("X", "H"), color="goodness")
 ```
 
-The `x`, `y`, and `z` map axes read `sample_position` from each result's metadata. Supply that metadata during indexing:
+The `X`, `Y`, and `Z` map axes read `sample_position` from each result's metadata. Supply that metadata during indexing:
 
 ```python
 result = indexer.index(
@@ -53,7 +53,7 @@ Call `result_set.to_visualization()` when you need the normalized arrays. Prepar
 from laueanalysis.visualization import load_visualization_xml, prepare_map
 
 dataset = load_visualization_xml("indexed-scan.xml")
-map_data = prepare_map(dataset, axes=("x", "h"), color="n_indexed")
+map_data = prepare_map(dataset, axes=("X", "H"), color="n_indexed")
 ```
 
 Pass a geometry file when the XML does not contain a readable geometry path:
@@ -99,7 +99,7 @@ Stable IDs do not depend on row order. A pattern uses `(frame_id, pattern_index)
 ```python
 map_data = prepare_map(
     result_set,
-    axes=("x", "h", "depth"),
+    axes=("X", "H", "depth"),
     color="rms_error",
     scope=DataScope(patterns="all", min_indexed=3),
 )
@@ -136,7 +136,9 @@ map_data = prepare_map(
 
 An alignment of `"frame"` requires one value per frame. `"pattern"` requires one value per normalized pattern. `"selected"` requires one value per pattern left by `scope`. A callable receives the complete {class}`~laueanalysis.visualization.VisualizationDataset`.
 
-Named scalar colors are `"n_indexed"`, `"goodness"`, `"rms_error"`, and `"n_patterns"`. The orientation colors are `"ipf"` and `"rodrigues"`. Cubic IPF coloring requires a cubic crystal.
+Named scalar colors are `"n_indexed"`, `"goodness"`, `"rms_error"`, and `"n_patterns"`. Orientation-map colors use the same names as Laue Portal: `"cubic_ipf"`, `"rodrigues"`, `"misorientation"`, and `"pole_hsv"`. Inspect {data}`~laueanalysis.visualization.COLOR_MODES` for the complete map-color list.
+
+Cubic IPF and pole HSV coloring require a cubic crystal. Misorientation coloring also requires `misorientation_reference=(frame_id, pattern_index)`. Use `pole_hkl`, `pole_center`, and `pole_color_radius_deg` to configure pole HSV coloring.
 
 ## Create Plotly figures
 
@@ -151,7 +153,7 @@ from laueanalysis.visualization import (
 
 map_figure = plot_map(
     result_set,
-    axes=("x", "h"),
+    axes=("X", "H"),
     color="goodness",
     marker_size=10,
 )
@@ -166,7 +168,7 @@ detector_figure = plot_detector_view(
 You can also prepare once and render later:
 
 ```python
-map_data = prepare_map(result_set, axes=("x", "h"), color="goodness")
+map_data = prepare_map(result_set, axes=("X", "H"), color="goodness")
 map_figure = plot_map(map_data)
 ```
 
@@ -228,7 +230,7 @@ import matplotlib.pyplot as plt
 
 from laueanalysis.visualization import prepare_map
 
-map_data = prepare_map(result_set, axes=("x", "h"), color="goodness")
+map_data = prepare_map(result_set, axes=("X", "H"), color="goodness")
 figure, axes = plt.subplots()
 points = axes.scatter(
     map_data.coordinates[:, 0],
@@ -258,7 +260,7 @@ pole_data = prepare_pole_figure(
 )
 ```
 
-`pole_data.points` has shape `(n, 2)`. One pattern can produce several rows, so its stable identity can occur more than once. The available colors are `"hsv_position"`, `"ipf"`, and `"uniform"`.
+`pole_data.points` has shape `(n, 2)`. One pattern can produce several rows, so its stable identity can occur more than once. Inspect {data}`~laueanalysis.visualization.POLE_COLOR_MODES` for the available colors: `"hsv_position"`, `"ipf"`, and `"uniform"`.
 
 HKL-family generation and IPF colors currently support cubic crystals only. The function rejects other crystal systems instead of applying cubic symmetry to them.
 
@@ -322,7 +324,7 @@ Keep these spaces separate when you combine prepared data with other software:
 
 For grouped data, the frame-to-detector conversion maps a frame coordinate to the center of its full-detector pixel group. Detector slots are physical geometry slots and can be sparse.
 
-The physical names, positive directions, and handedness of the laboratory axes still require beamline review. Do not infer those meanings from `x_lab`, `y_lab`, or `z_lab` alone.
+The physical names, positive directions, and handedness of the laboratory axes still require beamline review. Do not infer those meanings from `Xlab`, `Ylab`, or `Zlab` alone.
 
 ## APS 34-ID-E surface presets
 

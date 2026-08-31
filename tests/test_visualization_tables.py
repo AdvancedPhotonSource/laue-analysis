@@ -7,7 +7,9 @@ from laueanalysis.visualization import (
     AXIS_OPTIONS,
     COLOR_MODES,
     PALETTE_OPTIONS,
+    POLE_COLOR_MODES,
     SURFACE_PRESETS,
+
     DataScope,
     ResultSet,
     assignment_table,
@@ -86,8 +88,27 @@ def test_empty_scoped_tables_keep_schema():
         assert len(table.columns) > 0
 
 
-def test_choice_descriptors_are_immutable_and_unique():
-    for choices in (AXIS_OPTIONS, COLOR_MODES, PALETTE_OPTIONS, SURFACE_PRESETS):
+def test_choice_descriptors_match_portal_values_and_are_unique():
+    assert tuple(choice.value for choice in AXIS_OPTIONS) == (
+        "X", "Y", "Z", "H", "F", "depth", "Xlab", "Ylab", "Zlab", "Hlab", "Flab"
+    )
+    assert tuple(choice.value for choice in COLOR_MODES) == (
+        "cubic_ipf", "rodrigues", "misorientation", "pole_hsv",
+        "n_indexed", "goodness", "rms_error", "n_patterns",
+    )
+    assert tuple(choice.value for choice in POLE_COLOR_MODES) == (
+        "hsv_position", "ipf", "uniform"
+    )
+    assert tuple(choice.value for choice in PALETTE_OPTIONS) == (
+        "Viridis", "Plasma", "Inferno", "Magma", "Jet", "Rainbow", "Earth"
+    )
+    for choices in (
+        AXIS_OPTIONS,
+        COLOR_MODES,
+        PALETTE_OPTIONS,
+        POLE_COLOR_MODES,
+        SURFACE_PRESETS,
+    ):
         values = [choice.value for choice in choices]
         assert len(values) == len(set(values))
         assert all(choice.label for choice in choices)

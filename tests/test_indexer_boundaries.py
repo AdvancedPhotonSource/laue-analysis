@@ -14,6 +14,11 @@ from laueanalysis.indexing import (
     PeakParams,
 )
 from laueanalysis.indexing import indexer as indexer_module
+from laueanalysis.indexing._frame import (
+    detector_to_roi_pixels,
+    roi_inclusive_end,
+    roi_to_detector_pixels,
+)
 from laueanalysis.indexing._liblaue import get_library
 
 
@@ -101,6 +106,34 @@ def test_hdf5_metadata_override_and_processing_values(tmp_path):
     assert result.start == (10, 20)
     assert result.group == (2, 3)
     assert result.to_step().sampleName == "supplied"
+
+
+def test_hdf5_without_roi_metadata_preserves_explicit_processing_values(tmp_path):
+    path = tmp_path / "frame.h5"
+    with h5py.File(path, "w") as output:
+        output.create_dataset("entry1/data/data", data=np.zeros((4, 5), dtype=np.uint16))
+
+    result = Indexer(GEOMETRY).process(path, start=(100, 200), group=(2, 3))
+
+    assert result.start == (100, 200)
+    assert result.group == (2, 3)
+    roi = result.to_step().detector.roi
+    assert (roi.startx, roi.endx, roi.groupx) == (100, 109, 2)
+    assert (roi.starty, roi.endy, roi.groupy) == (200, 211, 3)
+
+
+def test_roi_coordinate_conversions_and_inclusive_end():
+    roi_pixels = np.array([[0.0, 0.0], [4.0, 3.0]])
+    detector_pixels = roi_to_detector_pixels(
+        roi_pixels, start=(100, 200), group=(2, 3)
+    )
+
+    np.testing.assert_allclose(detector_pixels, [[100.5, 201.0], [108.5, 210.0]])
+    np.testing.assert_allclose(
+        detector_to_roi_pixels(detector_pixels, start=(100, 200), group=(2, 3)),
+        roi_pixels,
+    )
+    assert roi_inclusive_end((4, 5), (100, 200), (2, 3)) == (109, 211)
 
 
 def test_hdf5_requires_image_dataset(tmp_path):

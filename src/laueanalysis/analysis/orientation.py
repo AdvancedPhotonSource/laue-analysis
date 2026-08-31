@@ -113,23 +113,28 @@ def symmetry_operations(symmetry: str | int) -> np.ndarray:
     raise ValueError("symmetry must be 'cubic', 'hexagonal', or a supported space group")
 
 
-def symmetry_reduce_orientation(rotation, *, reference=None, operations=None):
-    """Return the symmetry equivalent nearest to a reference orientation."""
+def symmetry_reduce_orientation(rotation, *, operations=None):
+    """Return the symmetry-equivalent orientation nearest to identity."""
     rotation = np.asarray(rotation, dtype=float)
-    reference = np.eye(3) if reference is None else np.asarray(reference, dtype=float)
     operations = np.eye(3)[None, ...] if operations is None else np.asarray(operations, dtype=float)
-    candidates = rotation @ (np.swapaxes(operations, 1, 2) @ np.linalg.inv(reference))
+    candidates = rotation @ np.swapaxes(operations, 1, 2)
+    return candidates[np.argmax(np.trace(candidates, axis1=1, axis2=2))]
+
+
+def misorientation_matrix(rotation_a, rotation_b, *, operations=None):
+    """Return the minimum-angle misorientation from ``rotation_b`` to ``rotation_a``."""
+    a = np.asarray(rotation_a, dtype=float)
+    b_inv = np.linalg.inv(np.asarray(rotation_b, dtype=float))
+    operations = np.eye(3)[None, ...] if operations is None else np.asarray(operations, dtype=float)
+    candidates = a @ (np.swapaxes(operations, 1, 2) @ b_inv)
     return candidates[np.argmax(np.trace(candidates, axis1=1, axis2=2))]
 
 
 def misorientation_angle(rotation_a, rotation_b, *, operations=None):
     """Return the minimum misorientation angle in degrees."""
-    a = np.asarray(rotation_a, dtype=float)
-    b_inv = np.linalg.inv(np.asarray(rotation_b, dtype=float))
-    operations = np.eye(3)[None, ...] if operations is None else np.asarray(operations, dtype=float)
-    candidates = a @ (np.swapaxes(operations, 1, 2) @ b_inv)
-    traces = np.trace(candidates, axis1=1, axis2=2)
-    return float(np.min(np.degrees(np.arccos(np.clip((traces - 1.0) / 2.0, -1.0, 1.0)))))
+    relative = misorientation_matrix(rotation_a, rotation_b, operations=operations)
+    cosine = np.clip((np.trace(relative) - 1.0) / 2.0, -1.0, 1.0)
+    return float(np.degrees(np.arccos(cosine)))
 
 
 def misorientation_from_reference(rotations, reference_index, *, operations=None):
@@ -141,7 +146,7 @@ def misorientation_from_reference(rotations, reference_index, *, operations=None
         raise IndexError("reference_index is out of range")
     reference = rotations[reference_index]
     reduced = np.asarray([
-        symmetry_reduce_orientation(rotation, reference=reference, operations=operations)
+        misorientation_matrix(rotation, reference, operations=operations)
         for rotation in rotations
     ])
     vectors = np.asarray([orientation_to_rodrigues(rotation) for rotation in reduced])

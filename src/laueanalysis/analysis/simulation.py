@@ -16,6 +16,7 @@ from laueanalysis.indexing import Crystal, DetectorGeometry
 
 _CANDIDATE_LIMIT = 100_000
 _ORDER_SIGNIFICANT_DIGITS = 12
+_HC_KEV_NM = 1.2398419739
 
 
 def _integer_array(value, *, name: str) -> np.ndarray:
@@ -228,6 +229,65 @@ def _cell_parameters_nm(crystal: Crystal) -> list[float]:
     ]
 
 
+def _atomic_number(lattice_base, symbol: str) -> int:
+    try:
+        atomic_number = int(lattice_base.atomGeneral.baseAtom(symbol).Z)
+    except Exception as error:
+        raise ValueError(f"unknown chemical element symbol {symbol!r}") from error
+    if not 1 <= atomic_number <= lattice_base.Zmax:
+        raise ValueError(f"unknown chemical element symbol {symbol!r}")
+    return atomic_number
+
+
+def _maximum_bragg_angle(detector: DetectorGeometry, depth: float) -> float:
+    source = np.asarray([0.0, 0.0, depth])
+    corners = np.asarray([
+        [0.0, 0.0],
+        [detector.nx - 1.0, 0.0],
+        [0.0, detector.ny - 1.0],
+        [detector.nx - 1.0, detector.ny - 1.0],
+    ])
+    points = [*detector.pixel_to_lab(corners)]
+
+    for first, second in ((0, 1), (2, 3), (0, 2), (1, 3)):
+        origin = points[first] - source
+        direction = points[second] - points[first]
+        denominator = direction[2] * np.dot(origin, direction) - origin[2] * np.dot(
+            direction, direction
+        )
+        if denominator:
+            position = (
+                origin[2] * np.dot(origin, direction)
+                - direction[2] * np.dot(origin, origin)
+            ) / denominator
+            if 0.0 < position < 1.0:
+                points.append(source + origin + position * direction)
+
+    rays = np.asarray(points) - source
+    cosines = rays[:, 2] / np.linalg.norm(rays, axis=1)
+    maximum_two_theta = np.max(np.arccos(np.clip(cosines, -1.0, 1.0)))
+    return maximum_two_theta / 2.0
+
+
+def _hkl_bound(
+    reciprocal: np.ndarray,
+    detector: DetectorGeometry,
+    depth: float,
+    energy_high_kev: float,
+) -> tuple[int, int, int]:
+    q_max = (
+        4.0
+        * np.pi
+        * np.sin(_maximum_bragg_angle(detector, depth))
+        * energy_high_kev
+        / _HC_KEV_NM
+    )
+    bounds = np.ceil(
+        q_max * np.linalg.norm(np.linalg.inv(reciprocal), axis=0)
+    ).astype(np.int64)
+    return tuple(int(value) for value in bounds)
+
+
 def _execute_jzt(
     modules,
     crystal: Crystal,
@@ -250,7 +310,7 @@ def _execute_jzt(
         atoms.append(
             lattice_base.atomXtal(
                 label=label,
-                Zatom=atom.symbol,
+                Zatom=_atomic_number(lattice_base, atom.symbol),
                 xyz=atom.position,
                 occ=atom.occupancy,
             )
@@ -271,6 +331,7 @@ def _execute_jzt(
     pattern.calc(
         ELO=np.nextafter(low, -np.inf),
         EHI=np.nextafter(high, np.inf),
+        hklMax=_hkl_bound(reciprocal, detector, depth, high),
         Nmax=_CANDIDATE_LIMIT,
     )
     return _BackendOutput(

@@ -92,7 +92,7 @@ Each renderer accepts a prepared model or normalized input. `trace_update` chang
 
 ## Built-in choices
 
-`AXIS_OPTIONS`, `COLOR_MODES`, `SURFACE_PRESETS`, and `PALETTE_OPTIONS` are immutable tuples of {class}`~laueanalysis.visualization.Choice` objects. Applications can use them to construct controls without duplicating package option names.
+`AXIS_OPTIONS`, `COLOR_MODES`, `POLE_COLOR_MODES`, `SURFACE_PRESETS`, and `PALETTE_OPTIONS` are immutable tuples of {class}`~laueanalysis.visualization.Choice` objects. Their values match the corresponding Laue Portal controls.
 
 ```{eval-rst}
 .. currentmodule:: laueanalysis.visualization
@@ -102,6 +102,8 @@ Each renderer accepts a prepared model or normalized input. `trace_update` chang
 .. autodata:: AXIS_OPTIONS
 
 .. autodata:: COLOR_MODES
+
+.. autodata:: POLE_COLOR_MODES
 
 .. autodata:: SURFACE_PRESETS
 

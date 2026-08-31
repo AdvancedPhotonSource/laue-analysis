@@ -49,7 +49,8 @@ def rodrigues_colors(vectors, *, max_angle_deg=None):
     if max_angle_deg is None:
         component_angles = 2.0 * np.degrees(np.arctan(np.abs(flat.reshape(-1))))
         finite = component_angles[np.isfinite(component_angles)]
-        max_angle_deg = _round_significant(float(np.percentile(finite, 95)), 2) if len(finite) else 45.0
+        maximum = _round_significant(float(np.percentile(finite, 95)), 2) if len(finite) else 0.0
+        max_angle_deg = maximum if maximum > 0 else 45.0
     if not np.isfinite(max_angle_deg) or max_angle_deg <= 0:
         raise ValueError("max_angle_deg must be positive and finite")
 

@@ -18,7 +18,14 @@ from laueanalysis.analysis import (
     lattice_params_to_reciprocal,
     simulate_reflections,
 )
-from laueanalysis.indexing import Atom, Cell, Crystal, DetectorGeometry, load_crystal
+from laueanalysis.indexing import (
+    Atom,
+    Cell,
+    Crystal,
+    DetectorGeometry,
+    load_crystal,
+    load_geometry,
+)
 
 
 DATA = Path(__file__).parent / "data" / "simulation"
@@ -251,6 +258,11 @@ def test_backend_receives_fitted_row_basis_cell_units_and_occupancy(monkeypatch)
     recorded = {}
 
     class LatticeBase:
+        Zmax = 109
+        atomGeneral = SimpleNamespace(
+            baseAtom=lambda symbol: SimpleNamespace(Z={"Ni": 28}[symbol])
+        )
+
         @staticmethod
         def atomXtal(**kwargs):
             recorded.setdefault("atoms", []).append(kwargs)
@@ -281,8 +293,8 @@ def test_backend_receives_fitted_row_basis_cell_units_and_occupancy(monkeypatch)
         1,
         Cell(5, 6, 7, 80, 90, 100, unit="angstrom"),
         (
-            Atom("Ni", (0, 0, 0), occupancy=0.25),
-            Atom("Ni", (0.5, 0.5, 0.5), occupancy=0.75),
+            Atom("Ni", (0, 0, 0), occupancy=0.25, label="site1"),
+            Atom("Ni", (0.5, 0.5, 0.5), occupancy=0.75, label="metal-B"),
         ),
     )
     reciprocal = np.asarray([[1, 2, 3], [0, 4, 5], [0, 0, 6]], dtype=float)
@@ -290,13 +302,94 @@ def test_backend_receives_fitted_row_basis_cell_units_and_occupancy(monkeypatch)
 
     assert result.hkl.shape == (0, 3)
     assert [atom["occ"] for atom in recorded["atoms"]] == [0.25, 0.75]
-    assert [atom["Zatom"] for atom in recorded["atoms"]] == ["Ni", "Ni"]
-    assert [atom["label"] for atom in recorded["atoms"]] == ["Ni1", "Ni2"]
+    assert [atom["Zatom"] for atom in recorded["atoms"]] == [28, 28]
+    assert [atom["label"] for atom in recorded["atoms"]] == ["site1", "metal-B"]
     np.testing.assert_allclose(recorded["lattice"][0][1], [0.5, 0.6, 0.7, 80, 90, 100])
     np.testing.assert_array_equal(recorded["reciprocal"], reciprocal.T)
     assert recorded["calc"]["ELO"] < 6.0
     assert recorded["calc"]["EHI"] > 30.0
+    expected_q_max = (
+        4
+        * np.pi
+        * np.sin(simulation._maximum_bragg_angle(_detector(), 0.0))
+        * 30.0
+        / simulation._HC_KEV_NM
+    )
+    expected_hkl_max = tuple(
+        np.ceil(
+            expected_q_max * np.linalg.norm(np.linalg.inv(reciprocal), axis=0)
+        ).astype(int)
+    )
+    assert recorded["calc"]["hklMax"] == expected_hkl_max
     np.testing.assert_array_equal(reciprocal, [[1, 2, 3], [0, 4, 5], [0, 0, 6]])
+
+
+def test_real_backend_uses_symbol_independently_of_site_label():
+    reciprocal = np.eye(3) * (2 * np.pi / 0.5) @ _baseline_rotation()
+    conventional = Crystal(
+        "Ni conventional label",
+        1,
+        Cell(0.5, 0.5, 0.5),
+        (Atom("Ni", (0, 0, 0), label="Ni1"),),
+    )
+    arbitrary = Crystal(
+        "Ni arbitrary label",
+        1,
+        Cell(0.5, 0.5, 0.5),
+        (Atom("Ni", (0, 0, 0), label="site1"),),
+    )
+
+    expected = simulate_reflections(
+        conventional, reciprocal, _detector(), energy_range_kev=(6, 15)
+    )
+    actual = simulate_reflections(
+        arbitrary, reciprocal, _detector(), energy_range_kev=(6, 15)
+    )
+
+    np.testing.assert_array_equal(actual.hkl, expected.hkl)
+    np.testing.assert_allclose(actual.energy_kev, expected.energy_kev)
+    np.testing.assert_allclose(actual.relative_intensity, expected.relative_intensity)
+
+
+def test_real_backend_includes_high_angle_corner_reflection():
+    detector = load_geometry(
+        Path(__file__).parent / "data/geo/geoN_2022-03-29_14-15-05.xml"
+    ).detector(0)
+    target_pixel = np.asarray([20.0, 20.0])
+    outgoing = detector.pixel_to_lab(target_pixel)
+    outgoing /= np.linalg.norm(outgoing)
+    target_q = outgoing - np.asarray([0.0, 0.0, 1.0])
+    target_q /= np.linalg.norm(target_q)
+    source_hkl = np.asarray([18.0, 1.0, 0.0])
+    source_hkl /= np.linalg.norm(source_hkl)
+    cross = np.cross(source_hkl, target_q)
+    cosine = np.dot(source_hkl, target_q)
+    cross_matrix = np.asarray([
+        [0.0, -cross[2], cross[1]],
+        [cross[2], 0.0, -cross[0]],
+        [-cross[1], cross[0], 0.0],
+    ])
+    rotation = (
+        np.eye(3)
+        + cross_matrix
+        + cross_matrix @ cross_matrix * ((1.0 - cosine) / np.dot(cross, cross))
+    ).T
+    reciprocal = (2 * np.pi / 0.5) * rotation
+    crystal = Crystal(
+        "Al high angle",
+        1,
+        Cell(0.5, 0.5, 0.5),
+        (Atom("Al", (0, 0, 0)),),
+    )
+
+    result = simulate_reflections(
+        crystal, reciprocal, detector, energy_range_kev=(6, 30)
+    )
+    row = np.flatnonzero(np.all(result.hkl == (18, 1, 0), axis=1))
+
+    assert row.size == 1
+    np.testing.assert_allclose(result.detector_xy[row[0]], target_pixel, atol=1e-9)
+    assert result.energy_kev[row[0]] == pytest.approx(27.7406465)
 
 
 def test_real_backend_honors_partial_occupancy():
@@ -466,7 +559,7 @@ def test_public_surface_has_no_backend_or_fallback_controls():
     ]
     import laueanalysis.analysis as analysis
 
-    assert len(analysis.__all__) == 23
+    assert len(analysis.__all__) == 24
     assert "SimulationResult" in analysis.__all__
     assert "simulate_reflections" in analysis.__all__
     assert not any("backend" in name.lower() or "fallback" in name.lower() for name in analysis.__all__)

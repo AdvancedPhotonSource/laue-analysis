@@ -11,6 +11,8 @@ from typing import Optional
 import numpy as np
 from cffi import FFI
 
+from ._frame import roi_to_detector_pixels
+
 ffi = FFI()
 ffi.cdef(
     """
@@ -460,7 +462,7 @@ class Geometry:
             raise ValueError("peak coordinates must be finite")
         detector = self.detector(detector_index)
         if len(pixels):
-            detector_pixels = np.asarray(start) + pixels * np.asarray(group) + (np.asarray(group) - 1) / 2
+            detector_pixels = roi_to_detector_pixels(pixels, start, group)
             if (detector_pixels < 0).any() or (detector_pixels[:, 0] > detector.nx - 1).any() or (
                 detector_pixels[:, 1] > detector.ny - 1
             ).any():

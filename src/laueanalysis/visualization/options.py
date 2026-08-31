@@ -12,27 +12,33 @@ class Choice:
 
 
 AXIS_OPTIONS = (
-    Choice("x", "X motor (um)"),
-    Choice("y", "Y motor (um)"),
-    Choice("z", "Z motor (um)"),
-    Choice("h", "H (um)"),
-    Choice("f", "F (um)"),
+    Choice("X", "X motor (um)"),
+    Choice("Y", "Y motor (um)"),
+    Choice("Z", "Z motor (um)"),
+    Choice("H", "H (um)"),
+    Choice("F", "F (um)"),
     Choice("depth", "Depth (um)"),
-    Choice("x_lab", "X lab (um)"),
-    Choice("y_lab", "Y lab (um)"),
-    Choice("z_lab", "Z lab (um)"),
-    Choice("h_lab", "H lab (um)"),
-    Choice("f_lab", "F lab (um)"),
+    Choice("Xlab", "X lab (um)"),
+    Choice("Ylab", "Y lab (um)"),
+    Choice("Zlab", "Z lab (um)"),
+    Choice("Hlab", "H lab (um)"),
+    Choice("Flab", "F lab (um)"),
 )
 
 COLOR_MODES = (
-    Choice("n_indexed", "Indexed peaks"),
-    Choice("goodness", "Goodness"),
-    Choice("rms_error", "RMS error"),
-    Choice("n_patterns", "Patterns"),
-    Choice("ipf", "Cubic IPF"),
+    Choice("cubic_ipf", "Cubic IPF"),
     Choice("rodrigues", "Rodrigues RGB"),
-    Choice("pole_hsv", "Pole position (HSV)"),
+    Choice("misorientation", "Misorientation"),
+    Choice("pole_hsv", "Pole Figure HSV"),
+    Choice("n_indexed", "N Indexed"),
+    Choice("goodness", "Goodness"),
+    Choice("rms_error", "RMS Error"),
+    Choice("n_patterns", "N Patterns"),
+)
+
+POLE_COLOR_MODES = (
+    Choice("hsv_position", "Position HSV"),
+    Choice("ipf", "Cubic IPF"),
     Choice("uniform", "Uniform"),
 )
 
@@ -50,6 +56,7 @@ PALETTE_OPTIONS = (
     Choice("Plasma", "Plasma"),
     Choice("Inferno", "Inferno"),
     Choice("Magma", "Magma"),
-    Choice("Cividis", "Cividis"),
-    Choice("Turbo", "Turbo"),
+    Choice("Jet", "Jet"),
+    Choice("Rainbow", "Rainbow"),
+    Choice("Earth", "Terrain"),
 )

@@ -302,9 +302,9 @@ def test_indexer_accepts_optional_manual_metadata():
     assert step.detector.Nx == 12
     assert step.detector.Ny == 8
     assert step.detector.roi.startx == 100
-    assert step.detector.roi.endx == 122
+    assert step.detector.roi.endx == 123
     assert step.detector.roi.starty == 200
-    assert step.detector.roi.endy == 221
+    assert step.detector.roi.endy == 223
 
 
 def test_indexer_accepts_partial_hdf5_metadata(tmp_path):
@@ -446,6 +446,27 @@ def test_indexer_selects_detector_by_id():
 
     with pytest.raises(ValueError, match="not present"):
         Indexer(GEOMETRY, detector_id="missing")
+
+
+def test_indexer_replace_preserves_detector_identity_across_geometry_slots(tmp_path):
+    original_id = "PE1621 723-3335"
+    other_id = "PE0822 883-4841"
+    reordered_text = GEOMETRY.read_text().replace(original_id, "temporary detector")
+    reordered_text = reordered_text.replace(other_id, original_id)
+    reordered_text = reordered_text.replace("temporary detector", other_id)
+    reordered = tmp_path / "reordered.xml"
+    reordered.write_text(reordered_text)
+
+    indexer = Indexer(GEOMETRY, detector_id=original_id)
+    replaced = indexer.replace(geo_file=reordered)
+
+    assert replaced.detector_id == original_id
+    assert replaced.detector.detector_id == original_id
+    assert replaced.detector_index == 1
+
+    by_slot = indexer.replace(geo_file=reordered, detector_index=0)
+    assert by_slot.detector_id == other_id
+    assert by_slot.detector_index == 0
 
 
 def test_indexer_validates_index_parameters():

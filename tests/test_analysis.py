@@ -12,12 +12,24 @@ from laueanalysis.analysis import (
     hsv_key,
     hsv_position_colors,
     misorientation_angle,
+    misorientation_from_reference,
+    misorientation_matrix,
     orientation_to_rodrigues,
     pole_color_radius,
     pole_figure_points,
     rodrigues_colors,
     symmetry_operations,
+    symmetry_reduce_orientation,
 )
+
+
+def _rotation_about_z(angle_deg):
+    angle = np.radians(angle_deg)
+    return np.array([
+        [np.cos(angle), -np.sin(angle), 0],
+        [np.sin(angle), np.cos(angle), 0],
+        [0, 0, 1],
+    ])
 
 
 def test_aps_surface_frames_are_right_handed_and_read_only():
@@ -68,10 +80,32 @@ def test_symmetry_and_misorientation_primitives():
         symmetry_operations(1)
 
 
+def test_orientation_reduction_and_misorientation_are_distinct():
+    rotation_30 = _rotation_about_z(30)
+    rotation_20 = _rotation_about_z(20)
+    operation_90 = _rotation_about_z(90)
+
+    np.testing.assert_allclose(
+        symmetry_reduce_orientation(rotation_30, operations=[np.eye(3), operation_90]),
+        rotation_30,
+        atol=1e-15,
+    )
+    relative = misorientation_matrix(rotation_30, rotation_20)
+    np.testing.assert_allclose(relative, _rotation_about_z(10), atol=1e-15)
+
+    vectors, angles = misorientation_from_reference(
+        np.asarray([rotation_20, rotation_30]), 0
+    )
+    np.testing.assert_allclose(vectors[0], 0, atol=1e-15)
+    np.testing.assert_allclose(vectors[1], [0, 0, np.tan(np.radians(5))], atol=1e-15)
+    np.testing.assert_allclose(angles, [0, 10], atol=1e-12)
+
+
 def test_color_primitives_have_expected_shapes_and_ranges():
     directions = np.array([[0, 0, 1], [0, 1, 1], [1, 1, 1]], dtype=float)
     ipf = cubic_ipf_colors(directions)
     rods = rodrigues_colors(np.array([[0, 0, 0], [1, 0, 0]], dtype=float))
+    np.testing.assert_array_equal(rodrigues_colors(np.zeros((2, 3))), 0)
     hsv = hsv_position_colors([0, 1], [0, 0])
     assert ipf.shape == (3, 3)
     assert rods.shape == hsv.shape == (2, 3)

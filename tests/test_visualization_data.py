@@ -52,6 +52,18 @@ def test_result_set_validates_ids_and_preserves_results():
         ResultSet(results, frame_ids=("one",))
 
 
+def test_frame_ids_accept_numpy_integers_and_reject_booleans():
+    results = (_result(), _result())
+    result_set = ResultSet(results, frame_ids=np.array([10, 20], dtype=np.int64))
+    assert result_set.frame_ids == (10, 20)
+    assert all(type(value) is int for value in result_set.frame_ids)
+
+    with pytest.raises(TypeError, match="frame IDs"):
+        ResultSet(results, frame_ids=(True, 1))
+    with pytest.raises(TypeError, match="frame IDs"):
+        ResultSet(results, frame_ids=(np.bool_(True), 1))
+
+
 def test_visualization_dataset_normalizes_all_record_levels():
     result_set = ResultSet(
         (_result((_pattern(3), _pattern(2))), _result((_pattern(4),), position=(4, 5, 6))),

@@ -13,6 +13,7 @@ from laueanalysis.analysis import (
     closest_pole_colors,
     cubic_hkl_family,
     cubic_ipf_colors,
+    misorientation_matrix,
     orientation_to_rodrigues,
     pole_color_radius,
     pole_figure_points,
@@ -21,8 +22,15 @@ from laueanalysis.analysis import (
     symmetry_operations,
     symmetry_reduce_orientation,
 )
+from laueanalysis.indexing._frame import detector_to_roi_pixels, read_h5_frame
 
 from .data import DataScope, FrameId, ResultSet, VisualizationDataset, _readonly
+from .options import AXIS_OPTIONS, COLOR_MODES, POLE_COLOR_MODES
+
+
+_AXIS_VALUES = tuple(choice.value for choice in AXIS_OPTIONS)
+_COLOR_VALUES = tuple(choice.value for choice in COLOR_MODES)
+_POLE_COLOR_VALUES = tuple(choice.value for choice in POLE_COLOR_MODES)
 
 Values = np.ndarray | Callable[[VisualizationDataset], np.ndarray]
 Alignment = Literal["frame", "pattern", "selected"]
@@ -274,20 +282,20 @@ def _frame_axis(dataset, name):
     h_lab = (lab[:, 1] + lab[:, 2]) / np.sqrt(2.0)
     f_lab = (-lab[:, 1] + lab[:, 2]) / np.sqrt(2.0)
     axes = {
-        "x": (positions[:, 0], "X motor (um)"),
-        "y": (positions[:, 1], "Y motor (um)"),
-        "z": (positions[:, 2], "Z motor (um)"),
-        "h": (h, "H (um)"),
-        "f": (f, "F (um)"),
+        "X": (positions[:, 0], "X motor (um)"),
+        "Y": (positions[:, 1], "Y motor (um)"),
+        "Z": (positions[:, 2], "Z motor (um)"),
+        "H": (h, "H (um)"),
+        "F": (f, "F (um)"),
         "depth": (dataset.depths, "Depth (um)"),
-        "x_lab": (lab[:, 0], "X lab (um)"),
-        "y_lab": (lab[:, 1], "Y lab (um)"),
-        "z_lab": (lab[:, 2], "Z lab (um)"),
-        "h_lab": (h_lab, "H lab (um)"),
-        "f_lab": (f_lab, "F lab (um)"),
+        "Xlab": (lab[:, 0], "X lab (um)"),
+        "Ylab": (lab[:, 1], "Y lab (um)"),
+        "Zlab": (lab[:, 2], "Z lab (um)"),
+        "Hlab": (h_lab, "H lab (um)"),
+        "Flab": (f_lab, "F lab (um)"),
     }
     if name not in axes:
-        raise ValueError(f"unknown axis {name!r}; choose from {tuple(axes)}")
+        raise ValueError(f"unknown axis {name!r}; choose from {_AXIS_VALUES}")
     return axes[name]
 
 
@@ -335,7 +343,16 @@ def _crystal_directions(rotations, normal):
     return directions
 
 
-def _map_colors(color, dataset, rows, surface):
+def _map_colors(
+    color,
+    dataset,
+    rows,
+    surface,
+    misorientation_reference,
+    pole_hkl,
+    pole_center,
+    pole_color_radius_deg,
+):
     scalar_fields = {
         "n_indexed": (dataset.pattern_n_indexed, "Indexed peaks"),
         "goodness": (dataset.pattern_goodness, "Goodness"),
@@ -363,7 +380,7 @@ def _map_colors(color, dataset, rows, surface):
         alignment = "frame" if color == "n_patterns" else "pattern"
         return _aligned_values(values, dataset, rows, alignment, "color").astype(float), "scalar", label, "Viridis", None
     rotations = dataset.pattern_rotations[rows]
-    if color == "ipf":
+    if color == "cubic_ipf":
         if dataset.crystal is None:
             raise ValueError("crystal context is required for cubic IPF coloring")
         if dataset.crystal.crystal_system != "cubic":
@@ -371,7 +388,11 @@ def _map_colors(color, dataset, rows, surface):
         directions = _crystal_directions(rotations, surface.normal)
         return cubic_ipf_colors(directions), "rgb", "Cubic IPF", None, None
     if color == "rodrigues":
-        operations = symmetry_operations(dataset.crystal.space_group) if dataset.crystal else None
+        operations = (
+            symmetry_operations(dataset.crystal.space_group)
+            if dataset.crystal and dataset.crystal.crystal_system in ("cubic", "hexagonal")
+            else None
+        )
         reduced = [
             symmetry_reduce_orientation(rotation, operations=operations)
             if np.isfinite(rotation).all() else np.full((3, 3), np.nan)
@@ -382,10 +403,63 @@ def _map_colors(color, dataset, rows, surface):
             for rotation in reduced
         ], dtype=float).reshape((-1, 3))
         return rodrigues_colors(vectors), "rgb", "Rodrigues RGB", None, None
-    raise ValueError("unknown color mode; choose from 'n_indexed', 'goodness', 'rms_error', 'n_patterns', 'ipf', or 'rodrigues'")
+    if color == "misorientation":
+        if misorientation_reference is None:
+            raise ValueError("misorientation_reference is required for misorientation coloring")
+        try:
+            frame_id, pattern_index = misorientation_reference
+            reference_row = next(
+                row
+                for row in range(dataset.n_patterns)
+                if dataset.frame_ids[dataset.pattern_frame_indices[row]] == frame_id
+                and dataset.pattern_indices[row] == pattern_index
+            )
+        except (TypeError, ValueError, StopIteration) as error:
+            raise ValueError("misorientation_reference must identify a pattern") from error
+        reference = dataset.pattern_rotations[reference_row]
+        operations = (
+            symmetry_operations(dataset.crystal.space_group)
+            if dataset.crystal and dataset.crystal.crystal_system in ("cubic", "hexagonal")
+            else None
+        )
+        relative = [
+            misorientation_matrix(rotation, reference, operations=operations)
+            if np.isfinite(rotation).all() else np.full((3, 3), np.nan)
+            for rotation in rotations
+        ]
+        vectors = np.asarray([
+            orientation_to_rodrigues(rotation) if np.isfinite(rotation).all() else [np.nan] * 3
+            for rotation in relative
+        ], dtype=float).reshape((-1, 3))
+        return rodrigues_colors(vectors), "rgb", "Misorientation", None, None
+    if color == "pole_hsv":
+        if dataset.crystal is None or dataset.crystal.crystal_system != "cubic":
+            raise ValueError("cubic crystal context is required for pole HSV coloring")
+        points, local_rows = pole_figure_points(
+            dataset.pattern_reciprocals[rows], cubic_hkl_family(pole_hkl), surface=surface
+        )
+        finite = np.isfinite(points).all(axis=1)
+        points, local_rows = points[finite], local_rows[finite]
+        radius = pole_color_radius(pole_center, pole_color_radius_deg)
+        colors = closest_pole_colors(
+            points, local_rows, len(rows), center=pole_center, radius=radius
+        )
+        return colors, "rgb", "Pole Figure HSV", None, None
+    raise ValueError(f"unknown color mode {color!r}; choose from {_COLOR_VALUES}")
 
 
-def prepare_map(source, *, axes=("x", "y"), color="n_indexed", scope=None, surface=None):
+def prepare_map(
+    source,
+    *,
+    axes=("X", "Y"),
+    color="n_indexed",
+    scope=None,
+    surface=None,
+    misorientation_reference=None,
+    pole_hkl=(1, 0, 0),
+    pole_center=(0.0, 0.0),
+    pole_color_radius_deg=22.5,
+):
     """Prepare a two- or three-dimensional spatial map."""
     dataset = _dataset(source)
     if len(axes) not in (2, 3):
@@ -398,7 +472,16 @@ def prepare_map(source, *, axes=("x", "y"), color="n_indexed", scope=None, surfa
     coordinates = np.column_stack([item[0] for item in resolved]) if rows.size else np.empty((0, len(axes)))
     if len(coordinates) and not np.isfinite(coordinates).all():
         raise ValueError("selected map coordinates contain missing or non-finite values")
-    colors, kind, label, palette, limits = _map_colors(color, dataset, rows, surface)
+    colors, kind, label, palette, limits = _map_colors(
+        color,
+        dataset,
+        rows,
+        surface,
+        misorientation_reference,
+        pole_hkl,
+        pole_center,
+        pole_color_radius_deg,
+    )
     frame_ids = tuple(dataset.frame_ids[index] for index in dataset.pattern_frame_indices[rows])
     indexed = np.isfinite(dataset.pattern_rotations[rows]).all(axis=(1, 2))
     return MapData(
@@ -456,7 +539,7 @@ def prepare_pole_figure(
         radius = None
         color_kind = "uniform"
     else:
-        raise ValueError("unknown pole color mode; choose from 'hsv_position', 'ipf', or 'uniform'")
+        raise ValueError(f"unknown pole color mode {color!r}; choose from {_POLE_COLOR_VALUES}")
     return PoleFigureData(
         points=points,
         frame_ids=tuple(dataset.frame_ids[index] for index in dataset.pattern_frame_indices[selected_rows]),
@@ -482,10 +565,7 @@ def _load_image(image):
     path = Path(image)
     if path.suffix.lower() == ".npy":
         return np.load(path)
-    import h5py
-
-    with h5py.File(path, "r") as source:
-        return source["entry1/data/data"][...]
+    return read_h5_frame(path)[0]
 
 
 def prepare_detector_view(
@@ -542,7 +622,7 @@ def prepare_detector_view(
         indexed_mask[peak_indices] = True
         q = dataset.assignment_hkl[assignment_rows] @ dataset.pattern_reciprocals[pattern_row]
         full_xy = detector.q_to_pixel(q, depth=depth)
-        roi_xy = (full_xy - start - (group - 1) / 2.0) / group
+        roi_xy = detector_to_roi_pixels(full_xy, start, group)
         prepared_patterns.append(DetectorPatternData(
             int(dataset.pattern_indices[pattern_row]),
             dataset.assignment_hkl[assignment_rows],
@@ -557,9 +637,7 @@ def prepare_detector_view(
                 energy_range_kev=simulation_energy_range_kev,
                 depth=0.0 if depth is None else float(depth),
             ).missing_from(dataset.assignment_hkl[assignment_rows])
-            simulated_xy = (
-                simulated.detector_xy - start - (group - 1) / 2.0
-            ) / group
+            simulated_xy = detector_to_roi_pixels(simulated.detector_xy, start, group)
             width, height = dataset.image_shapes[frame_index][::-1]
             valid = (
                 np.isfinite(simulated_xy).all(axis=1)

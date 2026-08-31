@@ -102,9 +102,14 @@ def load_visualization_xml(path, *, geometry=None, frame_ids=None):
     crystal = _load_crystal(steps)
     reference_recip = None
     if crystal is not None:
-        cell = crystal.cell
+        cell = crystal.cell.in_angstrom
         reference_recip = lattice_params_to_reciprocal(
-            cell.a, cell.b, cell.c, cell.alpha, cell.beta, cell.gamma
+            cell.a / 10.0,
+            cell.b / 10.0,
+            cell.c / 10.0,
+            cell.alpha,
+            cell.beta,
+            cell.gamma,
         )
 
     positions = np.full((len(steps), 3), np.nan)

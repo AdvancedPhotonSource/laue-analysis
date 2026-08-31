@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from numbers import Integral
 from typing import Iterable, Literal, Sequence
 
 import numpy as np
@@ -25,8 +26,9 @@ def _validate_frame_ids(values: Sequence[FrameId], count: int) -> tuple[FrameId,
     ids = tuple(values)
     if len(ids) != count:
         raise ValueError(f"frame_ids must contain {count} values")
-    if any(isinstance(value, bool) or not isinstance(value, (str, int)) for value in ids):
+    if any(isinstance(value, (bool, np.bool_)) or not isinstance(value, (str, Integral)) for value in ids):
         raise TypeError("frame IDs must be strings or integers")
+    ids = tuple(int(value) if isinstance(value, Integral) else value for value in ids)
     try:
         unique = set(ids)
     except TypeError as error:

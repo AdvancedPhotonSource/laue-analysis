@@ -59,6 +59,28 @@ def test_load_visualization_xml_normalizes_legacy_data(legacy_xml):
     np.testing.assert_allclose(dataset.peaks["qhat"][1], [1, 1, 1])
 
 
+def test_xml_cell_units_are_normalized_for_orientation(tmp_path):
+    reciprocal = 2.0 * np.pi / 0.4
+
+    def document(length, unit):
+        return f"""<AllSteps><step><detector/><indexing><pattern>
+        <recip_lattice><astar>{reciprocal} 0 0</astar><bstar>0 {reciprocal} 0</bstar>
+        <cstar>0 0 {reciprocal}</cstar></recip_lattice></pattern>
+        <xtl><structureDesc>Test</structureDesc><SpaceGroup>225</SpaceGroup>
+        <latticeParameters unit="{unit}">{length} {length} {length} 90 90 90</latticeParameters>
+        </xtl></indexing></step></AllSteps>"""
+
+    rotations = []
+    for length, unit in ((0.4, "nm"), (4.0, "angstrom")):
+        path = tmp_path / f"cell-{unit}.xml"
+        path.write_text(document(length, unit))
+        dataset = load_visualization_xml(path)
+        assert dataset.crystal.cell.unit == unit
+        rotations.append(dataset.pattern_rotations[0])
+
+    np.testing.assert_allclose(rotations, np.tile(np.eye(3), (2, 1, 1)), atol=1e-15)
+
+
 def test_declared_peak_count_preserves_rows_with_missing_fields(tmp_path):
     path = tmp_path / "partial.xml"
     path.write_text(
@@ -96,3 +118,9 @@ def test_missing_embedded_geometry_is_not_required(tmp_path):
 def test_load_visualization_xml_validates_frame_ids(legacy_xml):
     with pytest.raises(ValueError, match="contain 2"):
         load_visualization_xml(legacy_xml, frame_ids=(1,))
+
+    dataset = load_visualization_xml(
+        legacy_xml, frame_ids=np.array([10, 20], dtype=np.int64)
+    )
+    assert dataset.frame_ids == (10, 20)
+    assert all(type(value) is int for value in dataset.frame_ids)

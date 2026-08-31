@@ -2,7 +2,14 @@
 
 from .data import DataScope, ResultSet, VisualizationDataset
 from .interaction import PlotlySelection, selection_from_plotly
-from .options import AXIS_OPTIONS, COLOR_MODES, PALETTE_OPTIONS, SURFACE_PRESETS, Choice
+from .options import (
+    AXIS_OPTIONS,
+    COLOR_MODES,
+    PALETTE_OPTIONS,
+    POLE_COLOR_MODES,
+    SURFACE_PRESETS,
+    Choice,
+)
 from .preparation import (
     Axis,
     DetectorPatternData,
@@ -23,6 +30,7 @@ __all__ = [
     "AXIS_OPTIONS",
     "COLOR_MODES",
     "PALETTE_OPTIONS",
+    "POLE_COLOR_MODES",
     "SURFACE_PRESETS",
     "Axis",
     "Choice",

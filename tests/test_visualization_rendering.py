@@ -80,7 +80,7 @@ def _roles(figure):
 
 def test_plot_map_renders_prepared_2d_data_with_stable_identity():
     figure = plot_map(
-        prepare_map(_result_set(), axes=("x", "h"), color="goodness"),
+        prepare_map(_result_set(), axes=("X", "H"), color="goodness"),
         marker_size=12,
         trace_update={"data": {"marker": {"symbol": "circle"}}},
         layout_update={"template": "plotly_white"},
@@ -96,7 +96,7 @@ def test_plot_map_renders_prepared_2d_data_with_stable_identity():
 
 
 def test_plot_map_3d_uses_opaque_markers_and_validates_updates():
-    figure = plot_map(_result_set(), axes=("x", "y", "z"), color="ipf")
+    figure = plot_map(_result_set(), axes=("X", "Y", "Z"), color="cubic_ipf")
 
     assert figure.data[0].type == "scatter3d"
     assert figure.data[0].marker.opacity is None
@@ -303,6 +303,27 @@ def test_selection_from_plotly_deduplicates_stable_identities():
     assert selection_from_plotly(None) == PlotlySelection()
 
 
+def test_selection_from_plotly_normalizes_numpy_integer_identities():
+    selection = selection_from_plotly({
+        "points": [{
+            "customdata": [
+                np.int64(5),
+                np.int32(2),
+                None,
+                np.int16(1),
+                np.int16(0),
+                np.int16(-1),
+            ]
+        }]
+    })
+    assert selection == PlotlySelection(
+        frame_ids=(5,),
+        pattern_ids=((5, 2),),
+        reflection_ids=((5, 2, 1, 0, -1),),
+    )
+    assert all(type(value) is int for value in selection.reflection_ids[0])
+
+
 def test_selection_from_plotly_rejects_invalid_payloads():
     with pytest.raises(TypeError, match="mapping"):
         selection_from_plotly([])
@@ -312,3 +333,5 @@ def test_selection_from_plotly_rejects_invalid_payloads():
         selection_from_plotly({
             "points": [{"customdata": ["a", 0, None, 1.0, 0, -1]}]
         })
+    with pytest.raises(ValueError, match="frame IDs"):
+        selection_from_plotly({"points": [{"customdata": [np.bool_(True), 0, None]}]})

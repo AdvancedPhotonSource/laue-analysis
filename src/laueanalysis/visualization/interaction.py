@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
+
+import numpy as np
 
 from .data import FrameId
 
@@ -47,27 +50,33 @@ def selection_from_plotly(event_data) -> PlotlySelection:
         if not isinstance(customdata, (list, tuple)) or len(customdata) < 3:
             raise ValueError("point customdata must contain frame, pattern, and peak identity")
         frame_id, pattern_index, peak_index = customdata[:3]
-        if isinstance(frame_id, bool) or not isinstance(frame_id, (str, int)):
+        if isinstance(frame_id, (bool, np.bool_)) or not isinstance(frame_id, (str, Integral)):
             raise ValueError("customdata frame IDs must be strings or integers")
+        frame_id = int(frame_id) if isinstance(frame_id, Integral) else frame_id
         if frame_id not in frames:
             frames.append(frame_id)
         if pattern_index is not None:
-            if isinstance(pattern_index, bool) or not isinstance(pattern_index, int):
+            if isinstance(pattern_index, (bool, np.bool_)) or not isinstance(pattern_index, Integral):
                 raise ValueError("customdata pattern indices must be integers or None")
+            pattern_index = int(pattern_index)
             identity = (frame_id, pattern_index)
             if identity not in patterns:
                 patterns.append(identity)
         if peak_index is not None:
-            if isinstance(peak_index, bool) or not isinstance(peak_index, int):
+            if isinstance(peak_index, (bool, np.bool_)) or not isinstance(peak_index, Integral):
                 raise ValueError("customdata peak indices must be integers or None")
+            peak_index = int(peak_index)
             identity = (frame_id, peak_index)
             if identity not in peaks:
                 peaks.append(identity)
         if peak_index is None and pattern_index is not None and len(customdata) >= 6:
             reflection = customdata[3:6]
-            if any(isinstance(value, bool) or not isinstance(value, int) for value in reflection):
+            if any(
+                isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral)
+                for value in reflection
+            ):
                 raise ValueError("customdata Miller indices must be integers")
-            identity = (frame_id, pattern_index, *reflection)
+            identity = (frame_id, pattern_index, *(int(value) for value in reflection))
             if identity not in reflections:
                 reflections.append(identity)
     return PlotlySelection(

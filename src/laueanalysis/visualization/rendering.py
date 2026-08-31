@@ -79,10 +79,14 @@ def _add_empty_annotation(figure, text):
 def plot_map(
     source,
     *,
-    axes=("x", "y"),
+    axes=("X", "Y"),
     color="n_indexed",
     scope=None,
     surface=None,
+    misorientation_reference=None,
+    pole_hkl=(1, 0, 0),
+    pole_center=(0.0, 0.0),
+    pole_color_radius_deg=22.5,
     marker_size=10,
     layout_update=None,
     trace_update=None,
@@ -94,7 +98,15 @@ def plot_map(
     ``"unindexed"``.
     """
     data = source if isinstance(source, MapData) else prepare_map(
-        source, axes=axes, color=color, scope=scope, surface=surface
+        source,
+        axes=axes,
+        color=color,
+        scope=scope,
+        surface=surface,
+        misorientation_reference=misorientation_reference,
+        pole_hkl=pole_hkl,
+        pole_center=pole_center,
+        pole_color_radius_deg=pole_color_radius_deg,
     )
     if isinstance(marker_size, bool) or not np.isfinite(marker_size) or marker_size <= 0:
         raise ValueError("marker_size must be positive and finite")

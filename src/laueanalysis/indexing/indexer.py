@@ -13,6 +13,7 @@ import numpy as np
 from ._liblaue import Geometry, NativeCrystal, ffi, get_library
 from .crystal import Crystal, load_crystal
 from .errors import IndexingError, InputError
+from ._frame import read_h5_frame, roi_inclusive_end
 from .lau_dataclasses.atom import Atom as StepAtom
 from .lau_dataclasses.hkls import HKLs
 from .lau_dataclasses.indexing import Indexing
@@ -560,7 +561,7 @@ class Indexer:
         except (TypeError, OverflowError, ValueError) as error:
             raise InputError(f"detector_index {detector_index!r} is not an active detector slot") from error
         self.detector_index = detector_index
-        self.detector_id = detector_id
+        self.detector_id = self.detector.detector_id
         self.cosmic_filter = cosmic_filter
         self._xtl = self._crystal_to_xtl(self.crystal_model) if self.crystal_model else Xtl()
 
@@ -643,7 +644,7 @@ class Indexer:
         supplied_metadata = metadata.as_dict() if isinstance(metadata, FrameMetadata) else dict(metadata or {})
         if isinstance(frame, (str, Path)):
             input_image = str(frame)
-            source, file_metadata, file_processing = self._read_h5_frame(frame)
+            source, file_metadata, file_processing = read_h5_frame(frame)
             file_detector_id = file_metadata.get("detector_id")
             supplied_metadata = {**file_metadata, **supplied_metadata}
             start = file_processing.get("start", start)
@@ -664,9 +665,8 @@ class Indexer:
             or min(group) < 1
         ):
             raise InputError("start must be two nonnegative integers and group two positive integers")
-        end_x = start[0] + image.shape[1] * group[0]
-        end_y = start[1] + image.shape[0] * group[1]
-        if end_x > self.detector.nx or end_y > self.detector.ny:
+        end_x, end_y = roi_inclusive_end(image.shape, start, group)
+        if end_x >= self.detector.nx or end_y >= self.detector.ny:
             raise InputError(
                 f"frame ROI start={start}, shape={image.shape}, group={group} exceeds "
                 f"detector bounds {self.detector.nx}x{self.detector.ny}"
@@ -896,8 +896,11 @@ class Indexer:
             "peak_params": self.peak_params,
             "index_params": self.index_params,
             "detector_index": self.detector_index,
+            "detector_id": self.detector_id,
             "cosmic_filter": self.cosmic_filter,
         }
+        if "detector_index" in changes and "detector_id" not in changes:
+            values["detector_id"] = None
         values.update(changes)
         return type(self)(**values)
 
@@ -938,65 +941,6 @@ class Indexer:
             If the destination cannot be written.
         """
         write_combined_xml([result.to_step() for result in results], str(path))
-
-    @staticmethod
-    def _read_h5_frame(
-        path: str | Path,
-    ) -> tuple[np.ndarray, dict[str, object], dict[str, object]]:
-        try:
-            import h5py
-        except ImportError as error:
-            raise ImportError("h5py is required when Indexer.process receives a file path") from error
-
-        def scalar(source, name, default=None):
-            if name not in source:
-                return default
-            value = source[name][()]
-            if isinstance(value, np.ndarray):
-                value = value.flat[0]
-            if isinstance(value, bytes):
-                return value.decode("utf-8")
-            return value.item() if isinstance(value, np.generic) else value
-
-        with h5py.File(path, "r") as source:
-            image = source["entry1/data/data"][...]
-            shutter = scalar(source, "entry1/microDiffraction/CCDshutter")
-            position = tuple(
-                scalar(source, name) for name in (
-                    "entry1/sample/sampleX", "entry1/sample/sampleY", "entry1/sample/sampleZ"
-                )
-            )
-            metadata = FrameMetadata(
-                title=scalar(source, "entry1/title"),
-                sample_name=scalar(source, "entry1/sample/name"),
-                user_name=scalar(source, "entry1/user/name"),
-                beamline=scalar(source, "Facility/facility_beamline"),
-                scan_number=scalar(source, "entry1/scanNum"),
-                date_exposed=source.attrs["file_time"].decode("utf-8")
-                    if "file_time" in source.attrs and isinstance(source.attrs["file_time"], bytes)
-                    else source.attrs.get("file_time"),
-                beam_bad=scalar(source, "entry1/microDiffraction/BeamBad"),
-                ccd_shutter=("out" if shutter else "in") if shutter is not None else None,
-                light_on=scalar(source, "entry1/microDiffraction/LightOn"),
-                mono_mode=scalar(source, "entry1/microDiffraction/MonoMode"),
-                sample_position=position if all(value is not None for value in position) else None,
-                energy_kev=scalar(source, "entry1/sample/incident_energy"),
-                hutch_temperature=scalar(source, "entry1/microDiffraction/HutchTemperature"),
-                sample_distance=scalar(source, "entry1/sample/distance"),
-                detector_id=scalar(source, "entry1/detector/ID"),
-                exposure_seconds=scalar(source, "entry1/detector/exposure"),
-            ).as_dict()
-            processing = {
-                "start": (
-                    scalar(source, "entry1/detector/startx", 0),
-                    scalar(source, "entry1/detector/starty", 0),
-                ),
-                "group": (
-                    scalar(source, "entry1/detector/binx", 1),
-                    scalar(source, "entry1/detector/biny", 1),
-                ),
-            }
-        return image, metadata, processing
 
     @staticmethod
     def _crystal_to_xtl(crystal: Crystal) -> Xtl:
@@ -1055,8 +999,9 @@ class Indexer:
         roi = step.detector.roi
         roi.startx, roi.starty = result.start
         roi.groupx, roi.groupy = result.group
-        roi.endx = result.start[0] + (step.detector.Nx - 1) * result.group[0]
-        roi.endy = result.start[1] + (step.detector.Ny - 1) * result.group[1]
+        roi.endx, roi.endy = roi_inclusive_end(
+            result.image_shape, result.start, result.group
+        )
 
         peak_data = step.detector.peaksXY
         peak_data.peakProgram = "liblaue"
