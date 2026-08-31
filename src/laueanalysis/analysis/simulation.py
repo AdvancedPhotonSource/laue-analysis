@@ -15,6 +15,7 @@ from laueanalysis.indexing import Crystal, DetectorGeometry
 
 
 _CANDIDATE_LIMIT = 100_000
+_ORDER_SIGNIFICANT_DIGITS = 12
 
 
 def _integer_array(value, *, name: str) -> np.ndarray:
@@ -45,6 +46,11 @@ def _direction_key(hkl: np.ndarray) -> tuple[int, int, int]:
     if divisor == 0:
         raise ValueError("Miller indices must not contain the zero reflection")
     return tuple(value // divisor for value in values)
+
+
+def _stable_order_value(value: float) -> float:
+    """Discard nonphysical last-bit noise from a floating-point sort key."""
+    return float(f"{value:.{_ORDER_SIGNIFICANT_DIGITS}g}")
 
 
 @dataclass(frozen=True)
@@ -355,7 +361,11 @@ def _normalize_candidates(
 
     ordered = sorted(
         grouped.values(),
-        key=lambda row: (-row[4], row[3], *row[0].tolist()),
+        key=lambda row: (
+            -_stable_order_value(row[4]),
+            _stable_order_value(row[3]),
+            *row[0].tolist(),
+        ),
     )
     return SimulationResult(
         hkl=np.asarray([row[0] for row in ordered], dtype=np.int64),
@@ -444,7 +454,9 @@ def simulate_reflections(
     One strongest-intensity representative is retained per signed primitive
     harmonic direction. Equal intensities prefer lower energy and then
     lexicographically smaller HKL; final rows use the same tie-breakers after
-    descending intensity.
+    descending intensity. Floating sort keys are compared to 12 significant
+    digits so numerical noise in symmetry-equivalent calculations reaches the
+    integer HKL tie-breaker.
 
     Parameters
     ----------

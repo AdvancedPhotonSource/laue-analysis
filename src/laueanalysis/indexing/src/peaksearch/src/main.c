@@ -16,6 +16,16 @@
 
 double itype2saturation(int itype);
 
+static void delete_point_value(void *value)
+{
+	point_delete((Point *)value);
+}
+
+static void delete_peak_value(void *value)
+{
+	peak_delete((Peak *)value);
+}
+
 
 //	#define IDL_FILES 1
 
@@ -369,7 +379,7 @@ int main(int argc, char **argv){
 		peaks = processBlobs(blobs,image,ginf,NpeakMax,grid_get_average(image->data),&helper_status);	/* list of peaks */
 		if (!peaks || helper_status) { fprintf(stderr,"peak fitting failed\n"); exit(helper_status == 1 ? ENOMEM : 1); }
 //printf("\nfinish processBlobs at %.2f seconds\n",((double)(clock() - tstart)) /((double)CLOCKS_PER_SEC));
-		list_delete_nodes(blobs);
+		list_delete_with_values(blobs, delete_point_value);
 	#endif
 
 	#ifdef DEBUG
@@ -419,8 +429,7 @@ int main(int argc, char **argv){
 	delete_genfileinf(ginf);
 	winview_image_delete(image);
 
-#warning "list_delete_nodes() may also be wrong, does it first delete the allocated space inside, but probably does not matter in this program?"
-	list_delete_nodes(peaks);
+	list_delete_with_values(peaks, delete_peak_value);
 
 	return 0;
 }
@@ -457,4 +466,3 @@ double itype2saturation(int itype)		/* returns largest value for an itype */
 	}
 	return NAN;
 }
-

@@ -77,6 +77,7 @@ typedef struct {
 typedef struct {
     double euler_deg[3];
     double rotation[3][3];
+    /* Rows are a*, b*, c* in 1/nm; q = hkl * recip. */
     double recip[3][3];
     double goodness;
     double rms_error_deg;

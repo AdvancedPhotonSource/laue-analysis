@@ -99,7 +99,7 @@ void list_delete(List* l) {
 	l = NULL;
 }
 
-void list_delete_nodes(List* l) {
+void list_delete_with_values(List* l, ListValueDestructor destroy_value) {
 	if (!l) return;						/* if NULL, do nothing */
 	ListNode* node;
 	ListNode* next;
@@ -107,11 +107,16 @@ void list_delete_nodes(List* l) {
 	node = l->head;
 	while(node != EMPTY_NODE) {			/* keep going as long as we have valid nodes */
 		next = node->next;				/* get the next node before we free this one*/
+		if (destroy_value && node->value) destroy_value(node->value);
 		free(node);						/*free this node*/
 		node = next;
 	}
 
 	list_delete(l);
+}
+
+void list_delete_nodes(List* l) {
+	list_delete_with_values(l, NULL);
 }
 //
 //void list_delete_nodes(List* l){
@@ -137,4 +142,3 @@ void list_delete_nodes(List* l) {
 //
 //	list_delete(l);
 //}
-

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -90,3 +91,55 @@ else:
     completed = _run_python(script, path)
 
     assert completed.returncode == 0, completed.stderr
+
+
+def test_repeated_peak_search_releases_native_allocations(tmp_path):
+    valgrind = shutil.which("valgrind")
+    compiler = shutil.which("cc")
+    if valgrind is None:
+        pytest.skip("Valgrind is required for the native memory regression test")
+    if compiler is None:
+        pytest.skip("a C compiler is required for the native memory regression test")
+
+    from importlib import resources
+
+    library = Path(str(resources.files("laueanalysis.indexing.bin") / "liblaue.so"))
+    source = ROOT / "tests/native/peaksearch_memory.c"
+    executable = tmp_path / "peaksearch-memory"
+    compiled = subprocess.run(
+        [
+            compiler,
+            "-std=c99",
+            "-O0",
+            "-g",
+            f"-I{ROOT / 'src/laueanalysis/indexing/src/liblaue'}",
+            str(source),
+            str(library),
+            "-lm",
+            "-o",
+            str(executable),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert compiled.returncode == 0, compiled.stderr
+
+    checked = subprocess.run(
+        [
+            valgrind,
+            "--quiet",
+            "--leak-check=full",
+            "--show-leak-kinds=definite",
+            "--errors-for-leak-kinds=definite",
+            "--error-exitcode=99",
+            str(executable),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert checked.returncode == 0, checked.stdout + checked.stderr

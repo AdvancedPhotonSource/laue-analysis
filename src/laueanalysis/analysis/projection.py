@@ -84,10 +84,9 @@ def pole_figure_points(recip_lattices, hkl_family, *, surface=None):
     if len(lattices) == 0 or len(family) == 0:
         return np.empty((0, 2)), np.empty(0, dtype=int)
 
-    vectors = np.matmul(
-        lattices.transpose(0, 2, 1)[:, None, :, :],
-        family[None, :, :, None],
-    )[..., 0]
+    # Reciprocal basis vectors occupy rows, so each Miller-index row maps to
+    # reciprocal space with q = hkl @ reciprocal.
+    vectors = np.matmul(family, lattices)
     norms = np.linalg.norm(vectors, axis=2)
     nonzero = ~(norms < 1e-12)
     vectors = np.divide(

@@ -92,6 +92,10 @@ def _mock_candidates(monkeypatch, candidates, *, limit_reached=False):
     )
 
 
+def _hkl_order(hkl):
+    return np.lexsort((hkl[:, 2], hkl[:, 1], hkl[:, 0]))
+
+
 def _simple_inputs():
     crystal = Crystal("Al", 1, Cell(0.5, 0.5, 0.5), (Atom("Al", (0, 0, 0)),))
     return crystal, np.eye(3), _detector(size=400_000.0, distance=100_000.0, pixels=100)
@@ -189,6 +193,25 @@ def test_harmonic_grouping_keeps_strongest_and_sorts_deterministically(monkeypat
     np.testing.assert_array_equal(first.hkl, second.hkl)
     np.testing.assert_array_equal(first.relative_intensity, [8, 8, 8])
     np.testing.assert_array_equal(first.energy_kev, [9, 9, 20])
+
+
+@pytest.mark.parametrize("perturbed_index", [0, 1])
+def test_sort_uses_hkl_for_last_bit_float_differences(monkeypatch, perturbed_index):
+    hkls = [[-1, 5, -3], [5, -1, -3]]
+    candidates = [_spot(hkl, 20.0, 8.0) for hkl in hkls]
+    candidates[perturbed_index] = _spot(
+        hkls[perturbed_index],
+        np.nextafter(20.0, np.inf),
+        np.nextafter(8.0, np.inf),
+    )
+    _mock_candidates(monkeypatch, reversed(candidates))
+
+    result = simulate_reflections(
+        *_simple_inputs(),
+        energy_range_kev=(6.0, 30.0),
+    )
+
+    np.testing.assert_array_equal(result.hkl, hkls)
 
 
 def test_energy_bounds_are_inclusive_and_off_detector_points_are_removed(monkeypatch):
@@ -469,10 +492,15 @@ def test_real_simulation_is_finite_on_detector_warning_free_and_deterministic(ca
     assert np.all((first.detector_xy[:, 1] >= 0) & (first.detector_xy[:, 1] <= detector.ny - 1))
     np.testing.assert_allclose(first.q, first.hkl @ reciprocal, rtol=1e-14, atol=1e-14)
     with np.load(DATA / f"normalized_{case}.npz") as golden:
-        np.testing.assert_array_equal(first.hkl, golden["hkl"])
+        actual_order = _hkl_order(first.hkl)
+        golden_order = _hkl_order(golden["hkl"])
+        np.testing.assert_array_equal(first.hkl[actual_order], golden["hkl"][golden_order])
         for name in ("q", "detector_xy", "energy_kev", "relative_intensity"):
             np.testing.assert_allclose(
-                getattr(first, name), golden[name], rtol=1e-12, atol=1e-12
+                getattr(first, name)[actual_order],
+                golden[name][golden_order],
+                rtol=1e-12,
+                atol=1e-12,
             )
 
 

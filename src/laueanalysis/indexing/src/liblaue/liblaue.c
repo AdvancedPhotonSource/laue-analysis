@@ -32,6 +32,35 @@ static void set_error(char *err, size_t errlen, const char *message)
     }
 }
 
+static void delete_point_value(void *value)
+{
+    point_delete((Point *)value);
+}
+
+static void delete_peak_value(void *value)
+{
+    peak_delete((Peak *)value);
+}
+
+/*
+ * Euler's indexing code stores a*, b*, and c* as columns in 1/Angstrom.
+ * The liblaue result API exports basis vectors as rows in 1/nm so callers can
+ * calculate reciprocal vectors with q = hkl * recip.
+ */
+static void export_reciprocal_rows(
+    double destination[3][3], const double source_columns[3][3])
+{
+    int basis;
+    int component;
+
+    for (basis = 0; basis < 3; ++basis) {
+        for (component = 0; component < 3; ++component) {
+            destination[basis][component] =
+                source_columns[component][basis] * 10.0;
+        }
+    }
+}
+
 /* GSL aborts on errors by default, which is unsafe in an embedded library. */
 #if defined(__GNUC__)
 __attribute__((constructor))
@@ -342,7 +371,7 @@ int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
         peaks = processBlobs(
             blobs, &image, ginf, params->max_peaks, grid_get_average(&grid), &helper_status
         );
-        list_delete_nodes(blobs);
+        list_delete_with_values(blobs, delete_point_value);
         blobs = NULL;
         if (!peaks || helper_status == 1) goto allocation_error;
         if (helper_status) {
@@ -382,15 +411,8 @@ allocation_error:
     result->status = LAUE_OUT_OF_MEMORY;
     snprintf(result->message, sizeof(result->message), "unable to allocate peak-search storage");
 cleanup:
-    if (blobs) list_delete_nodes(blobs);
-    if (peaks) {
-        node = peaks->head;
-        while (node) {
-            peak_delete(node->value);
-            node = node->next;
-        }
-        list_delete_nodes(peaks);
-    }
+    if (blobs) list_delete_with_values(blobs, delete_point_value);
+    if (peaks) list_delete_with_values(peaks, delete_peak_value);
     delete_genfileinf(ginf);
     free(values);
     return result->status;
@@ -632,17 +654,17 @@ int laue_index(const laue_crystal *crystal, const laue_index_params *params,
         output->euler_deg[2] = found[j].gamma * 180.0 / M_PI;
         EulerMatrix(found[j].alpha, found[j].beta, found[j].gamma, output->rotation);
         MatrixMultiply33(output->rotation, found[j].xtal.recip, reciprocal);
-        for (i = 0; i < 3; ++i) {
-            int k;
-            for (k = 0; k < 3; ++k) output->recip[i][k] = reciprocal[i][k] * 10.0;
-        }
+        export_reciprocal_rows(output->recip, reciprocal);
         for (i = 0; i < output->n_indexed; ++i) {
             long hkl[3] = {found[j].hkls[i][0], found[j].hkls[i][1], found[j].hkls[i][2]};
-            double vector[3] = {(double)hkl[0], (double)hkl[1], (double)hkl[2]};
+            double vector[3];
             double sin_theta;
             double energy;
 
             lowestAllowedHKL(hkl, &found[j].xtal);
+            vector[0] = (double)hkl[0];
+            vector[1] = (double)hkl[1];
+            vector[2] = (double)hkl[2];
             MatrixMultiply31(found[j].xtal.recip, vector, vector);
             sin_theta = -found[j].Ghat[i][2];
             energy = hc * sqrt(vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2])

@@ -180,7 +180,9 @@ class Pattern:
     rotation
         Orientation rotation matrix with shape ``(3, 3)``.
     recip
-        Reciprocal-lattice matrix with shape ``(3, 3)``.
+        Reciprocal-lattice matrix with shape ``(3, 3)`` in ``1/nm``. Rows are
+        ``a*``, ``b*``, and ``c*``; a Miller-index row maps to reciprocal
+        space as ``q = hkl @ recip``.
     goodness
         Native indexer's goodness score for the pattern.
     rms_error_deg
@@ -1091,9 +1093,9 @@ class Indexer:
         )
         for number, source in enumerate(result.patterns):
             reciprocal = RecipLattice(
-                astar=" ".join(str(value) for value in source.recip[:, 0]),
-                bstar=" ".join(str(value) for value in source.recip[:, 1]),
-                cstar=" ".join(str(value) for value in source.recip[:, 2]),
+                astar=" ".join(str(value) for value in source.recip[0]),
+                bstar=" ".join(str(value) for value in source.recip[1]),
+                cstar=" ".join(str(value) for value in source.recip[2]),
             )
             hkls = HKLs(
                 h=[str(value) for value in source.hkl[:, 0]],

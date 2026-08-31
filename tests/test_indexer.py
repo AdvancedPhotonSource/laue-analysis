@@ -8,9 +8,14 @@ import pytest
 
 from conftest import requires_liblaue
 
+from laueanalysis.analysis import simulate_reflections
 from laueanalysis.indexing import (
     FrameMetadata, Indexer, IndexParams, PeakParams, index_frame, load_crystal,
     load_geometry,
+)
+from laueanalysis.visualization import (
+    DataScope, ResultSet, load_visualization_xml, prepare_detector_view,
+    prepare_pole_figure,
 )
 
 
@@ -163,13 +168,49 @@ def test_indexer_matches_all_lauego_index_references(index_file):
         count = int(lines[marker].split()[2])
         rows = [re.findall(r"[-+]?\d+(?:\.\d+)?", line) for line in lines[marker + 1:marker + 1 + count]]
         expected_hkl = np.asarray([[int(value) for value in row[4:7]] for row in rows])
+        expected_energy = np.asarray([float(row[8]) for row in rows])
         expected_indices = np.asarray([int(row[-1]) for row in rows])
 
         assert pattern.n_indexed == count
         np.testing.assert_array_equal(pattern.hkl, expected_hkl)
         np.testing.assert_array_equal(pattern.pk_index, expected_indices)
+        np.testing.assert_allclose(pattern.energy_kev, expected_energy, atol=5e-4, rtol=0)
         np.testing.assert_allclose(pattern.euler_deg, expected_euler, atol=5e-4, rtol=0)
         np.testing.assert_allclose(pattern.rotation, expected_rotation, atol=2e-6, rtol=0)
+
+
+def test_reported_hkl_and_energy_describe_the_same_reflection():
+    indexer = Indexer(
+        GEOMETRY,
+        CRYSTAL,
+        peak_params=PeakParams(
+            boxsize=18, max_rfactor=0.5, min_size=3, min_separation=20,
+            threshold=None, threshold_ratio=4.0, max_peaks=200,
+        ),
+        index_params=IndexParams(
+            kev_max_calc=17.2, kev_max_test=35.0, angle_tolerance_deg=0.1,
+            cone_deg=72.0, hkl_prefer=(0, 0, 1),
+        ),
+    )
+    result = indexer.process(FRAMES / "synthetic_ni_two_grains.h5")
+
+    reported_hkls = {
+        tuple(hkl) for pattern in result.patterns for hkl in pattern.hkl
+    }
+    # In FCC Ni, (0, 2, 2) is the lowest allowed harmonic along (0, 1, 1).
+    assert (0, 2, 2) in reported_hkls
+
+    for pattern in result.patterns:
+        reciprocal_per_angstrom = pattern.hkl @ pattern.recip / 10.0
+        sin_theta = -result.peaks["qhat"][pattern.pk_index, 2]
+        expected_energy = (
+            12.3984187
+            * np.linalg.norm(reciprocal_per_angstrom, axis=1)
+            / (4.0 * np.pi * sin_theta)
+        )
+        np.testing.assert_allclose(
+            pattern.energy_kev, expected_energy, atol=0, rtol=1e-5
+        )
 
 
 def test_indexer_matches_peak_positions_for_all_synthetic_frames():
@@ -308,6 +349,92 @@ def test_indexer_processes_file_and_builds_step(tmp_path):
     assert step.indexing.NpatternsFound == 2
     assert step.indexing.Nindexed == 40
     assert output.read_text().startswith('<?xml version="1.0" ?>')
+
+
+def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
+    tmp_path,
+):
+    stem = "synthetic_ni_two_grains"
+    indexer = Indexer(
+        GEOMETRY,
+        CRYSTAL,
+        peak_params=PeakParams(
+            boxsize=18, max_rfactor=0.5, min_size=3, min_separation=20,
+            threshold=None, threshold_ratio=4.0, max_peaks=200,
+        ),
+        index_params=IndexParams(
+            kev_max_calc=17.2, kev_max_test=35.0, angle_tolerance_deg=0.1,
+            cone_deg=72.0, hkl_prefer=(0, 0, 1),
+        ),
+    )
+    result = indexer.process(FRAMES / f"{stem}.h5")
+    live = ResultSet.from_indexer(indexer, (result,))
+    live_data = live.to_visualization()
+
+    output = tmp_path / "result.xml"
+    indexer.write_xml(result, output)
+    xml_data = load_visualization_xml(output, geometry=indexer.geometry)
+
+    np.testing.assert_allclose(
+        live_data.pattern_reciprocals,
+        xml_data.pattern_reciprocals,
+        atol=0,
+        rtol=0,
+    )
+    np.testing.assert_allclose(
+        live_data.pattern_rotations,
+        xml_data.pattern_rotations,
+        atol=1e-12,
+        rtol=0,
+    )
+    for pattern in result.patterns:
+        calculated = pattern.hkl @ pattern.recip
+        calculated /= np.linalg.norm(calculated, axis=1, keepdims=True)
+        measured = result.peaks["qhat"][pattern.pk_index]
+        cosine = np.clip(np.sum(calculated * measured, axis=1), -1, 1)
+        angles = np.degrees(np.arccos(cosine))
+        assert np.max(angles) < 5e-4
+
+    pattern = result.patterns[0]
+    simulated = simulate_reflections(
+        indexer.crystal_model,
+        pattern.recip,
+        indexer.detector,
+        energy_range_kev=(6.0, 35.0),
+        depth=0.0 if result.depth is None else result.depth,
+    )
+    np.testing.assert_allclose(simulated.q, simulated.hkl @ pattern.recip)
+    indexed_divisors = np.gcd.reduce(np.abs(pattern.hkl), axis=1)
+    simulated_divisors = np.gcd.reduce(np.abs(simulated.hkl), axis=1)
+    indexed_directions = {
+        tuple(row) for row in pattern.hkl // indexed_divisors[:, None]
+    }
+    simulated_directions = {
+        tuple(row) for row in simulated.hkl // simulated_divisors[:, None]
+    }
+    assert indexed_directions <= simulated_directions
+
+    live_view = prepare_detector_view(live, frame_id=0, patterns="all")
+    xml_view = prepare_detector_view(xml_data, frame_id=0, patterns="all")
+    for live_pattern, xml_pattern in zip(
+        live_view.patterns, xml_view.patterns, strict=True
+    ):
+        np.testing.assert_allclose(
+            live_pattern.predicted_xy, xml_pattern.predicted_xy, atol=1e-12, rtol=0
+        )
+        measured = live_view.measured_xy[live_pattern.measured_peak_indices]
+        error = np.linalg.norm(live_pattern.predicted_xy - measured, axis=1)
+        assert np.max(error) < 0.02
+
+    scope = DataScope(patterns="all", min_indexed=0)
+    live_poles = prepare_pole_figure(live, scope=scope)
+    xml_poles = prepare_pole_figure(xml_data, scope=scope)
+    np.testing.assert_allclose(
+        live_poles.points, xml_poles.points, atol=1e-12, rtol=0
+    )
+    np.testing.assert_array_equal(
+        live_poles.pattern_indices, xml_poles.pattern_indices
+    )
 
 
 def test_indexer_selects_detector_by_id():

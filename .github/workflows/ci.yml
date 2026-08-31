@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential libgsl-dev libhdf5-dev zlib1g-dev
+            build-essential libgsl-dev libhdf5-dev valgrind zlib1g-dev
           gcc --version | head -1
           h5cc -showconfig | grep -i "HDF5 Version" || true
           gsl-config --version

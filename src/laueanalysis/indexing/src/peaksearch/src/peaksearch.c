@@ -13,6 +13,7 @@ int	peakCorrection(double *fitX, double *fitY,Genfileinf *ginf);
 double	biggestIntensity(List *peaks, double maxIntens, double *x, double *y);
 void	removeSmallerNearbyPeaks(List *peaks, double px, double py, double pIntens, int minSeparation);
 static void deletePointList(List *points);
+static void deletePointValue(void *value);
 #ifdef OLD_UNUSED_CODE
 List*	find_maximas(Grid* image, double threshold, int npix, double saturation_level, int shiftx, int shifty);
 #endif
@@ -373,6 +374,7 @@ int		*status)
 				else printf("skip \t%s",qualifyStr);
 				#endif
 			} /* end if(image_roi...) */
+			grid_delete(image_roi);
 		} /* end if(intens...) */
 
 		blob = blob->next;
@@ -929,12 +931,12 @@ allocation_error:
 
 static void deletePointList(List *points)
 {
-	ListNode *node = points->head;
-	while (node != EMPTY_NODE) {
-		free(node->value);
-		node = node->next;
-	}
-	list_delete_nodes(points);
+	list_delete_with_values(points, deletePointValue);
+}
+
+static void deletePointValue(void *value)
+{
+	point_delete((Point *)value);
 }
 
 #ifdef OLD_UNUSED_CODE
@@ -1137,4 +1139,3 @@ double	*b)
 	if (a[2] > b[2]) return 1;
 	return 0;
 }
-

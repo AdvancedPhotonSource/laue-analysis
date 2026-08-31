@@ -16,6 +16,10 @@ import pytest
 GOLDEN_DIR = Path(__file__).parent / "data" / "simulation"
 
 
+def _hkl_order(hkl):
+    return np.lexsort((hkl[:, 2], hkl[:, 1], hkl[:, 0]))
+
+
 class _BaselineDetector:
     """Minimal face-on detector matching the recorded portal fixture."""
 
@@ -105,9 +109,19 @@ def test_private_jzt_matches_pre_portal_baseline(case, tmp_path):
     assert process.stderr == ""
     with np.load(GOLDEN_DIR / f"portal_jzt_{case}.npz") as golden:
         with np.load(actual_path) as actual:
-            np.testing.assert_array_equal(actual["hkl"], golden["hkl"])
+            actual_order = _hkl_order(actual["hkl"])
+            golden_order = _hkl_order(golden["hkl"])
+            np.testing.assert_array_equal(
+                actual["hkl"][actual_order],
+                golden["hkl"][golden_order],
+            )
             for field in ("q", "detector_xy", "energy_kev", "relative_intensity"):
-                np.testing.assert_allclose(actual[field], golden[field], rtol=1e-12, atol=1e-12)
+                np.testing.assert_allclose(
+                    actual[field][actual_order],
+                    golden[field][golden_order],
+                    rtol=1e-12,
+                    atol=1e-12,
+                )
 
 
 def test_normal_imports_do_not_load_vendor_or_emit_warnings():
