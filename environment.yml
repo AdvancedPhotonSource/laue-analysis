@@ -22,6 +22,7 @@ dependencies:
   - cmake>=3.24
   - ninja
   - patchelf
+  - valgrind
   # native libraries (compatible minor series; upgrade one family at a time)
   - gsl=2.8.*
   - hdf5=1.14.*

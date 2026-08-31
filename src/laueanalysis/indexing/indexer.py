@@ -73,8 +73,6 @@ class PeakParams:
         Maximum number of peaks returned from one frame. Must be positive.
     smooth
         Whether to smooth the image before peak detection and fitting.
-    detect_binning
-        Peak-detection binning factor. Only ``1`` is currently supported.
 
     Notes
     -----
@@ -92,7 +90,6 @@ class PeakParams:
     peak_shape: str = "Lorentzian"
     max_peaks: int = 50
     smooth: bool = False
-    detect_binning: int = 1
 
 
 @dataclass(frozen=True)
@@ -279,6 +276,8 @@ class FrameResult:
         Sum of pixel values above ``threshold_used``.
     num_above_threshold
         Number of pixels above ``threshold_used``.
+    peak_minwidth, peak_maxwidth, peak_max_cent_to_fit, peak_boxsize
+        Effective fitting parameters configured by the native peak search.
     peaksearch_seconds
         Elapsed peak-search time in seconds.
     indexing_seconds
@@ -316,6 +315,10 @@ class FrameResult:
     num_above_threshold: int
     peaksearch_seconds: float
     indexing_seconds: float
+    peak_minwidth: float = 0.0
+    peak_maxwidth: float = 0.0
+    peak_max_cent_to_fit: float = 0.0
+    peak_boxsize: int = 0
     metadata: Mapping[str, object] = field(default_factory=dict)
     input_image: str | None = None
     image_shape: tuple[int, int] = (0, 0)
@@ -542,7 +545,6 @@ class Indexer:
         self.crystal_model = (
             load_crystal(crystal_file) if isinstance(crystal_file, (str, Path)) else crystal_file
         )
-        self.crystal_file = Path(self.crystal_model.source) if self.crystal_model and self.crystal_model.source else None
         self.geometry = geo_file if isinstance(geo_file, Geometry) else Geometry(self.geo_file)
         self.crystal = NativeCrystal.create(self.crystal_model) if self.crystal_model is not None else None
         self.peak_params = peak_params or PeakParams()
@@ -574,12 +576,10 @@ class Indexer:
             raise InputError("max_rfactor must be positive")
         if peak.peak_shape.upper()[:1] not in {"L", "G"}:
             raise InputError("peak_shape must be Lorentzian or Gaussian")
-        if peak.detect_binning != 1:
-            raise InputError("only exact detect_binning=1 is currently supported")
         if min(indexing.kev_max_calc, indexing.kev_max_test, indexing.angle_tolerance_deg, indexing.cone_deg) <= 0:
             raise InputError("indexing energy and angle parameters must be positive")
 
-    def process(
+    def index(
         self,
         frame: np.ndarray | str | Path,
         *,
@@ -612,7 +612,8 @@ class Indexer:
             Experiment metadata for XML output. Explicit values override
             metadata loaded from an HDF5 file.
         keep_image
-            Retain the contiguous input image in :attr:`FrameResult.image`.
+            Retain the contiguous input image in the returned result's
+            ``image`` attribute.
 
         Returns
         -------
@@ -700,7 +701,6 @@ class Indexer:
         params.max_peaks = self.peak_params.max_peaks
         params.smooth = self.peak_params.smooth
         params.mask = mask_pointer
-        params.detect_binning = self.peak_params.detect_binning
 
         library = get_library()
         result = ffi.new("laue_frame_result *")
@@ -776,6 +776,10 @@ class Indexer:
                 total_sum=result.total_sum,
                 sum_above_threshold=result.sum_above_threshold,
                 num_above_threshold=result.num_above_threshold,
+                peak_minwidth=result.peak_minwidth,
+                peak_maxwidth=result.peak_maxwidth,
+                peak_max_cent_to_fit=result.peak_max_cent_to_fit,
+                peak_boxsize=result.peak_boxsize,
                 peaksearch_seconds=peaksearch_seconds,
                 indexing_seconds=indexing_seconds,
                 metadata=supplied_metadata,
@@ -790,39 +794,6 @@ class Indexer:
             return frame_result
         finally:
             library.laue_frame_result_free(result)
-
-    def index(self, frame: np.ndarray | str | Path, **kwargs) -> FrameResult:
-        """Index one frame using the reusable configuration.
-
-        Parameters
-        ----------
-        frame
-            Two-dimensional ``uint16`` NumPy array or path to a supported HDF5
-            frame.
-        **kwargs
-            Frame options accepted by ``process``: ``start``, ``group``,
-            ``depth``, ``mask``, ``metadata``, and ``keep_image``.
-
-        Returns
-        -------
-        FrameResult
-            The processed frame result.
-
-        Raises
-        ------
-        InputError
-            If the frame or frame options are invalid.
-        MemoryError
-            If a native stage cannot allocate required memory.
-        IndexingError
-            If a native numerical or internal stage fails.
-
-        Notes
-        -----
-        This is the preferred single-frame method. ``keep_image`` defaults to
-        `True`.
-        """
-        return self.process(frame, **kwargs)
 
     def index_many(
         self, frames: Iterable[np.ndarray | str | Path], *, keep_images: bool = False
@@ -858,10 +829,6 @@ class Indexer:
         exception.
         """
         return [self.index(frame, keep_image=keep_images) for frame in frames]
-
-    def process_many(self, frames: Iterable[np.ndarray | str | Path]) -> list[FrameResult]:
-        """Compatibility alias for :meth:`index_many`."""
-        return self.index_many(frames)
 
     def replace(self, **changes) -> "Indexer":
         """Create an indexer with selected configuration values replaced.
@@ -948,7 +915,11 @@ class Indexer:
         xtl = Xtl(
             structureDesc=crystal.name,
             xtalFileName=crystal.source,
-            SpaceGroup=crystal.space_group,
+            SpaceGroup=(
+                f"{crystal.space_group}:{crystal.setting}"
+                if crystal.setting is not None
+                else crystal.space_group
+            ),
             latticeParameters=" ".join(str(value) for value in (
                 cell.a, cell.b, cell.c, cell.alpha, cell.beta, cell.gamma
             )),
@@ -1005,13 +976,13 @@ class Indexer:
 
         peak_data = step.detector.peaksXY
         peak_data.peakProgram = "liblaue"
-        peak_data.minwidth = self.peak_params.min_size / 4.0
+        peak_data.minwidth = result.peak_minwidth
         peak_data.threshold = result.threshold_used
         peak_data.thresholdRatio = self.peak_params.threshold_ratio
         peak_data.maxRfactor = self.peak_params.max_rfactor
-        peak_data.maxwidth = self.peak_params.boxsize * 1.5
-        peak_data.maxCentToFit = self.peak_params.boxsize
-        peak_data.boxsize = self.peak_params.boxsize
+        peak_data.maxwidth = result.peak_maxwidth
+        peak_data.maxCentToFit = result.peak_max_cent_to_fit
+        peak_data.boxsize = result.peak_boxsize
         peak_data.NpeakMax = self.peak_params.max_peaks
         peak_data.minSeparation = self.peak_params.min_separation
         peak_data.peakShape = self.peak_params.peak_shape

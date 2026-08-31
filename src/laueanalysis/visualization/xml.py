@@ -57,12 +57,14 @@ def _load_crystal(steps):
             position = np.fromstring(atom.text or "", sep=" ")
             if len(position) == 3 and atom.get("symbol"):
                 atoms.append(Atom(atom.get("symbol"), tuple(position), label=atom.get("label")))
+        number, separator, setting = space_group.partition(":")
         return Crystal(
             _text(node, "structureDesc") or "LaueGo XML crystal",
-            int(space_group),
+            int(number),
             Cell(*parameters, unit=unit),
             tuple(atoms),
             source=_text(node, "xtlFile"),
+            setting=setting if separator else None,
         )
     return None
 
@@ -110,6 +112,7 @@ def load_visualization_xml(path, *, geometry=None, frame_ids=None):
             cell.alpha,
             cell.beta,
             cell.gamma,
+            rhombohedral=crystal.setting == "R",
         )
 
     positions = np.full((len(steps), 3), np.nan)

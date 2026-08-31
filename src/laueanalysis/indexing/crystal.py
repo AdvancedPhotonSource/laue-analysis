@@ -123,6 +123,9 @@ class Crystal:
         Atom sites. Any iterable supplied at construction is stored as a tuple.
     source
         Optional source XML path retained as provenance.
+    setting
+        Optional explicit space-group setting, such as ``"R"`` or ``"H"``
+        for trigonal crystals.
 
     Raises
     ------
@@ -140,11 +143,18 @@ class Crystal:
     cell: Cell
     atoms: tuple[Atom, ...] = ()
     source: str | None = None
+    setting: str | None = None
 
     def __post_init__(self):
         if not 1 <= self.space_group <= 230:
             raise ValueError("space_group must be between 1 and 230")
+        setting = self.setting.upper() if self.setting is not None else None
+        if setting not in {None, "H", "R"}:
+            raise ValueError("setting must be 'H', 'R', or None")
+        if setting is not None and self.crystal_system != "trigonal":
+            raise ValueError("an H or R setting is only valid for trigonal crystals")
         object.__setattr__(self, "atoms", tuple(self.atoms))
+        object.__setattr__(self, "setting", setting)
 
     @property
     def crystal_system(self) -> str:
@@ -211,6 +221,12 @@ def load_crystal(path: str | Path) -> Crystal:
     space_group = root.findtext("space_group_IT_number") or root.findtext("space_group/IT_number")
     if space_group is None:
         raise ValueError(f"Crystal file {path} has no space group")
+    setting = None
+    space_group_id = root.findtext("space_group/id")
+    if space_group_id and ":" in space_group_id:
+        suffix = space_group_id.rsplit(":", 1)[1].upper()
+        if suffix in {"H", "R"}:
+            setting = suffix
 
     cell = Cell(
         *(float(cell_node.findtext(name)) for name in ("a", "b", "c")),
@@ -236,4 +252,5 @@ def load_crystal(path: str | Path) -> Crystal:
         cell=cell,
         atoms=tuple(atoms),
         source=str(path),
+        setting=setting,
     )

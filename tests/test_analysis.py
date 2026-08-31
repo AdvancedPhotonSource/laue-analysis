@@ -11,6 +11,7 @@ from laueanalysis.analysis import (
     cubic_ipf_key,
     hsv_key,
     hsv_position_colors,
+    lattice_params_to_reciprocal,
     misorientation_angle,
     misorientation_from_reference,
     misorientation_matrix,
@@ -30,6 +31,45 @@ def _rotation_about_z(angle_deg):
         [np.sin(angle), np.cos(angle), 0],
         [0, 0, 1],
     ])
+
+
+@pytest.mark.parametrize(
+    ("space_group", "cell"),
+    [
+        (1, (0.4, 0.5, 0.6, 70, 80, 75)),
+        (3, (0.4, 0.5, 0.6, 90, 105, 90)),
+        (16, (0.4, 0.5, 0.6, 90, 90, 90)),
+        (75, (0.4, 0.4, 0.6, 90, 90, 90)),
+        ("146:H", (0.4, 0.4, 0.6, 90, 90, 120)),
+        (168, (0.4, 0.4, 0.6, 90, 90, 120)),
+        (195, (0.4, 0.4, 0.4, 90, 90, 90)),
+    ],
+)
+def test_reciprocal_lattice_matches_jzt_general_basis(space_group, cell):
+    from laueanalysis.analysis._vendor.jzt.Lattice import Lattice3D
+
+    expected = np.asarray(Lattice3D(space_group, cell).recip).T
+    np.testing.assert_allclose(lattice_params_to_reciprocal(*cell), expected, atol=1e-12)
+
+
+def test_reciprocal_lattice_matches_jzt_rhombohedral_basis():
+    from laueanalysis.analysis._vendor.jzt.Lattice import Lattice3D
+
+    cell = (0.5, 0.5, 0.5, 70, 70, 70)
+    expected = np.asarray(Lattice3D("146:R", cell).recip).T
+    actual = lattice_params_to_reciprocal(*cell, rhombohedral=True)
+
+    np.testing.assert_allclose(actual, expected, atol=1e-12)
+    general = lattice_params_to_reciprocal(*cell)
+    np.testing.assert_allclose(actual @ actual.T, general @ general.T, atol=1e-12)
+    rotation = actual.T @ np.linalg.inv(general.T)
+    np.testing.assert_allclose(rotation.T @ rotation, np.eye(3), atol=1e-12)
+    assert np.linalg.det(rotation) == pytest.approx(1.0)
+
+
+def test_rhombohedral_basis_rejects_inconsistent_cell():
+    with pytest.raises(ValueError, match="equal lengths and equal angles"):
+        lattice_params_to_reciprocal(0.5, 0.6, 0.5, 70, 70, 70, rhombohedral=True)
 
 
 def test_aps_surface_frames_are_right_handed_and_read_only():

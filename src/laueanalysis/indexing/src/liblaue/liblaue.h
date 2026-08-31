@@ -49,7 +49,6 @@ typedef struct {
     int max_peaks;
     int smooth;
     const unsigned char *mask;
-    int detect_binning;
 } laue_peak_params;
 
 typedef struct {
@@ -98,6 +97,10 @@ typedef struct {
     int groupy;
     double depth;
     double threshold_used;
+    double peak_minwidth;
+    double peak_maxwidth;
+    double peak_max_cent_to_fit;
+    int peak_boxsize;
     double total_sum;
     double sum_above_threshold;
     long num_above_threshold;
@@ -112,7 +115,6 @@ typedef struct {
 
 LAUE_API laue_geometry *laue_geometry_from_file(const char *path, char *err, size_t errlen);
 LAUE_API void laue_geometry_free(laue_geometry *geometry);
-LAUE_API laue_crystal *laue_crystal_from_file(const char *path, char *err, size_t errlen);
 LAUE_API laue_crystal *laue_crystal_create(const char *name, int space_group,
                                             double a, double b, double c,
                                             double alpha_deg, double beta_deg, double gamma_deg,

@@ -7,19 +7,34 @@ from itertools import combinations
 import numpy as np
 
 
-def lattice_params_to_reciprocal(a, b, c, alpha_deg, beta_deg, gamma_deg):
-    """Return a reciprocal lattice whose rows are ``a*``, ``b*``, and ``c*``."""
+def lattice_params_to_reciprocal(
+    a, b, c, alpha_deg, beta_deg, gamma_deg, *, rhombohedral=False
+):
+    """Return reciprocal basis rows, optionally using JZT rhombohedral axes."""
     alpha, beta, gamma = np.radians([alpha_deg, beta_deg, gamma_deg])
     cos_a, cos_b, cos_g = np.cos([alpha, beta, gamma])
-    sin_g = np.sin(gamma)
-    volume = np.sqrt(
-        1.0 - cos_a**2 - cos_b**2 - cos_g**2 + 2.0 * cos_a * cos_b * cos_g
-    )
-    direct = np.array([
-        [a, 0.0, 0.0],
-        [b * cos_g, b * sin_g, 0.0],
-        [c * cos_b, c * (cos_a - cos_b * cos_g) / sin_g, c * volume / sin_g],
-    ])
+    if rhombohedral:
+        if not np.allclose([a, b, c], a) or not np.allclose(
+            [alpha_deg, beta_deg, gamma_deg], alpha_deg
+        ):
+            raise ValueError("rhombohedral axes require equal lengths and equal angles")
+        p = np.sqrt(1.0 + 2.0 * cos_a)
+        q = np.sqrt(1.0 - cos_a)
+        diagonal = a * (p + 2.0 * q) / 3.0
+        off_diagonal = a * (p - q) / 3.0
+        direct = np.full((3, 3), off_diagonal)
+        np.fill_diagonal(direct, diagonal)
+    else:
+        sin_g = np.sin(gamma)
+        volume = np.sqrt(
+            1.0 - cos_a**2 - cos_b**2 - cos_g**2
+            + 2.0 * cos_a * cos_b * cos_g
+        )
+        direct = np.array([
+            [a, 0.0, 0.0],
+            [b * cos_g, b * sin_g, 0.0],
+            [c * cos_b, c * (cos_a - cos_b * cos_g) / sin_g, c * volume / sin_g],
+        ])
     return 2.0 * np.pi * np.linalg.inv(direct).T
 
 

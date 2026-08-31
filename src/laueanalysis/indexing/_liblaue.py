@@ -48,7 +48,6 @@ ffi.cdef(
         int max_peaks;
         int smooth;
         const unsigned char *mask;
-        int detect_binning;
     } laue_peak_params;
     typedef struct {
         double kev_max_calc, kev_max_test, angle_tolerance_deg, cone_deg;
@@ -69,7 +68,10 @@ ffi.cdef(
     typedef struct {
         int nx, ny, startx, starty, groupx, groupy;
         double depth;
-        double threshold_used, total_sum, sum_above_threshold;
+        double threshold_used;
+        double peak_minwidth, peak_maxwidth, peak_max_cent_to_fit;
+        int peak_boxsize;
+        double total_sum, sum_above_threshold;
         long num_above_threshold;
         int n_peaks;
         laue_peak *peaks;
@@ -80,7 +82,6 @@ ffi.cdef(
     } laue_frame_result;
     laue_geometry *laue_geometry_from_file(const char *, char *, size_t);
     void laue_geometry_free(laue_geometry *);
-    laue_crystal *laue_crystal_from_file(const char *, char *, size_t);
     laue_crystal *laue_crystal_create(const char *, int, double, double, double,
                                        double, double, double, const laue_atom *, size_t,
                                        char *, size_t);
@@ -123,16 +124,6 @@ class NativeCrystal:
     def __init__(self, handle, library):
         self._library = library
         self._handle = ffi.gc(handle, library.laue_crystal_free)
-
-    @classmethod
-    def from_file(cls, path: str | Path):
-        error = ffi.new("char[256]")
-        library = get_library()
-        handle = library.laue_crystal_from_file(fspath(path).encode(), error, 256)
-        if handle == ffi.NULL:
-            message = ffi.string(error).decode(errors="replace")
-            raise ValueError(f"Failed to load crystal {path}: {message}")
-        return cls(handle, library)
 
     @classmethod
     def create(cls, crystal):

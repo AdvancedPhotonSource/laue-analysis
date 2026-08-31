@@ -18,9 +18,6 @@ struct laue_crystal {
     struct crystalStructure value;
 };
 
-int readCrystalFile(char *fname, struct crystalStructure *xtal);
-long FindClosestMeasuredG(double recip[3][3], int hkls[3], size_t count, double (*measured)[3]);
-
 struct laue_geometry {
     struct geoStructure value;
 };
@@ -111,31 +108,6 @@ laue_geometry *laue_geometry_from_file(const char *path, char *err, size_t errle
 void laue_geometry_free(laue_geometry *geometry)
 {
     free(geometry);
-}
-
-laue_crystal *laue_crystal_from_file(const char *path, char *err, size_t errlen)
-{
-    laue_crystal *crystal;
-
-    if (!path) {
-        set_error(err, errlen, "crystal path is NULL");
-        return NULL;
-    }
-    crystal = calloc(1, sizeof(*crystal));
-    if (!crystal) {
-        set_error(err, errlen, "unable to allocate crystal");
-        return NULL;
-    }
-    InitCleanCrystalStructure(&crystal->value);
-    if (readCrystalFile((char *)path, &crystal->value) ||
-        UpdateInternalsOfCrystalStructure(&crystal->value)) {
-        freeCrystalStructure(&crystal->value);
-        free(crystal);
-        set_error(err, errlen, "unable to read crystal file");
-        return NULL;
-    }
-    set_error(err, errlen, "");
-    return crystal;
 }
 
 laue_crystal *laue_crystal_create(const char *name, int space_group,
@@ -290,8 +262,7 @@ int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
         return result->status;
     }
     if (params->boxsize < 1 || params->min_size < 1 || params->max_peaks < 1 ||
-        params->min_separation < 1 || (params->peak_shape != 0 && params->peak_shape != 1) ||
-        params->detect_binning != 1) {
+        params->min_separation < 1 || (params->peak_shape != 0 && params->peak_shape != 1)) {
         result->status = LAUE_INVALID_ARGUMENT;
         snprintf(result->message, sizeof(result->message), "invalid or unsupported peak-search parameters");
         return result->status;
@@ -362,6 +333,10 @@ int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
     ginf->maxRfactor = params->max_rfactor;
     ginf->peakShape = params->peak_shape;
     ginf->CCDFilename[0] = '\0';
+    result->peak_minwidth = ginf->minwidth;
+    result->peak_maxwidth = ginf->maxwidth;
+    result->peak_max_cent_to_fit = ginf->maxCentToFit;
+    result->peak_boxsize = ginf->boxsize;
 
     {
         int helper_status = 0;
@@ -373,10 +348,10 @@ int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
         );
         list_delete_with_values(blobs, delete_point_value);
         blobs = NULL;
-        if (!peaks || helper_status == 1) goto allocation_error;
-        if (helper_status) {
+        if (!peaks || helper_status == GSL_ENOMEM) goto allocation_error;
+        if (helper_status != GSL_SUCCESS) {
             result->status = LAUE_NUMERICAL_ERROR;
-            snprintf(result->message, sizeof(result->message), "peak fitting failed");
+            snprintf(result->message, sizeof(result->message), "peak fitting failed: %s", gsl_strerror(helper_status));
             goto cleanup;
         }
     }

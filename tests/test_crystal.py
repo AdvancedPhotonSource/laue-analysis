@@ -25,6 +25,8 @@ def test_cell_converts_supported_units_to_angstrom(unit, scale):
         (lambda: Atom("Ni", (0, 0, 0), occupancy=1.1), "occupancy"),
         (lambda: Crystal("Ni", 0, Cell(1, 1, 1)), "space_group"),
         (lambda: Crystal("Ni", 231, Cell(1, 1, 1)), "space_group"),
+        (lambda: Crystal("Ni", 225, Cell(1, 1, 1), setting="R"), "trigonal"),
+        (lambda: Crystal("test", 146, Cell(1, 1, 1), setting="P"), "setting"),
     ],
 )
 def test_crystal_models_reject_invalid_values(factory, message):
@@ -76,6 +78,22 @@ def test_load_crystal_supports_nested_space_group_and_atom_defaults(tmp_path):
     assert crystal.cell == Cell(3, 4, 5, 80, 90, 100, "angstrom")
     assert crystal.atoms == (Atom("Ni", (0, 0.25, 0.5), label="Ni12"),)
     assert crystal.source == str(path)
+
+
+def test_load_crystal_preserves_explicit_rhombohedral_setting(tmp_path):
+    path = tmp_path / "rhombohedral.xml"
+    path.write_text(
+        """<crystal>
+  <space_group><IT_number>146</IT_number><id>146:R</id></space_group>
+  <cell><a>0.5</a><b>0.5</b><c>0.5</c>
+    <alpha>70</alpha><beta>70</beta><gamma>70</gamma></cell>
+</crystal>"""
+    )
+
+    crystal = load_crystal(path)
+
+    assert crystal.setting == "R"
+    assert crystal.space_group == 146
 
 
 @pytest.mark.parametrize(

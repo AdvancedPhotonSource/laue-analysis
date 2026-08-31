@@ -37,8 +37,6 @@ info = ffi.new("laue_detector_info *")
 
 assert lib.laue_geometry_from_file(ffi.NULL, error, 256) == ffi.NULL
 assert ffi.string(error) == b"geometry path is NULL"
-assert lib.laue_crystal_from_file(ffi.NULL, error, 256) == ffi.NULL
-assert ffi.string(error) == b"crystal path is NULL"
 assert lib.laue_crystal_create(b"bad", 0, 1, 1, 1, 90, 90, 90,
                                ffi.NULL, 0, error, 256) == ffi.NULL
 assert ffi.string(error) == b"invalid crystal parameters"

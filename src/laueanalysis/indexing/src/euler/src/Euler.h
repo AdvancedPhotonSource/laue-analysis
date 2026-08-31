@@ -152,5 +152,6 @@ int OrientFast(long size, double keVmaxCalc, double keVmaxTest, double angleTole
 	struct patternOfOneGrain foundPattern[MAX_GRAINS_PER_PATTERN]);
 
 int optimizeEulerAngles(double startStep, double epsAbs, long maxIter, struct patternOfOneGrain *pattern);
+long FindClosestMeasuredG(double recip[3][3], int hkls[3], size_t count, double (*measured)[3]);
 
 #endif

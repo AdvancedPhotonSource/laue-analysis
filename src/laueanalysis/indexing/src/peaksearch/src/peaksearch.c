@@ -288,8 +288,8 @@ int		*status)
 {
 	List * peaks = list_new();						/* for holding peak list */
 	double	xoff=ginf->xoff, yoff=ginf->yoff;
-	if (status) *status = 0;
-	if (!peaks) { if (status) *status = 1; return NULL; }		/* information from Genfileinf for doing peak fitting,e.g. fitToFunction */
+	if (status) *status = GSL_SUCCESS;
+	if (!peaks) { if (status) *status = GSL_ENOMEM; return NULL; }		/* information from Genfileinf for doing peak fitting,e.g. fitToFunction */
 	int		boxsize = ginf->boxsize;				/* local copy of boxsize */
 	int		x1, x2, y1, y2;							/* box for image_roi, used to process one blob */
 	int		width, height;							/* size of image (pixels) */
@@ -349,7 +349,7 @@ int		*status)
 				point_delete(cent);
 				if (fit_status) {
 					grid_delete(image_roi);
-					if (status) *status = fit_status == GSL_ENOMEM ? 1 : 2;
+					if (status) *status = fit_status;
 					return peaks;
 				}
 				fitX += x1 + xoff + 1.;				/* translate from small roi to full image */
@@ -382,7 +382,7 @@ int		*status)
 	return peaks;
 
 allocation_error:
-	if (status) *status = 1;
+	if (status) *status = GSL_ENOMEM;
 	return peaks;
 }
 

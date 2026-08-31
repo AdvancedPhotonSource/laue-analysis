@@ -36,7 +36,6 @@ pytestmark = requires_liblaue
         (PeakParams(max_peaks=0), "positive"),
         (PeakParams(max_rfactor=0), "max_rfactor"),
         (PeakParams(peak_shape="Voigt"), "peak_shape"),
-        (PeakParams(detect_binning=2), "detect_binning"),
     ],
 )
 def test_indexer_rejects_invalid_peak_parameters(peak_params, message):
@@ -67,9 +66,9 @@ def test_indexer_rejects_invalid_index_parameters(index_params, message):
         np.zeros((3, 4), dtype=np.float32),
     ],
 )
-def test_process_rejects_invalid_frame_arrays(frame):
+def test_index_rejects_invalid_frame_arrays(frame):
     with pytest.raises(InputError, match="2D uint16"):
-        Indexer(GEOMETRY).process(frame)
+        Indexer(GEOMETRY).index(frame)
 
 
 @pytest.mark.parametrize(
@@ -83,9 +82,9 @@ def test_process_rejects_invalid_frame_arrays(frame):
         ({"mask": np.zeros((3, 3))}, "mask shape"),
     ],
 )
-def test_process_rejects_invalid_frame_options(kwargs, message):
+def test_index_rejects_invalid_frame_options(kwargs, message):
     with pytest.raises(InputError, match=message):
-        Indexer(GEOMETRY).process(np.zeros((4, 5), dtype=np.uint16), **kwargs)
+        Indexer(GEOMETRY).index(np.zeros((4, 5), dtype=np.uint16), **kwargs)
 
 
 def test_hdf5_metadata_override_and_processing_values(tmp_path):
@@ -98,7 +97,7 @@ def test_hdf5_metadata_override_and_processing_values(tmp_path):
         output.create_dataset("entry1/detector/binx", data=2)
         output.create_dataset("entry1/detector/biny", data=3)
 
-    result = Indexer(GEOMETRY).process(
+    result = Indexer(GEOMETRY).index(
         path, start=(100, 100), group=(1, 1), metadata={"sample_name": "supplied"}
     )
 
@@ -113,7 +112,7 @@ def test_hdf5_without_roi_metadata_preserves_explicit_processing_values(tmp_path
     with h5py.File(path, "w") as output:
         output.create_dataset("entry1/data/data", data=np.zeros((4, 5), dtype=np.uint16))
 
-    result = Indexer(GEOMETRY).process(path, start=(100, 200), group=(2, 3))
+    result = Indexer(GEOMETRY).index(path, start=(100, 200), group=(2, 3))
 
     assert result.start == (100, 200)
     assert result.group == (2, 3)
@@ -142,19 +141,68 @@ def test_hdf5_requires_image_dataset(tmp_path):
         pass
 
     with pytest.raises(KeyError):
-        Indexer(GEOMETRY).process(path)
+        Indexer(GEOMETRY).index(path)
 
 
-def test_batch_order_retention_and_compatibility_alias():
+def test_batch_order_and_image_retention():
     frames = [np.zeros((3, width), dtype=np.uint16) for width in (4, 5)]
     indexer = Indexer(GEOMETRY)
 
     retained = indexer.index_many(frames, keep_images=True)
-    discarded = indexer.process_many(frames)
+    discarded = indexer.index_many(frames)
 
     assert [result.image_shape for result in retained] == [(3, 4), (3, 5)]
     assert all(result.image is frame for result, frame in zip(retained, frames))
     assert all(result.image is None for result in discarded)
+
+
+def _short_peak_frame():
+    y, x = np.indices((2, 2))
+    return 10 + (2000 * np.exp(-(x * x + y * y) / 0.4)).astype(np.uint16)
+
+
+def test_short_peak_fit_raises_indexing_error():
+    frame = _short_peak_frame()
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(
+            boxsize=2,
+            min_size=1,
+            min_separation=1,
+            threshold=20,
+            max_rfactor=100,
+        ),
+    )
+
+    with pytest.raises(IndexingError, match="peak search failed: peak fitting failed"):
+        indexer.index(frame)
+
+
+def test_index_many_stops_on_first_failed_frame():
+    good = np.zeros((2, 2), dtype=np.uint16)
+    bad = _short_peak_frame()
+    frames_started = 0
+
+    def frames():
+        nonlocal frames_started
+        for frame in (good, bad, good):
+            frames_started += 1
+            yield frame
+
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(
+            boxsize=2,
+            min_size=1,
+            min_separation=1,
+            threshold=20,
+            max_rfactor=100,
+        ),
+    )
+
+    with pytest.raises(IndexingError, match="peak fitting failed"):
+        indexer.index_many(frames())
+    assert frames_started == 2
 
 
 class _FailingLibrary:
@@ -199,6 +247,6 @@ def test_native_failures_map_to_exceptions_and_release_results(
     monkeypatch.setattr(indexer_module, "get_library", lambda: library)
 
     with pytest.raises(error, match=f"{stage} failed: injected failure"):
-        indexer.process(np.zeros((4, 5), dtype=np.uint16))
+        indexer.index(np.zeros((4, 5), dtype=np.uint16))
 
     assert library.free_calls == 1

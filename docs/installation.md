@@ -1,6 +1,8 @@
 # Installation
 
-`laueanalysis` builds from source. `python -m pip install .` compiles the native indexing library and the command-line programs with CMake, then installs the Python package.
+During alpha development, install `laueanalysis` from source in the Conda environment supplied by this repository. `python -m pip install .` compiles the native indexing library and command-line programs with CMake, then installs the Python package. The project does not publish prebuilt wheels or Conda packages.
+
+Pip can create a temporary wheel while it installs the source tree. This is part of the build process and does not avoid native compilation. Wheels created with `python -m build` are development artifacts. They require compatible native libraries and are not supported outside the environment used to build them.
 
 ## Supported platforms
 
@@ -29,7 +31,7 @@ CUDA is not required. See [GPU reconstruction](#gpu-reconstruction).
 
 ## Install with conda (recommended)
 
-Use this path at APS and on any machine where you do not install system packages. `environment.yml` provides the compiler and all native libraries from conda-forge.
+Use this path at APS and for alpha testing. `environment.yml` provides the compiler and native libraries from conda-forge. Build, install, and run `laueanalysis` in this environment so the native programs can load the same GSL and HDF5 libraries.
 
 1. Clone the repository:
 
@@ -76,7 +78,7 @@ Use this path on a Linux system that already provides the native dependencies, f
 
 Do not run `pip` with `sudo`.
 
-The installed programs find GSL and HDF5 through the dynamic loader's default search path. If the libraries come from environment modules or another non-system prefix, make sure that prefix is in `LD_LIBRARY_PATH` at run time. A virtual environment created on top of a conda environment does not see the conda libraries unless you set `LD_LIBRARY_PATH` to `<conda prefix>/lib`.
+The installed programs find GSL and HDF5 through the dynamic loader's search path. If environment modules or another non-system prefix provides the libraries, add its library directory to `LD_LIBRARY_PATH` at run time. A virtual environment does not inherit access to libraries from a separate Conda environment. Do not move a wheel built in one environment into another environment unless the target provides compatible native libraries.
 
 ## Verify the installation
 
@@ -111,10 +113,10 @@ A default installation builds all of these:
 | Component | Location in the installed package | Required |
 | --- | --- | --- |
 | `liblaue.so` | `laueanalysis/indexing/bin/` | Yes. The in-process indexing API needs it. |
-| `peaksearch`, `pix2qs`, `euler` | `laueanalysis/indexing/bin/` | Yes by default. Used by the LaueGo compatibility functions. |
-| `reconstructN_cpu` | `laueanalysis/reconstruct/bin/` | Yes by default. Used by `reconstruct()`. |
+| `peaksearch`, `pix2qs`, `euler` | `laueanalysis/indexing/bin/` | Yes. Used by the LaueGo compatibility functions. |
+| `reconstructN_cpu` | `laueanalysis/reconstruct/bin/` | Yes. Used by `reconstruct()`. |
 
-The build stops with an error when a required dependency is missing or a component fails to compile. It does not install a partial package.
+The in-process indexing API is the main path for new code. The LaueGo compatibility functions and their command-line programs remain supported for existing workflows. The build stops with an error when a required dependency is missing or a component fails to compile. It does not install a partial package.
 
 Native code is compiled for the generic x86-64 baseline with SSE2. The same installed files run on any x86-64 Linux machine that has compatible GSL and HDF5 libraries.
 
@@ -122,7 +124,9 @@ Native code is compiled for the generic x86-64 baseline with SSE2. The same inst
 
 ## GPU reconstruction
 
-The package build does not compile the CUDA reconstruction program. `reconstruct_gpu()` remains in the API and raises `FileNotFoundError` when `reconstructN_gpu` is not on `PATH`. The CUDA source and a stand-alone Makefile are kept in `src/laueanalysis/reconstruct/source/recon_gpu/` for users who have an NVIDIA toolchain. Use `reconstruct()` for CPU reconstruction.
+CPU reconstruction is the supported path. The package does not build or distribute the CUDA reconstruction program, and it does not detect CUDA during installation. `reconstruct_gpu()` can run an externally installed `reconstructN_gpu` executable from `PATH`. It raises `FileNotFoundError` when the executable is unavailable.
+
+The source distribution and repository include the CUDA source and a stand-alone Makefile in `src/laueanalysis/reconstruct/source/recon_gpu/`. This build is not part of the maintained package installation.
 
 ## Troubleshooting
 

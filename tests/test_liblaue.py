@@ -169,7 +169,7 @@ def test_sparse_detector_slots_are_addressable(tmp_path):
 
     indexer = Indexer(geometry, detector_index=2)
     by_id = Indexer(geometry, detector_id="PE0822 883-4843")
-    result = indexer.process(np.zeros((8, 12), dtype=np.uint16))
+    result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
     assert by_id.detector_index == 2
     assert result.image_shape == (8, 12)
 

@@ -20,8 +20,12 @@ option(LAUE_BUILD_LAUEGO "Build the LaueGo programs peaksearch, pix2qs, and eule
 option(LAUE_BUILD_RECONSTRUCTION "Build the CPU reconstruction program reconstructN_cpu" ON)
 option(LAUE_NATIVE_OPTIMIZATION
   "Tune for the build machine (-march=native).  Local use only; never redistribute these artifacts." OFF)
+# The supported alpha install places the package under
+# <conda-prefix>/lib/pythonX.Y/site-packages. From either package bin directory,
+# this relative path resolves to <conda-prefix>/lib without recording an
+# absolute build prefix.
 set(LAUE_INSTALL_RPATH "$ORIGIN/../../../../.."
-  CACHE STRING "RPATH written into installed binaries (relative to the package bin directory; default resolves to <prefix>/lib from a standard site-packages layout)")
+  CACHE STRING "RPATH for the supported Conda/source-install layout; resolves from a package bin directory to <prefix>/lib")
 
 # ---------------------------------------------------------------------------
 # Global compile settings (numerical contract: -O2, SSE2 baseline, no fast-math)
@@ -45,12 +49,11 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)          # sources rely on gnu99
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# RPATH policy: write only the package-relative entry.  Build-tree binaries
-# use the same value (no install-time relink, and no CMake-generated build
-# rpath, which produces empty entries when every link directory is already
-# a toolchain-implicit directory, as in a conda environment).  Note that a
-# toolchain may append its own prefix (conda-forge GCC adds <prefix>/lib);
-# that entry is not produced here.
+# RPATH policy for the supported Conda/source-install workflow: write only the
+# package-relative entry. Build-tree binaries use the same value, with no
+# install-time relink or CMake-generated build RPATH. A toolchain can append
+# its own prefix; conda-forge GCC can add <prefix>/lib, but this project does
+# not add that absolute entry.
 set(CMAKE_SKIP_BUILD_RPATH OFF)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH OFF)
@@ -255,11 +258,11 @@ if(LAUE_BUILD_RECONSTRUCTION)
 endif()
 
 # ---------------------------------------------------------------------------
-# Post-install RPATH normalisation
-# conda-forge GCC appends <prefix>/lib to the RPATH of everything it links.
-# Rewrite every installed native file to carry exactly LAUE_INSTALL_RPATH so
-# installed artifacts contain no absolute path (see the plan's "RPATH and
-# library vendoring" decision).  Failure here fails the install.
+# Post-install RPATH normalization
+# conda-forge GCC appends <prefix>/lib to the RPATH of linked files. Rewrite
+# each installed native file with the relative Conda/source-install RPATH so
+# the artifact does not contain an absolute build prefix. Failure stops the
+# installation.
 # ---------------------------------------------------------------------------
 find_program(LAUE_PATCHELF NAMES patchelf HINTS ${LAUE_TOOL_HINTS})
 if(NOT LAUE_PATCHELF)

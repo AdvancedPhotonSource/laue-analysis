@@ -141,6 +141,8 @@ double	*results)
 	const size_t n = ((ObservedValues *)params)->n;
 	const size_t p = a->size;
 	const gsl_multifit_fdfsolver_type *T;
+
+	if (n < p) return GSL_EBADLEN;
 	gsl_multifit_fdfsolver *s;
 	gsl_multifit_function_fdf f;
 
@@ -320,6 +322,8 @@ double	*a_fit)
 
 	const size_t n = (size_t)(((Grid *)image)->width*((Grid *)image)->height);
 	const size_t p = a->size;
+
+	if (n < p) return GSL_EBADLEN;
 
 	gsl_multifit_function_fdf f;
 	// printf("array size: %d %d\n",sizeof(init_a),sizeof(double));

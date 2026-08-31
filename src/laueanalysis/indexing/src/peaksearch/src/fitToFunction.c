@@ -139,6 +139,8 @@ static int fitLorentz_1D(double *initA, void *params, double *results){
   const size_t n = ((ObservedValues *)params)->n;
   const size_t p = a->size;
 
+  if (n < p) return GSL_EBADLEN;
+
   //  gsl_matrix *covar = gsl_matrix_alloc (p, p);
 
   
@@ -338,6 +340,8 @@ static int fitLorentz_2D(double *init_a, void *image, double *a_fit){
 
   const size_t n = (size_t)(((Grid *)image)->width*((Grid *)image)->height);
   const size_t p = a->size;
+
+  if (n < p) return GSL_EBADLEN;
 
   //  gsl_matrix *covar = gsl_matrix_alloc (p, p);
 

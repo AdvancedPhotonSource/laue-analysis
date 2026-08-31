@@ -59,7 +59,7 @@ def test_public_crystal_is_editable_by_replacement():
     Indexer(GEOMETRY, modified)
 
 
-def test_indexer_process_matches_lauego_peak_and_q_reference():
+def test_indexer_matches_lauego_peak_and_q_reference():
     stem = "synthetic_ni_two_grains"
     with h5py.File(FRAMES / f"{stem}.h5") as source:
         image = source["entry1/data/data"][...]
@@ -77,7 +77,7 @@ def test_indexer_process_matches_lauego_peak_and_q_reference():
             max_peaks=200,
         ),
     )
-    result = indexer.process(image)
+    result = indexer.index(image)
     expected_peaks = _table_after(BASELINE / "peaks" / f"peaks_{stem}.txt", "$peakList")
     expected_q = _table_after(BASELINE / "p2q" / f"p2q_{stem}.txt", "$N_Ghat+Intens", delimiter=",")
 
@@ -96,7 +96,7 @@ def test_indexer_process_matches_lauego_peak_and_q_reference():
     np.testing.assert_allclose(result.peaks["qhat"], expected_q[:, :3], atol=2e-7, rtol=0)
 
 
-def test_indexer_process_matches_lauego_index_reference():
+def test_indexer_matches_lauego_index_reference():
     stem = "synthetic_ni_two_grains"
     with h5py.File(FRAMES / f"{stem}.h5") as source:
         image = source["entry1/data/data"][...]
@@ -113,7 +113,7 @@ def test_indexer_process_matches_lauego_index_reference():
         ),
     )
 
-    result = indexer.process(image)
+    result = indexer.index(image)
     expected = [
         (np.array([-169.14354065, 143.65364921, 137.25271596]), 23),
         (np.array([-110.30109407, 143.68406785, 76.90290940]), 17),
@@ -151,7 +151,7 @@ def test_indexer_matches_all_lauego_index_references(index_file):
         ),
     )
 
-    result = indexer.process(image)
+    result = indexer.index(image)
     text = index_file.read_text()
     expected_count = int(re.search(r"\$NpatternsFound\s+(\d+)", text).group(1))
     assert len(result.patterns) == expected_count
@@ -192,7 +192,7 @@ def test_reported_hkl_and_energy_describe_the_same_reflection():
             cone_deg=72.0, hkl_prefer=(0, 0, 1),
         ),
     )
-    result = indexer.process(FRAMES / "synthetic_ni_two_grains.h5")
+    result = indexer.index(FRAMES / "synthetic_ni_two_grains.h5")
 
     reported_hkls = {
         tuple(hkl) for pattern in result.patterns for hkl in pattern.hkl
@@ -229,7 +229,7 @@ def test_indexer_matches_peak_positions_for_all_synthetic_frames():
 
     for frame_file in sorted((FRAMES).glob("*.h5")):
         with h5py.File(frame_file) as source:
-            result = indexer.process(source["entry1/data/data"][...])
+            result = indexer.index(source["entry1/data/data"][...])
         peaks_file = BASELINE / "peaks" / f"peaks_{frame_file.stem}.txt"
         lines = peaks_file.read_text().splitlines()
         start = next(index for index, line in enumerate(lines) if "$peakList" in line) + 1
@@ -258,19 +258,26 @@ def test_index_frame_and_image_retention_defaults():
 
 
 def test_result_is_independent_of_indexer_configuration():
-    indexer = Indexer(GEOMETRY)
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(boxsize=8, min_size=6),
+    )
     result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
-    original = result.to_step().detector.peaksXY.boxsize
+    peak_data = result.to_step().detector.peaksXY
     first_step = result.to_step()
     first_step.detector.peaksXY.boxsize = 123
-    indexer.peak_params = replace(indexer.peak_params, boxsize=99)
+    indexer.peak_params = replace(indexer.peak_params, boxsize=99, min_size=99)
 
-    assert result.to_step().detector.peaksXY.boxsize == original
+    assert result.peak_boxsize == peak_data.boxsize == 8
+    assert result.peak_minwidth == peak_data.minwidth == 1.5
+    assert result.peak_maxwidth == peak_data.maxwidth == 12.0
+    assert result.peak_max_cent_to_fit == peak_data.maxCentToFit == 8.0
+    assert result.to_step().detector.peaksXY.boxsize == 8
 
 
 def test_indexer_requires_no_metadata_for_in_memory_frame():
     indexer = Indexer(GEOMETRY)
-    result = indexer.process(np.zeros((8, 12), dtype=np.uint16))
+    result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
     step = result.to_step()
 
     assert result.metadata == {}
@@ -283,7 +290,7 @@ def test_indexer_accepts_optional_manual_metadata():
     indexer = Indexer(GEOMETRY)
     image = np.zeros((8, 12), dtype=np.uint16)
     image[2:6, 3:7] = 100
-    result = indexer.process(
+    result = indexer.index(
         image,
         start=(100, 200),
         group=(2, 3),
@@ -314,7 +321,7 @@ def test_indexer_accepts_partial_hdf5_metadata(tmp_path):
         output.create_dataset("entry1/sample/name", data=np.asarray([b"partial"]))
 
     indexer = Indexer(GEOMETRY)
-    result = indexer.process(path)
+    result = indexer.index(path)
     step = result.to_step()
 
     assert result.metadata == {"sample_name": "partial"}
@@ -323,7 +330,7 @@ def test_indexer_accepts_partial_hdf5_metadata(tmp_path):
     assert step.detector.Ny == 8
 
 
-def test_indexer_processes_file_and_builds_step(tmp_path):
+def test_indexer_indexes_file_and_builds_step(tmp_path):
     stem = "synthetic_ni_two_grains"
     indexer = Indexer(
         GEOMETRY,
@@ -337,7 +344,7 @@ def test_indexer_processes_file_and_builds_step(tmp_path):
             cone_deg=72.0, hkl_prefer=(0, 0, 1),
         ),
     )
-    result = indexer.process(FRAMES / f"{stem}.h5")
+    result = indexer.index(FRAMES / f"{stem}.h5")
     step = result.to_step()
     output = tmp_path / "result.xml"
     indexer.write_xml(result, output)
@@ -367,7 +374,7 @@ def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
             cone_deg=72.0, hkl_prefer=(0, 0, 1),
         ),
     )
-    result = indexer.process(FRAMES / f"{stem}.h5")
+    result = indexer.index(FRAMES / f"{stem}.h5")
     live = ResultSet.from_indexer(indexer, (result,))
     live_data = live.to_visualization()
 
@@ -480,7 +487,7 @@ def test_indexer_validates_index_parameters():
 def test_indexer_requires_uint16_2d_frame():
     indexer = Indexer(GEOMETRY)
     with pytest.raises(ValueError, match="uint16"):
-        indexer.process(np.zeros((4, 4), dtype=np.float64))
+        indexer.index(np.zeros((4, 4), dtype=np.float64))
 
 
 def test_native_invalid_input_maps_to_input_error():
@@ -502,11 +509,11 @@ def test_indexer_validates_frame_roi_against_detector():
     indexer = Indexer(GEOMETRY)
     image = np.zeros((8, 12), dtype=np.uint16)
 
-    indexer.process(image, start=(2024, 2032), group=(2, 2))
+    indexer.index(image, start=(2024, 2032), group=(2, 2))
     with pytest.raises(ValueError, match="exceeds detector bounds 2048x2048"):
-        indexer.process(image, start=(2025, 2032), group=(2, 2))
+        indexer.index(image, start=(2025, 2032), group=(2, 2))
     with pytest.raises(ValueError, match="two nonnegative integers"):
-        indexer.process(image, start=(0.5, 0))
+        indexer.index(image, start=(0.5, 0))
 
 
 def test_indexer_validates_hdf5_detector_id(tmp_path):
@@ -517,4 +524,4 @@ def test_indexer_validates_hdf5_detector_id(tmp_path):
 
     indexer = Indexer(GEOMETRY)
     with pytest.raises(ValueError, match="does not match selected detector"):
-        indexer.process(path)
+        indexer.index(path)

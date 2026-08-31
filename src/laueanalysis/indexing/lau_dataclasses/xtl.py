@@ -20,7 +20,7 @@ class Xtl:
 
     structureDesc: str = None
     xtalFileName: str = None
-    SpaceGroup: int = None
+    SpaceGroup: int | str = None
     latticeParameters: str = None
     lengthUnit: str = "nm"
     atoms: list = field(default_factory=lambda: [])

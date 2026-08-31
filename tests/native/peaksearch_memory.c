@@ -45,7 +45,6 @@ int main(void)
     params.threshold_ratio = 4.0;
     params.peak_shape = 0;
     params.max_peaks = 100;
-    params.detect_binning = 1;
 
     for (iteration = 0; iteration < REPEAT_COUNT; ++iteration) {
         laue_frame_result result = {0};

@@ -33,7 +33,6 @@ long readDataFromJZT(char *fname, struct patternOfOneGrain *dataPattern, long ma
 int strFromTagFile(FILE *f,char *tagIn, char *value, long maxLen);
 int strFromTagBuf(char *buffer, char *tagIn, char *value, long maxLen);
 long readDataFromWenge(char *fname, struct patternOfOneGrain *dataPattern, long maxData);
-long FindClosestMeasuredG(double recip[3][3], int hkls[3], size_t Nmeas, double (*Gmeas)[3]);
 
 int magnifyEulerSpace(struct WaveSpace_struct *EulerSpace, double mag, double center[3]);
 /* int EulerSpaceFromSpotsFast(struct WaveSpace_struct *EulerSpace, struct EulerAngle_pair *AllEulerAngles,size_t Neuler, double center[3]); */
