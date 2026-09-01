@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from laueanalysis.indexing.index import _parse_peaks_output, _parse_npatterns_found, _parse_indexing_output
+from lauelab.indexing.index import _parse_peaks_output, _parse_npatterns_found, _parse_indexing_output
 
 
 def test_parse_peaks_output_uses_peaklist_dims(tmp_path):
@@ -102,6 +102,17 @@ $Nindexed 12
     index_file = tmp_path / "index_nindexed_tag.txt"
     index_file.write_text(content)
     assert _parse_indexing_output(str(index_file)) == 12
+
+
+def test_indexing_set_supports_multi_digit_pattern_numbers():
+    from lauelab.indexing.lau_dataclasses.indexing import Indexing
+
+    indexing = Indexing()
+    indexing.set("goodness10", "42.5")
+
+    assert len(indexing.patterns) == 11
+    assert indexing.patterns[10].num == 10
+    assert indexing.patterns[10].goodness == 42.5
 
 
 def test_parse_indexing_output_without_tag_returns_zero(tmp_path):

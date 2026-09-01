@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from laueanalysis.indexing import index, IndexingResult
+from lauelab.indexing import IndexingResult, lauego
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +54,7 @@ def test_functional_index_with_real_data(test_config):
     assert os.path.exists(crystal_file), f"Crystal file not found: {crystal_file}"
     
     # Run the functional index with real data using parameters from config
-    result = index(
+    result = lauego(
         input_image=test_file,
         output_dir=temp_dir.name,
         geo_file=geo_file,
@@ -95,22 +95,19 @@ def test_functional_index_with_real_data(test_config):
     assert 'peaks' in result.output_files
     assert os.path.exists(result.output_files['peaks'])
     
-    # If peaks were found, p2q should have run
-    if result.n_peaks_found > 0:
-        assert 'p2q' in result.output_files
-        assert os.path.exists(result.output_files['p2q'])
-        
-        # If enough peaks for indexing, indexing should have run
-        if result.n_peaks_found > 1:
-            assert 'index' in result.output_files
-            assert os.path.exists(result.output_files['index'])
-    
+    assert result.n_peaks_found > 0
+    assert 'p2q' in result.output_files
+    assert os.path.exists(result.output_files['p2q'])
+
+    # This fixture has enough peaks for indexing.
+    assert result.n_peaks_found > 1
+    assert 'index' in result.output_files
+    assert os.path.exists(result.output_files['index'])
+
     # Verify command history contains the right executables
     assert any('peaksearch' in cmd for cmd in result.command_history)
-    if result.n_peaks_found > 0:
-        assert any('pix2qs' in cmd for cmd in result.command_history)
-        if result.n_peaks_found > 1:
-            assert any('euler' in cmd for cmd in result.command_history)
+    assert any('pix2qs' in cmd for cmd in result.command_history)
+    assert any('euler' in cmd for cmd in result.command_history)
 
 
 def test_functional_index_batch_processing_real_data(test_config):
@@ -137,7 +134,7 @@ def test_functional_index_batch_processing_real_data(test_config):
     # Process each file with the functional interface
     results = []
     for test_file_copy in test_files:
-        result = index(
+        result = lauego(
             input_image=test_file_copy,
             output_dir=temp_dir.name,
             geo_file=geo_file,
@@ -168,9 +165,10 @@ def test_functional_index_batch_processing_real_data(test_config):
     peak_counts = [result.n_peaks_found for result in results]
     indexed_counts = [result.n_indexed for result in results]
     
-    # All files should produce the same results
-    assert len(set(peak_counts)) <= 1, f"Inconsistent peak counts: {peak_counts}"
-    assert len(set(indexed_counts)) <= 1, f"Inconsistent index counts: {indexed_counts}"
+    # All files should produce the same, nonzero results
+    assert len(set(peak_counts)) == 1, f"Inconsistent peak counts: {peak_counts}"
+    assert len(set(indexed_counts)) == 1, f"Inconsistent index counts: {indexed_counts}"
+    assert peak_counts[0] > 0, "batch run found no peaks"
     
     # Check output structure
     _check_output_structure(temp_dir.name)
@@ -189,7 +187,7 @@ def test_functional_index_error_handling_real_executables(test_config):
     crystal_file = str(ROOT / "tests/config/Ni.xml")
     
     # Run with invalid data
-    result = index(
+    result = lauego(
         input_image=invalid_file,
         output_dir=temp_dir.name,
         geo_file=geo_file,
@@ -234,7 +232,7 @@ def test_functional_index_maintains_compatibility():
     # Create temporary output directory
     with tempfile.TemporaryDirectory() as temp_dir:
         # Should work with just the essential parameters
-        result = index(
+        result = lauego(
             input_image=test_file,
             output_dir=temp_dir,
             geo_file=geo_file,
@@ -272,7 +270,7 @@ def test_functional_index_equivalence():
         config_dict['outputFolder'] = temp_dir
         
         # Functional interface call that provides comprehensive indexing
-        result = index(
+        result = lauego(
             input_image=test_file,
             output_dir=temp_dir,
             geo_file=geo_file,
@@ -300,13 +298,11 @@ def test_functional_index_equivalence():
         assert isinstance(result.n_indexed, int)      # Equivalent to step.indexing.Nindexed  
         assert 'peaks' in result.output_files         # Equivalent to peakSearchOut
         
-        # If processing succeeded, should have p2q output for peaks > 0
-        if result.n_peaks_found > 0:
-            assert 'p2q' in result.output_files       # Equivalent to p2qOut
-            
-        # If enough peaks, should have indexing output 
-        if result.n_peaks_found > 1:
-            assert 'index' in result.output_files     # Equivalent to indexOut
+        # The synthetic fixture always yields peaks, so the downstream
+        # pipeline outputs must exist unconditionally.
+        assert result.n_peaks_found > 0
+        assert 'p2q' in result.output_files           # Equivalent to p2qOut
+        assert 'index' in result.output_files         # Equivalent to indexOut
         
         # Benefits of the functional interface
         assert len(result.command_history) > 0        # Command history for debugging

@@ -2,6 +2,16 @@
 
 This directory contains a minimal, standalone performance test runner for the reconstruction code. It is completely separate from pytest and will not be collected by default test runs.
 
+`run_simulation_perf.py` measures the reflection simulator separately. It reports cold import and first-call time, warm-call median, peak resident memory, scientific inputs, spot count, and the private candidate limit.
+
+Run the observational simulation benchmark from the repository root:
+
+```console
+$ python tests/perf_testing/run_simulation_perf.py --case ni --warm-runs 5
+```
+
+Use `--output report.json` to retain the machine-readable report. The benchmark has no pass or fail threshold because host load and cold filesystem state affect its measurements.
+
 Key features:
 - Requires two inputs: an HDF5 file and a staging directory (to test different filesystems).
 - Pre-copies the input HDF5 into N replicas (one per parallel runner) once before all tests.
@@ -10,7 +20,7 @@ Key features:
   - CPU: Cartesian product of parallel reconstructions vs. number of threads per process.
   - GPU: Number of concurrent GPU reconstructions.
 - Saves runtimes and test parameters to a JSONL file for later analysis.
-- Uses the installed `laueanalysis` python API directly; no build steps required.
+- Uses the installed `lauelab` python API directly; no build steps required.
 
 ## Script
 
@@ -105,6 +115,6 @@ Example JSONL entries:
 
 ## Notes
 
-- The script uses the installed `laueanalysis.reconstruct` Python API (`reconstruct` and `reconstruct_gpu`). Ensure the environment can resolve these.
+- The script uses the installed `lauelab.reconstruct` Python API (`reconstruct` and `reconstruct_gpu`). Ensure the environment can resolve these.
 - GPU tests will simply launch multiple concurrent GPU reconstructions; if you need per-GPU pinning on multi-GPU systems, this script can be extended to set `CUDA_VISIBLE_DEVICES` per process.
 - Long runs are expected; use `--dry-run` first to verify the plan.

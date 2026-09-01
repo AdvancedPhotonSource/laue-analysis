@@ -31,23 +31,24 @@ $minwidth		0.75		// min allowed width of a peak
 $maxwidth		27			// max allowed width of a peak
 $maxCentToFit	18			// max diff between initial & fitted peak position
 $maxRfactor		0.5			// max allowed R-factor
-$threshold		134.035		// threshold for blob searching
+$threshold		137.732		// threshold for blob searching
 $minSeparation	20			// minimum separation between any two peaks
 $smooth			0			// fit to smoothed image
 $peakShape		Lorentzian	// shape for peak fit
-$totalSum		8.62374e+07		// sum of all pixels in image
-$sumAboveThreshold	2.30403e+06	// sum of all pixels in image above threshold
-$numAboveThreshold	2787	// number of pixels above threshold
+$totalSum		8.64018e+07		// sum of all pixels in image
+$sumAboveThreshold	2.46105e+06	// sum of all pixels in image above threshold
+$numAboveThreshold	2949	// number of pixels above threshold
 $NpeakMax		200			// limit on number of peaks to search for
-$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$programName	<env>/lib/python3.12/site-packages/lauelab/indexing/bin/peaksearch
 $geoFileName	<repo>/tests/data/geo/geoN_2022-03-29_14-15-05.xml
-$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/pix2qs
+$programName	<env>/lib/python3.12/site-packages/lauelab/indexing/bin/pix2qs
 
 // the following table contains xyz compotnents of G^ and the integral of the peak
-$N_Ghat+Intens 	41		// number of G^ vectors
+$N_Ghat+Intens 	48		// number of G^ vectors
 -0.1342000,  0.5768306, -0.8057647,     101.23
  0.2233914,  0.7493781, -0.6233207,     97.784
  0.0909368,  0.7003385, -0.7079947,     83.255
+-0.2850511,  0.7233420, -0.6289056,     78.27
  0.0285809,  0.6711168, -0.7408005,     72.643
 -0.2449899,  0.6878527, -0.6832559,     69.758
 -0.0746038,  0.8048531, -0.5887663,     68.819
@@ -57,20 +58,26 @@ $N_Ghat+Intens 	41		// number of G^ vectors
  0.1430009,  0.7217765, -0.6771923,     63.718
 -0.2214997,  0.6658232, -0.7124727,     63.076
 -0.0897702,  0.7571957, -0.6469900,     63.172
+ 0.3043418,  0.7699775, -0.5608126,     59.033
  0.0699723,  0.8360835, -0.5441216,     60.028
 -0.0299962,  0.6401918, -0.7676292,     59.341
 -0.2061572,  0.6509665, -0.7305763,     57.886
  0.1416239,  0.6098923, -0.7797269,     58.869
 -0.0989078,  0.7253992, -0.6811852,     58.286
+ 0.2645284,  0.6535216, -0.7091786,     35.306
  0.0413371,  0.6362970, -0.7703359,     56.166
  0.0282047,  0.7941544, -0.6070612,     56.898
  0.2956961,  0.7538761, -0.5867151,     56.914
+-0.0459690,  0.6311766, -0.7742757,     54.886
 -0.1765903,  0.8066854, -0.5639809,     54.846
+ 0.0548782,  0.6839099, -0.7274996,     54.789
+ 0.1010929,  0.6079771, -0.7874923,     54.713
  0.1668585,  0.5771419, -0.7994157,     48.11
  0.0498825,  0.7676317, -0.6389470,     44.476
 -0.0694382,  0.6776564, -0.7320930,     43.115
  0.1517452,  0.6959796, -0.7018446,     40.905
 -0.1497179,  0.6041301, -0.7826949,     40.676
+-0.0411937,  0.5835695, -0.8110177,     37.893
 -0.1765618,  0.8090611, -0.5605765,     37.925
  0.0541747,  0.8334695, -0.5499034,     36.679
  0.1151446,  0.6031155, -0.7892993,     36.633

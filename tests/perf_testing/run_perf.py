@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standalone performance runner for laueanalysis reconstruction.
+Standalone performance runner for lauelab reconstruction.
 
 - Does NOT use pytest and won't be auto-collected.
 - Requires two parameters: input HDF5 file and a staging directory.
@@ -37,8 +37,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
 
-# laueanalysis is assumed to be installed in the environment (as per user request).
-from laueanalysis.reconstruct import reconstruct, reconstruct_gpu
+# lauelab is assumed to be installed in the environment (as per user request).
+from lauelab.reconstruct import reconstruct, reconstruct_gpu
 
 
 def parse_int_list(text: str) -> List[int]:
@@ -135,7 +135,7 @@ def worker_cpu(i: int,
     res = reconstruct(
         input_file=input_path,
         output_file=out_base,
-        geometry_file=geometry,
+        geometry=geometry,
         depth_range=(depth_start, depth_end),
         resolution=resolution,
         memory_limit_mb=memory_limit_mb, 
@@ -168,7 +168,7 @@ def worker_gpu(i: int,
     res = reconstruct_gpu(
         input_file=input_path,
         output_file=out_base,
-        geometry_file=geometry,
+        geometry=geometry,
         depth_range=(depth_start, depth_end),
         resolution=resolution,
         verbose=verbose,
@@ -307,7 +307,7 @@ def run_matrix_gpu(args, replicas: List[Path], results_path: Path) -> None:
 
 
 def main(argv: List[str]) -> int:
-    parser = argparse.ArgumentParser(description="Standalone performance runner for laueanalysis reconstruction.")
+    parser = argparse.ArgumentParser(description="Standalone performance runner for lauelab reconstruction.")
     parser.add_argument("--h5", required=True, type=Path, help="Path to input HDF5 file to benchmark.")
     parser.add_argument("--staging-dir", required=True, type=Path, help="Staging directory to copy inputs and write outputs.")
     parser.add_argument("--geometry", required=True, type=Path, help="Path to geometry XML file.")

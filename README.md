@@ -1,85 +1,44 @@
 # laue-analysis
 
-Python package and C binaries for Laue diffraction data analysis at beamline 34IDE, including indexing and wire scan reconstruction.
+Python and native tools for Laue diffraction analysis at APS beamline 34-ID-E. The package supports indexing, wire-scan reconstruction, simulation, orientation analysis, and interactive visualization.
 
-## Package Structure
+> [!NOTE]
+> `lauelab` is alpha software under active development. Public behavior can change before a stable release.
 
-```
-src/laueanalysis/
-├── indexing/
-│   ├── index.py             # Functional indexing API
-│   ├── parsers.py           # Output file parsers
-│   ├── xml_utils.py         # XML generation utilities
-│   ├── xmlWriter.py         # XML batch writer
-│   ├── mpi_runner.py        # MPI distributed execution
-│   ├── lau_dataclasses/     # Data models (step, detector, pattern, etc.)
-│   ├── bin/                 # Compiled C executables (euler, peaksearch, pix2qs)
-│   └── src/                 # C source trees
-├── reconstruct/
-│   ├── reconstruct.py       # Reconstruction API (CPU + GPU)
-│   ├── bin/                 # Compiled C executable (reconstructN_cpu)
-│   └── source/              # C source code
-└── __init__.py
-```
+Read the [documentation](https://advancedphotonsource.github.io/laue-analysis/) for installation requirements, indexing workflows, concepts, and API details.
 
-## Installation
+## Install
 
-Prerequisites:
-- Python >= 3.12
-- System: `make`, `gcc`, `h5cc`, GNU Scientific Library (GSL), HDF5 dev libraries
-- Linux only (conda packaging)
+The package builds from source on Linux x86-64. It needs GCC, GSL, HDF5, and Python 3.11, 3.12, or 3.13. The conda environment in `environment.yml` provides all of them.
 
 ```bash
 git clone https://github.com/AdvancedPhotonSource/laue-analysis.git
 cd laue-analysis
-python3 -m pip install .
+conda env create -f environment.yml
+conda activate laue-analysis
+python -m pip install .
 ```
 
-The build step compiles C binaries into `indexing/bin/` and `reconstruct/bin/`.
+See the [installation guide](https://advancedphotonsource.github.io/laue-analysis/installation.html) for the virtual-environment path and troubleshooting.
 
-## Usage
-
-### Indexing
+## Index a frame
 
 ```python
-from laueanalysis.indexing import index
+from lauelab.indexing import index_frame
 
-result = index(
-    input_image='path/to/image.h5',
-    output_dir='path/to/output',
-    geo_file='path/to/geometry.xml',
-    crystal_file='path/to/crystal.xml',
+result = index_frame(
+    "frame.h5",
+    geometry="geometry.xml",
+    crystal="crystal.xml",
 )
 
-print(result.n_peaks_found, result.n_indexed)
+print(result.n_peaks, result.n_indexed, result.n_patterns)
 ```
 
-The `index()` function runs the full pipeline (peak search, pixel-to-q conversion, indexing) and returns an `IndexingResult` with output files, statistics, and parsed data. See `index.py` for all available parameters.
+Use `Indexer` to reuse one geometry and crystal configuration across frames. The subprocess-based `lauego()` function remains available for existing LaueGo workflows.
 
-### Wire Scan Reconstruction
-
-```python
-from laueanalysis.reconstruct import reconstruct
-
-result = reconstruct(...)
-```
-
-See test files for detailed usage examples.
-
-## Output Layout
-
-Indexing outputs are written under `output_dir`:
-
-```
-xml/                        # Per-image indexed XML files
-peaks/peaks_<name>.txt      # Peak search results
-p2q/p2q_<name>.txt          # Pixel-to-Q space results
-index/index_<name>.txt      # Indexing results
-error/                      # Error logs
-```
-
-## Testing
+## Test
 
 ```bash
-python -m pytest tests/ -v
+python -m pytest
 ```

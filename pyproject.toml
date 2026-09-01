@@ -1,51 +1,83 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.10", "patchelf>=0.17; platform_system == 'Linux'"]
+build-backend = "scikit_build_core.build"
 
 [project]
-name = "laueanalysis"
+name = "lauelab"
 version = "0.1.0"
 description = "A package for Laue diffraction analysis including indexing and reconstruction"
 readme = "README.md"
-requires-python = ">=3.11"
+license = "LicenseRef-UChicago-Argonne-BSD"  # Argonne BSD-style terms; see LICENSE
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.14"
 authors = [
-    {name = "linked-liszt", email = "anoxymoren@gmail.com"},  # Update with actual info
+    {name = "Advanced Photon Source"},
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: C",
+    "Topic :: Scientific/Engineering :: Physics",
 ]
 
 dependencies = [
+    "cffi>=1.15.0",
+    "h5py>=3.0",
     "numpy>=1.20.0",
-    "pyyaml>=5.4",
+    "pandas>=2.0",
+    "plotly>=6.0",
 ]
 
 [project.urls]
-Repository = "https://github.com/Linked-Liszt/laue-analysis"
+Repository = "https://github.com/AdvancedPhotonSource/laue-analysis"
 
 [project.optional-dependencies]
-mpi = ["mpi4py>=3.0.0"]
-test = ["pytest>=7.0"]
+test = ["pytest>=7.0", "pyyaml>=5.4"]
+docs = [
+    "myst-parser>=4.0",
+    "sphinx-llms-txt>=0.7",
+    "pydata-sphinx-theme>=0.16",
+    "sphinx>=8.2,<9",
+]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["laueanalysis*"]
-
-[tool.setuptools.package-data]
-"laueanalysis.indexing" = ["bin/*"]
-"laueanalysis.reconstruct" = ["bin/*"]
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.24"
+cmake.build-type = "Release"
+build-dir = "build-skbuild/{wheel_tag}"
+# Python sources live under src/; CMake installs the native files into the
+# same package directories (lauelab/indexing/bin, lauelab/reconstruct/bin).
+wheel.packages = ["src/lauelab"]
+# Native files are plain executables and a cffi ABI-mode library: no Python ABI dependence.
+wheel.py-api = "py3"
+wheel.exclude = [
+    # Native source trees stay in the sdist but must not ship in the wheel.
+    "lauelab/indexing/src/**",
+    "lauelab/reconstruct/source/**",
+    "**/*.o",
+]
+# The install step (patchelf, RPATH rewrite) must fail the build if it fails.
+install.strip = false
+editable.mode = "redirect"
+# sdist: everything Git tracks (Python, C and CUDA source, CMake files,
+# docs sources, tests and their fixtures, environment.yml) minus material
+# that is not needed to build, test, or document the package.
+sdist.exclude = [
+    ".github/",
+    "contributing/",
+    "sandbox/",
+    "workflow/",
+    "docs/_build/",
+    "*_PLAN.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
 markers = [
     "integration: marks tests as integration tests that require compiled executables (deselect with '-m \"not integration\"')",
 ]

@@ -1,10 +1,38 @@
+# Maintained user/development environment for lauelab.
+#
+# Create it, activate it, then install the package from source:
+#     conda env create -f environment.yml
+#     conda activate laue-analysis
+#     python -m pip install .
+#
+# Only conda-forge is used.  Native libraries and anything with a compiled
+# component come from conda; pure-Python dependencies are resolved by pip
+# from pyproject.toml.  Test and documentation extras are installed with
+# `python -m pip install -e '.[test,docs]'`, not listed here.
 name: laue-analysis
 channels:
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
-  - python=3.12.1
-  - numpy=2.3.1
-  - gsl=2.8
-  - hdf5=1.12.2
-  - hdf5-static=1.12.2
+  # interpreter and installer
+  - python=3.12.*
+  - pip
+  # native toolchain
+  - c-compiler
+  - cmake>=3.24
+  - ninja
+  - patchelf
+  - valgrind
+  # native libraries (compatible minor series; upgrade one family at a time)
+  - gsl=2.8.*
+  - hdf5=1.14.*
+  - zlib
+  # binary Python dependencies, kept consistent with the libraries above
+  - numpy
+  - h5py
+  - cffi
+  # notebooks and documentation examples
+  - ipykernel
+  - nbformat
+  - jupyterlab
+  - matplotlib

@@ -2,8 +2,7 @@
 
 import os
 import pytest
-from pathlib import Path
-from laueanalysis.indexing.lau_dataclasses.config import get_packaged_executable_path
+from lauelab.bins import get_packaged_executable_path
 
 
 @pytest.mark.parametrize("program", ['euler', 'peaksearch', 'pix2qs'])
