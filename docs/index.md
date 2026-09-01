@@ -45,4 +45,4 @@ The API reference contains the exact supported signatures and result fields. The
 
 ## Existing code
 
-The subprocess-based `index` and `lauego` functions remain available for existing workflows. New code should use {func}`~laueanalysis.indexing.index_frame` or {class}`~laueanalysis.indexing.Indexer`. See [LaueGo interfaces](lauego/index.md) for the behavioral differences.
+The subprocess-based `lauego` function remains available for existing workflows. New code should use {func}`~laueanalysis.indexing.index_frame` or {class}`~laueanalysis.indexing.Indexer`. See [LaueGo interfaces](lauego/index.md) for the behavioral differences.

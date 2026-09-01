@@ -10,7 +10,7 @@ from argparse import Namespace
 import yaml
 from pathlib import Path
 
-from laueanalysis.indexing import index, IndexingResult
+from laueanalysis.indexing import IndexingResult, lauego
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ def test_index_function_with_mocked_executables(test_config_data, temp_image_fil
         (index_dir / f'index_{base}.txt').write_text('')
         
         # Run the index function with parameters
-        result = index(
+        result = lauego(
             input_image=temp_image_file,
             output_dir=temp_output_dir,
             geo_file=test_config_data['geoFile'],
@@ -159,6 +159,30 @@ def test_index_function_with_mocked_executables(test_config_data, temp_image_fil
         assert '-t' in index_call and str(test_config_data['indexKeVmaxTest']) in index_call
 
 
+def test_lauego_omits_inactive_threshold_ratio_from_xml(
+    temp_image_file, temp_output_dir
+):
+    with patch("laueanalysis.indexing.index._run_peaksearch") as run_peaksearch, \
+         patch("laueanalysis.indexing.index.parse_full_step_data") as parse_step, \
+         patch("laueanalysis.indexing.index.write_step_xml"):
+        run_peaksearch.return_value = (True, "", "", 0, "peaksearch")
+        peaks = Path(temp_output_dir) / "peaks" / f"peaks_{Path(temp_image_file).stem}.txt"
+        peaks.parent.mkdir(parents=True)
+        peaks.write_text("$peakList\t8 0\n")
+        parse_step.return_value = MagicMock(indexing=MagicMock())
+
+        lauego(
+            temp_image_file,
+            temp_output_dir,
+            "geo.xml",
+            "crystal.xml",
+            threshold=100,
+            threshold_ratio=3.25,
+        )
+
+    assert parse_step.call_args.kwargs["threshold_ratio"] is None
+
+
 def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
     """Test the index function when no peaks are found."""
     
@@ -182,7 +206,7 @@ def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
         peaks_dir.mkdir(parents=True, exist_ok=True)
         (peaks_dir / f'peaks_{base}.txt').write_text('')
         
-        result = index(
+        result = lauego(
             input_image=temp_image_file,
             output_dir=temp_output_dir,
             geo_file='/tmp/test_geo.xml',
@@ -226,7 +250,7 @@ def test_index_function_insufficient_peaks_for_indexing(temp_image_file, temp_ou
         (peaks_dir / f'peaks_{base}.txt').write_text('')
         (p2q_dir / f'p2q_{base}.txt').write_text('')
         
-        result = index(
+        result = lauego(
             input_image=temp_image_file,
             output_dir=temp_output_dir,
             geo_file='/tmp/test_geo.xml',
@@ -271,7 +295,7 @@ def test_index_function_with_errors_continues_processing(temp_image_file, temp_o
         peaks_dir.mkdir(parents=True, exist_ok=True)
         (peaks_dir / f'peaks_{base}.txt').write_text('')
         
-        result = index(
+        result = lauego(
             input_image=temp_image_file,
             output_dir=temp_output_dir,
             geo_file='/tmp/test_geo.xml',
@@ -309,7 +333,7 @@ def test_index_function_default_config():
         Path('/tmp/output/peaks').mkdir(parents=True, exist_ok=True)
         Path('/tmp/output/peaks/peaks_test.txt').write_text('')
         
-        result = index(
+        result = lauego(
             input_image='/tmp/test.h5',
             output_dir='/tmp/output',
             geo_file='/tmp/geo.xml',
@@ -344,7 +368,7 @@ def test_index_function_complete_failure():
         
         # Use a unique temporary output directory and do not create any peaks files
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = index(
+            result = lauego(
                 input_image='/tmp/test.h5',
                 output_dir=temp_dir,
                 geo_file='/tmp/geo.xml',

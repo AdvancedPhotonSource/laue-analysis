@@ -15,4 +15,4 @@ def __getattr__(name: str) -> ModuleType:
 
 
 def __dir__() -> list[str]:
-    return sorted((*globals(), *__all__))
+    return sorted(__all__)

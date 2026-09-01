@@ -60,7 +60,7 @@ class IndexingResult(NamedTuple):
     xml_file: Optional[str]  # Path to generated XML file
     log: str
     error: Optional[str] = None
-    command_history: List[str] = []
+    command_history: Tuple[str, ...] = ()
 
 
 @functools.lru_cache(maxsize=1)
@@ -526,6 +526,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     if threshold_ratio is not None and threshold_ratio <= 0:
         raise ValueError("threshold_ratio must be positive or None")
     resolved_threshold_ratio = 4.0 if threshold_ratio is None else threshold_ratio
+    recorded_threshold_ratio = resolved_threshold_ratio if threshold is None else None
 
     # Set up output directories
     try:
@@ -745,7 +746,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 peak_shape=peak_shape,
                 max_peaks=max_peaks,
                 mask_file=mask_file,
-                threshold_ratio=resolved_threshold_ratio,
+                threshold_ratio=recorded_threshold_ratio,
                 index_kev_max_calc=index_kev_max_calc,
                 index_kev_max_test=index_kev_max_test,
                 index_angle_tolerance=index_angle_tolerance,
@@ -787,7 +788,3 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         error=None,
         command_history=command_history
     )
-
-
-# Backward-compatible name for existing callers.
-index = lauego

@@ -134,12 +134,19 @@ def test_prepare_map_empty_scope_has_stable_shapes():
 
 
 @pytest.mark.parametrize("axis", ["depth", "Zlab", "Hlab", "Flab"])
-def test_depth_dependent_axes_name_frames_with_missing_depth(axis):
+def test_depth_dependent_axes_name_selected_frames_with_missing_depth(axis):
     dataset = _result_set().to_visualization()
     dataset = replace(dataset, depths=np.array([np.nan, 2.0]))
 
     with pytest.raises(ValueError, match=rf"{axis}.*'a'"):
         prepare_map(dataset, axes=("X", axis))
+
+    selected = prepare_map(
+        dataset,
+        axes=("X", axis),
+        scope=DataScope(patterns="all", min_indexed=4),
+    )
+    assert selected.frame_ids == ("b",)
 
 
 def test_prepare_map_requires_real_coordinates():
@@ -292,6 +299,11 @@ def test_prepare_detector_view_validates_frame_and_image():
         result_set, frame_id="a", patterns=(np.int64(1),)
     )
     assert [pattern.pattern_index for pattern in prepared.patterns] == [1]
+
+
+def test_prepare_detector_view_explains_all_frames_scope():
+    with pytest.raises(ValueError, match="all_frames.*DataScope"):
+        prepare_detector_view(_result_set(with_context=True), frame_id="a", patterns="all_frames")
 
 
 def test_detector_simulation_data_normalizes_validates_and_owns_arrays():

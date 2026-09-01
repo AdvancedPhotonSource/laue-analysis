@@ -42,6 +42,19 @@ def _attribute_number(element, name, default=np.nan):
         return default
 
 
+def _integer(value, *, path, step, field):
+    if not np.isfinite(value) or value != int(value):
+        raise ValueError(f"invalid integer in {path}, step {step}, field {field}: {value!r}")
+    return int(value)
+
+
+def _integer_array(parent, name, *, path, step, field):
+    values = _array(parent, (name,))
+    if not np.isfinite(values).all() or np.any(values != values.astype(int)):
+        raise ValueError(f"invalid integer in {path}, step {step}, field {field}")
+    return values.astype(int)
+
+
 def _load_crystal(steps):
     for step in steps:
         node = step.find("indexing/xtl")
@@ -95,13 +108,16 @@ def _resolve_geometry(xml_path, geometry, steps):
         path = _text(step.find("detector"), "geoFile")
         if path and path not in candidates:
             candidates.append(path)
+    xml_directory = Path(xml_path).resolve().parent
     for candidate in candidates:
         path = Path(candidate).expanduser()
-        if path.is_file():
-            try:
-                return Geometry(path)
-            except (ImportError, OSError, ValueError):
-                pass
+        paths = (path,) if path.is_absolute() else (path, xml_directory / path)
+        for resolved in paths:
+            if resolved.is_file():
+                try:
+                    return Geometry(resolved)
+                except (ImportError, OSError, ValueError):
+                    pass
     return None
 
 
@@ -168,17 +184,34 @@ def load_visualization_xml(path, *, geometry=None, frame_ids=None):
         detector = step.find("detector")
         detector_ids.append(_text(detector, "detectorID"))
         input_images.append(_text(detector, "inputImage"))
-        image_shapes[frame_index] = [int(_number(detector, "Ny", 0)), int(_number(detector, "Nx", 0))]
+        image_shapes[frame_index] = [
+            _integer(_number(detector, name, 0), path=path, step=frame_index, field=name)
+            for name in ("Ny", "Nx")
+        ]
         roi = detector.find("ROI") if detector is not None else None
         if roi is not None:
-            starts[frame_index] = [int(_attribute_number(roi, "startx", 0)), int(_attribute_number(roi, "starty", 0))]
-            groups[frame_index] = [int(_attribute_number(roi, "groupx", 1)), int(_attribute_number(roi, "groupy", 1))]
+            starts[frame_index] = [
+                _integer(_attribute_number(roi, name, 0), path=path, step=frame_index, field=f"ROI.{name}")
+                for name in ("startx", "starty")
+            ]
+            groups[frame_index] = [
+                _integer(_attribute_number(roi, name, 1), path=path, step=frame_index, field=f"ROI.{name}")
+                for name in ("groupx", "groupy")
+            ]
 
         peaks_node = detector.find("peaksXY") if detector is not None else None
         x = _array(peaks_node, ("fitX", "Xpixel"))
         y = _array(peaks_node, ("fitY", "Ypixel"))
         lengths = [len(value) for value in (x, y) if len(value)]
-        declared_count = int(_attribute_number(peaks_node, "Npeaks", 0)) if peaks_node is not None else 0
+        declared_count = (
+            _integer(
+                _attribute_number(peaks_node, "Npeaks", 0),
+                path=path,
+                step=frame_index,
+                field="peaksXY.Npeaks",
+            )
+            if peaks_node is not None else 0
+        )
         peak_count = declared_count if declared_count > 0 else (max(lengths) if lengths else 0)
         frame_n_peaks[frame_index] = peak_count
         peaks = np.full(peak_count, np.nan, dtype=PEAK_DTYPE)
@@ -216,26 +249,59 @@ def load_visualization_xml(path, *, geometry=None, frame_ids=None):
                     pass
             pattern_row = len(pattern_indices)
             pattern_frames.append(frame_index)
-            pattern_indices.append(int(_attribute_number(pattern, "num", rank)))
+            pattern_indices.append(_integer(
+                _attribute_number(pattern, "num", rank),
+                path=path,
+                step=frame_index,
+                field=f"pattern[{rank}].num",
+            ))
             rotations.append(rotation)
             reciprocals.append(reciprocal)
             goodness.append(_attribute_number(pattern, "goodness"))
             rms_errors.append(_attribute_number(pattern, "rms_error"))
 
             hkl_node = pattern.find("hkl_s")
-            h, k, l = (_array(hkl_node, (name,), dtype=int) for name in ("h", "k", "l"))
-            peak_refs = _array(hkl_node, ("PkIndex",), dtype=int)
+            h, k, l = (
+                _integer_array(
+                    hkl_node,
+                    name,
+                    path=path,
+                    step=frame_index,
+                    field=f"pattern[{rank}].hkl_s.{name}",
+                )
+                for name in ("h", "k", "l")
+            )
+            peak_refs = _integer_array(
+                hkl_node,
+                "PkIndex",
+                path=path,
+                step=frame_index,
+                field=f"pattern[{rank}].hkl_s.PkIndex",
+            )
+            errors = _array(hkl_node, ("err_deg",))
+            assignment_energy = _array(hkl_node, ("energy_kev",))
+            predicted_intensity = _array(hkl_node, ("pred_intens",))
             count = min(len(h), len(k), len(l), len(peak_refs))
-            pattern_counts.append(int(_attribute_number(pattern, "Nindexed", count)))
+            pattern_counts.append(_integer(
+                _attribute_number(pattern, "Nindexed", count),
+                path=path,
+                step=frame_index,
+                field=f"pattern[{rank}].Nindexed",
+            ))
             if count:
                 valid = (peak_refs[:count] >= 0) & (peak_refs[:count] < peak_count)
                 count_valid = int(np.count_nonzero(valid))
                 assignment_patterns.extend([pattern_row] * count_valid)
                 assignment_peaks.extend(peak_refs[:count][valid])
                 assignment_hkl.extend(np.column_stack([h[:count], k[:count], l[:count]])[valid])
-                assignment_errors.extend([np.nan] * count_valid)
-                assignment_energies.extend([np.nan] * count_valid)
-                assignment_intensities.extend([np.nan] * count_valid)
+                for target, values in (
+                    (assignment_errors, errors),
+                    (assignment_energies, assignment_energy),
+                    (assignment_intensities, predicted_intensity),
+                ):
+                    aligned = np.full(count, np.nan)
+                    aligned[:min(count, len(values))] = values[:count]
+                    target.extend(aligned[valid])
 
     peaks = np.concatenate(peak_arrays) if peak_arrays else np.empty(0, dtype=PEAK_DTYPE)
     return VisualizationDataset(

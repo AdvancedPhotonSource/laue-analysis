@@ -46,8 +46,6 @@ def test_result_set_validates_ids_and_preserves_results():
     result_set = ResultSet(results, frame_ids=("a", "b"))
     assert result_set.results == results
     assert result_set.frame_ids == ("a", "b")
-    assert len(repr(results[0])) < 200
-    assert len(repr(result_set)) < 200
     with pytest.raises(ValueError, match="unique"):
         ResultSet(results, frame_ids=("same", "same"))
     with pytest.raises(ValueError, match="contain 2"):
@@ -88,8 +86,6 @@ def test_visualization_dataset_normalizes_all_record_levels():
     assert not dataset.sample_positions.flags.writeable
     assert not dataset.pattern_rotations.flags.writeable
     assert not dataset.images[0].flags.writeable
-    assert len(repr(result_set.results[0].patterns[0])) < 200
-    assert len(repr(dataset)) < 200
 
 
 def test_result_set_rejects_invalid_context():

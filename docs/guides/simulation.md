@@ -46,7 +46,7 @@ The inputs use these conventions:
 | `energy_range_kev` | two values | Inclusive lower and upper bounds in keV |
 | `depth` | scalar | Sample depth in µm |
 
-For an HKL row vector, the function calculates the reciprocal vector as `hkl @ reciprocal`. The reciprocal matrix must be finite and nonsingular.
+The reciprocal matrix must be finite and nonsingular. See the [results guide](results.md) for its basis and multiplication convention.
 
 ## Read the result
 

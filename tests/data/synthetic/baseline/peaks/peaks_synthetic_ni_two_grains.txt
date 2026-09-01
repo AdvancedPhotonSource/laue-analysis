@@ -24,24 +24,25 @@ $minwidth		0.75		// min allowed width of a peak
 $maxwidth		27			// max allowed width of a peak
 $maxCentToFit	18			// max diff between initial & fitted peak position
 $maxRfactor		0.5			// max allowed R-factor
-$threshold		134.035		// threshold for blob searching
+$threshold		137.732		// threshold for blob searching
 $minSeparation	20			// minimum separation between any two peaks
 $smooth			0			// fit to smoothed image
 $peakShape		Lorentzian	// shape for peak fit
-$totalSum		8.62374e+07		// sum of all pixels in image
-$sumAboveThreshold	2.30403e+06	// sum of all pixels in image above threshold
-$numAboveThreshold	2787	// number of pixels above threshold
+$totalSum		8.64018e+07		// sum of all pixels in image
+$sumAboveThreshold	2.46105e+06	// sum of all pixels in image above threshold
+$numAboveThreshold	2949	// number of pixels above threshold
 $NpeakMax		200			// limit on number of peaks to search for
 $programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
-$executionTime	3.98		// execution time (sec)
+$executionTime	11.03		// execution time (sec)
 //
 // fitted peak positions relative to the start of the ROI (not detector origin)
 //    peak positions are in zero based binned pixels
-$Npeaks		41				// number of fitted peaks in following table
-$peakList	8 41			// fitX fitY intens integral hwhmX hwhmY tilt chisq
+$Npeaks		48				// number of fitted peaks in following table
+$peakList	8 48			// fitX fitY intens integral hwhmX hwhmY tilt chisq
        50.719      402.152       4922.0000       101.23000      1.452      1.458     2.4929   0.06411
      1473.091     1778.692       4754.0000        97.78400      1.460      1.451   178.7682   0.064075
       859.449     1341.382       3902.0000        83.25500      1.436      1.438   178.0121   0.062803
+     1468.531        4.457       3624.0000        78.27000      1.462      1.498     0.5174   0.05406
       616.439     1115.020       3486.0000        72.64300      1.443      1.459   179.7913   0.063349
      1059.860       96.787       3417.0000        69.75800      1.460      1.457     4.5005   0.063733
      1700.994      779.479       3284.0000        68.81900      1.459      1.442     0.1128   0.063227
@@ -51,20 +52,26 @@ $peakList	8 41			// fitX fitY intens integral hwhmX hwhmY tilt chisq
      1081.402     1518.682       3031.0000        63.71800      1.439      1.443     3.9747   0.062527
       837.081      154.435       3029.0000        63.07600      1.458      1.443     0.3364   0.063026
      1298.557      708.833       3021.0000        63.17200      1.441      1.453   179.4953   0.062869
+     1958.949     2031.981       2919.0000        59.03300      1.477      1.474     0.1557   0.062437
      2015.066     1234.571       2887.0000        60.02800      1.458      1.443   179.9193   0.062941
       404.382      883.207       2856.0000        59.34100      1.443      1.452   178.2303   0.062714
       695.790      193.777       2827.0000        57.88600      1.456      1.455    20.5183   0.063101
       280.200     1598.545       2807.0000        58.86900      1.451      1.440   179.3273   0.062596
      1059.821      660.599       2804.0000        58.28600      1.453      1.443     1.3006   0.062726
+      842.380     2046.593       2779.0000        35.30600      1.489      1.189   179.6074   0.044551
       378.373     1170.047       2722.0000        56.16600      1.446      1.460   179.8594   0.062902
      1567.310     1106.610       2715.0000        56.89800      1.444      1.440   177.0123   0.0623
      1761.108     2022.492       2710.0000        56.91400      1.456      1.441   179.8049   0.062703
+      348.591      815.917       2647.0000        54.88600      1.444      1.458   179.5110   0.062731
      1899.398      458.317       2613.0000        54.84600      1.440      1.443   177.1309   0.062195
+      716.390     1212.673       2611.0000        54.78900      1.440      1.443     5.1650   0.062156
+      220.556     1428.647       2582.0000        54.71300      1.437      1.440   179.0220   0.06201
        87.496     1742.891       2292.0000        48.11000      1.442      1.456   179.4867   0.062236
      1347.186     1179.899       2192.0000        44.47600      1.460      1.463     2.4422   0.062647
       686.136      743.462       2065.0000        43.11500      1.455      1.441     0.2850   0.061803
       902.536     1568.041       1964.0000        40.90500      1.443      1.459   179.7039   0.061719
       264.467      365.608       1910.0000        40.67600      1.436      1.437     0.0534   0.060931
+       15.063      818.111       1878.0000        37.89300      1.472      1.474   177.6661   0.060899
      1924.152      460.333       1847.0000        37.92500      1.457      1.448     2.1991   0.061533
      1971.793     1186.265       1794.0000        36.67900      1.455      1.452   174.0160   0.061436
       200.800     1491.736       1792.0000        36.63300      1.456      1.452     7.1604   0.061459

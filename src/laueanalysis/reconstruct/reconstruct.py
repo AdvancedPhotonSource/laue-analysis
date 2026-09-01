@@ -1,9 +1,9 @@
 """Wire scan reconstruction functions for Laue analysis."""
 
-from typing import Dict, List, Tuple, Optional, Union, NamedTuple
+from typing import List, Tuple, Optional, Union, NamedTuple
 from pathlib import Path
 import subprocess
-import os
+import re
 import shutil
 import functools
 from importlib import resources
@@ -109,8 +109,7 @@ def _validate_executable(exe_path: str) -> None:
                 f"stdout: {result.stdout[:100]}... "
                 f"stderr: {result.stderr[:100]}..."
             )
-    except (subprocess.CalledProcessError, FileNotFoundError, 
-            subprocess.TimeoutExpired, PermissionError) as e:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
         raise RuntimeError(
             f"Executable validation failed: {exe_path}. Error: {e}"
         )
@@ -152,25 +151,42 @@ def _execute_reconstruction(
         ReconstructionResult with execution details
     """
     try:
+        output_dir = Path(output_base).parent
+        output_pattern = Path(output_base).name + "*"
+        before = {
+            path: (path.stat().st_mtime_ns, path.stat().st_size)
+            for path in output_dir.glob(output_pattern)
+            if path.is_file()
+        } if output_dir.exists() else {}
+
         # Execute the subprocess - RPATH handles library loading
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            cwd=os.getcwd(),
             timeout=timeout
         )
         
         success = result.returncode == 0
         
-        # Find output files
         output_files = []
-        if success:
-            output_dir = Path(output_base).parent
-            if output_dir.exists():
-                # Look for files matching the output pattern
-                output_pattern = Path(output_base).name + "*"
-                output_files = [str(f) for f in output_dir.glob(output_pattern)]
+        if success and output_dir.exists():
+            changed = [
+                path
+                for path in output_dir.glob(output_pattern)
+                if path.is_file()
+                and (
+                    path not in before
+                    or (path.stat().st_mtime_ns, path.stat().st_size) != before[path]
+                )
+            ]
+            output_files = [str(path) for path in sorted(
+                changed,
+                key=lambda path: [
+                    (0, int(part)) if part.isdigit() else (1, part)
+                    for part in re.split(r"(\d+)", path.name)
+                ],
+            )]
         
         return ReconstructionResult(
             success=success,
@@ -199,6 +215,52 @@ def _execute_reconstruction(
             command=' '.join(cmd),
             return_code=-1
         )
+
+
+def _build_command(
+    executable,
+    input_file,
+    output_file,
+    geometry,
+    depth_range,
+    resolution,
+    image_range,
+    verbose,
+    percent_brightest,
+    wire_edge,
+    memory_limit_mb,
+    normalization,
+    output_pixel_type,
+    distortion_map,
+    detector_number,
+):
+    if depth_range[0] >= depth_range[1]:
+        raise ValueError(
+            f"Invalid depth range: start ({depth_range[0]}) must be less than end ({depth_range[1]})"
+        )
+    command = [
+        executable,
+        '-i', str(input_file),
+        '-o', str(output_file),
+        '-g', str(geometry),
+        '-s', str(depth_range[0]),
+        '-e', str(depth_range[1]),
+        '-r', str(resolution),
+        '-v', str(verbose),
+        '-p', str(percent_brightest),
+        '-w', _map_wire_edge(wire_edge),
+        '-m', str(memory_limit_mb),
+        '-D', str(detector_number),
+    ]
+    if image_range is not None:
+        command.extend(['-f', str(image_range[0]), '-l', str(image_range[1])])
+    if normalization:
+        command.extend(['-n', normalization])
+    if output_pixel_type is not None:
+        command.extend(['-t', str(output_pixel_type)])
+    if distortion_map:
+        command.extend(['-d', distortion_map])
+    return command
 
 
 def reconstruct(
@@ -303,38 +365,11 @@ def reconstruct(
     # Validate executable on first use
     _validate_executable(exe_path)
     
-    # Validate parameters
-    if depth_range[0] >= depth_range[1]:
-        raise ValueError(
-            f"Invalid depth range: start ({depth_range[0]}) must be less than end ({depth_range[1]})"
-        )
-    
-    # Build command
-    cmd = [
-        exe_path,
-        '-i', str(input_file),
-        '-o', str(output_file),
-        '-g', str(geometry),
-        '-s', str(depth_range[0]),
-        '-e', str(depth_range[1]),
-        '-r', str(resolution),
-        '-v', str(verbose),
-        '-p', str(percent_brightest),
-        '-w', _map_wire_edge(wire_edge),
-        '-m', str(memory_limit_mb),
-        '-D', str(detector_number)
-    ]
-    
-    # Add optional parameters
-    if image_range is not None:
-        cmd.extend(['-f', str(image_range[0])])
-        cmd.extend(['-l', str(image_range[1])])
-    if normalization:
-        cmd.extend(['-n', normalization])
-    if output_pixel_type is not None:
-        cmd.extend(['-t', str(output_pixel_type)])
-    if distortion_map:
-        cmd.extend(['-d', distortion_map])
+    cmd = _build_command(
+        exe_path, input_file, output_file, geometry, depth_range, resolution,
+        image_range, verbose, percent_brightest, wire_edge, memory_limit_mb,
+        normalization, output_pixel_type, distortion_map, detector_number,
+    )
     if wire_depths_file:
         cmd.extend(['--wireDepths', wire_depths_file])
     
@@ -449,39 +484,12 @@ def reconstruct_gpu(
     # Validate executable on first use
     _validate_executable(exe_path)
     
-    # Validate parameters
-    if depth_range[0] >= depth_range[1]:
-        raise ValueError(
-            f"Invalid depth range: start ({depth_range[0]}) must be less than end ({depth_range[1]})"
-        )
-    
-    # Build command
-    cmd = [
-        exe_path,
-        '-i', str(input_file),
-        '-o', str(output_file),
-        '-g', str(geometry),
-        '-s', str(depth_range[0]),
-        '-e', str(depth_range[1]),
-        '-r', str(resolution),
-        '-v', str(verbose),
-        '-p', str(percent_brightest),
-        '-w', _map_wire_edge(wire_edge),
-        '-m', str(memory_limit_mb),
-        '-D', str(detector_number),
-        '-R', str(cuda_rows)  # GPU uses -R for CUDA rows
-    ]
-    
-    # Add optional parameters
-    if image_range is not None:
-        cmd.extend(['-f', str(image_range[0])])
-        cmd.extend(['-l', str(image_range[1])])
-    if normalization:
-        cmd.extend(['-n', normalization])
-    if output_pixel_type is not None:
-        cmd.extend(['-t', str(output_pixel_type)])
-    if distortion_map:
-        cmd.extend(['-d', distortion_map])
+    cmd = _build_command(
+        exe_path, input_file, output_file, geometry, depth_range, resolution,
+        image_range, verbose, percent_brightest, wire_edge, memory_limit_mb,
+        normalization, output_pixel_type, distortion_map, detector_number,
+    )
+    cmd.extend(['-R', str(cuda_rows)])
     if wire_depths_file:
         cmd.extend(['-W', wire_depths_file])  # Note: GPU uses -W, not --wireDepths
     

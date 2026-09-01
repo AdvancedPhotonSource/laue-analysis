@@ -1,6 +1,6 @@
 # laue-analysis
 
-Python and native tools for Laue diffraction analysis at APS beamline 34-ID-E. The package currently supports indexing and wire-scan reconstruction.
+Python and native tools for Laue diffraction analysis at APS beamline 34-ID-E. The package supports indexing, wire-scan reconstruction, simulation, orientation analysis, and interactive visualization.
 
 > [!NOTE]
 > `laueanalysis` is alpha software under active development. Public behavior can change before a stable release.
@@ -9,7 +9,7 @@ Read the [documentation](https://advancedphotonsource.github.io/laue-analysis/) 
 
 ## Install
 
-The package builds from source on Linux x86-64. It needs GCC, GSL, HDF5, and Python 3.11 or later. The conda environment in `environment.yml` provides all of them.
+The package builds from source on Linux x86-64. It needs GCC, GSL, HDF5, and Python 3.11, 3.12, or 3.13. The conda environment in `environment.yml` provides all of them.
 
 ```bash
 git clone https://github.com/AdvancedPhotonSource/laue-analysis.git
@@ -35,7 +35,7 @@ result = index_frame(
 print(result.n_peaks, result.n_indexed, result.n_patterns)
 ```
 
-Use `Indexer` to reuse one geometry and crystal configuration across frames. The subprocess-based `index()` and `lauego()` functions remain available for existing LaueGo workflows.
+Use `Indexer` to reuse one geometry and crystal configuration across frames. The subprocess-based `lauego()` function remains available for existing LaueGo workflows.
 
 ## Test
 

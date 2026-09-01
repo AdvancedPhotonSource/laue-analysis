@@ -1,5 +1,6 @@
 from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass, field
+import math
 
 from laueanalysis.indexing.lau_dataclasses.roi import ROI
 from laueanalysis.indexing.lau_dataclasses.peaksXY import PeaksXY
@@ -54,16 +55,20 @@ class Detector:
 
     def getXMLElem(self) -> Element:
         elem = Element("detector")
-        SubElement(elem, "inputImage").text = self.inputImage
-        SubElement(elem, "detectorID").text = self.detectorID
-        exposure = SubElement(elem, 'exposure')
-        exposure.set('unit', self.exposureUnit)
-        exposure.text = str(self.exposure)
 
-        attrs = ['Nx', 'Ny', 'totalSum', 'sumAboveThreshold', 'numAboveThreshold',
-            'cosmicFilter', 'geoFile']
-        for attr in attrs:
-            SubElement(elem, attr).text = str(getattr(self, attr))
+        def add(name, value):
+            if value is not None and not (isinstance(value, float) and math.isnan(value)):
+                SubElement(elem, name).text = str(value)
+
+        add("inputImage", self.inputImage)
+        add("detectorID", self.detectorID)
+        if self.exposure is not None and not (isinstance(self.exposure, float) and math.isnan(self.exposure)):
+            exposure = SubElement(elem, 'exposure')
+            exposure.set('unit', self.exposureUnit)
+            exposure.text = str(self.exposure)
+
+        for attr in ('Nx', 'Ny', 'totalSum', 'sumAboveThreshold', 'numAboveThreshold', 'cosmicFilter', 'geoFile'):
+            add(attr, getattr(self, attr))
 
         elem.append(self.roi.getXMLElem())
         elem.append(self.peaksXY.getXMLElem())

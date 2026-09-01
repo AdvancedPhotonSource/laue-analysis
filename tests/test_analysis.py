@@ -114,6 +114,8 @@ def test_pole_figure_points_are_in_unit_circle_and_keep_pattern_ids():
 def test_symmetry_and_misorientation_primitives():
     assert CUBIC_SYMMETRY.shape == (24, 3, 3)
     assert HEXAGONAL_SYMMETRY.shape == (12, 3, 3)
+    assert not CUBIC_SYMMETRY.flags.writeable
+    assert not HEXAGONAL_SYMMETRY.flags.writeable
     np.testing.assert_allclose(symmetry_operations(225), CUBIC_SYMMETRY)
     rotation = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=float)
     np.testing.assert_allclose(orientation_to_rodrigues(rotation), [0, 0, 1], atol=1e-12)
@@ -122,19 +124,44 @@ def test_symmetry_and_misorientation_primitives():
         symmetry_operations(1)
 
 
-@pytest.mark.parametrize("angle", [180, 180 - 1e-7])
-def test_rodrigues_and_misorientation_handle_180_degree_rotation(angle):
-    rotation = _rotation_about_z(angle)
+def test_rodrigues_round_trips_generic_rotations():
+    from laueanalysis.analysis.orientation import _rotation_matrix
 
-    np.testing.assert_allclose(
-        orientation_to_rodrigues(rotation), [0, 0, np.radians(angle)], atol=1e-8
-    )
-    vectors, angles = misorientation_from_reference(
-        np.asarray([np.eye(3), rotation]), 0
-    )
-    np.testing.assert_allclose(vectors[1], [0, 0, np.radians(angle)], atol=1e-8)
-    assert angles[1] == pytest.approx(angle)
-    assert angles[1] == pytest.approx(misorientation_angle(rotation, np.eye(3)))
+    rng = np.random.default_rng(3851)
+    for angle in rng.uniform(0.01, 179.0, 50):
+        axis = rng.normal(size=3)
+        axis /= np.linalg.norm(axis)
+        vector = orientation_to_rodrigues(_rotation_matrix(axis, angle))
+
+        np.testing.assert_allclose(vector / np.linalg.norm(vector), axis, atol=1e-12)
+        assert 2.0 * np.arctan(np.linalg.norm(vector)) == pytest.approx(
+            np.radians(angle), abs=1e-12
+        )
+
+
+def test_rodrigues_and_misorientation_handle_random_180_degree_rotations():
+    from laueanalysis.analysis.orientation import _rotation_matrix
+
+    rng = np.random.default_rng(180)
+    for _ in range(50):
+        axis = rng.normal(size=3)
+        axis /= np.linalg.norm(axis)
+        first = np.flatnonzero(np.abs(axis) > 1e-12)[0]
+        if axis[first] < 0:
+            axis = -axis
+        rotation = _rotation_matrix(axis, 180)
+
+        vector = orientation_to_rodrigues(rotation)
+        np.testing.assert_allclose(vector / np.linalg.norm(vector), axis, atol=1e-12)
+        assert np.degrees(2.0 * np.arctan(np.linalg.norm(vector))) == pytest.approx(
+            180.0, abs=1e-5
+        )
+        vectors, angles = misorientation_from_reference(
+            np.asarray([np.eye(3), rotation]), 0
+        )
+        np.testing.assert_allclose(vectors[1], vector, rtol=1e-12)
+        assert angles[1] == pytest.approx(180.0, abs=2e-6)
+        assert angles[1] == pytest.approx(misorientation_angle(rotation, np.eye(3)))
 
 
 def test_rotation_matrix_does_not_mutate_input_axis():

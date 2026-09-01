@@ -13,6 +13,7 @@ from laueanalysis.visualization import (
     DetectorSimulationData,
     PlotlySelection,
     ResultSet,
+    Axis,
     plot_detector_view,
     plot_map,
     plot_pole_figure,
@@ -96,6 +97,26 @@ def test_plot_map_renders_prepared_2d_data_with_stable_identity():
     assert figure.layout.xaxis.title.text == "X motor (um)"
 
 
+def test_plot_map_does_not_lock_custom_axes_to_equal_scale():
+    figure = plot_map(
+        _result_set(),
+        axes=(Axis([1, 2], "Temperature", "K"), Axis([10, 20], "Load", "N")),
+    )
+
+    assert figure.layout.yaxis.scaleanchor is None
+    assert figure.layout.yaxis.scaleratio is None
+
+
+def test_plot_map_renders_scalar_colors_without_crystal_context():
+    dataset = replace(_result_set().to_visualization(), crystal=None)
+
+    figure = plot_map(dataset, color="goodness")
+
+    assert _roles(figure) == ["data"]
+    np.testing.assert_array_equal(figure.data[0].marker.color, [13, 14])
+    assert figure.data[0].marker.showscale is True
+
+
 def test_prepared_sources_reject_preparation_keywords():
     map_data = prepare_map(_result_set())
     pole_data = prepare_pole_figure(_result_set())
@@ -168,7 +189,9 @@ def test_plot_detector_view_preserves_detector_conventions_and_ids():
     indexed = next(trace for trace in figure.data if trace.meta["role"] == "indexed")
     assert list(indexed.customdata[0][:3]) == ["a", 0, 0]
     assert indexed.marker.size == 20
-    assert figure.layout.yaxis.range == (8.0, 0)
+    assert figure.layout.xaxis.range == (-0.5, 9.5)
+    assert figure.layout.yaxis.range == (7.5, -0.5)
+    assert list(figure.data[1].x) == [-0.5, 9.5, 9.5, -0.5, -0.5]
     assert figure.layout.xaxis.scaleanchor == "y"
     assert figure.data[0].zmin == 0
     assert figure.data[0].zmax == 100

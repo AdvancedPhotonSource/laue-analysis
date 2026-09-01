@@ -331,9 +331,9 @@ int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
         if (params->mask && params->mask[i]) {
             values[i] = average;
         } else {
-            sum += values[i];
-            if (values[i] > threshold) {
-                sum_above += values[i];
+            sum += pixels[i];
+            if (pixels[i] > threshold) {
+                sum_above += pixels[i];
                 ++above;
             }
         }

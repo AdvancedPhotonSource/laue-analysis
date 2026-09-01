@@ -1,9 +1,22 @@
-from typing import Dict, Any
+from importlib import resources
 import os
+from typing import Any, Dict
 
-# Reuse existing, domain-specific discovery logic
-from laueanalysis.indexing.lau_dataclasses.config import get_packaged_executable_path
 from laueanalysis.reconstruct.reconstruct import find_executable, find_gpu_executable
+
+
+def get_packaged_executable_path(program_name: str) -> str:
+    """Return the path to a packaged indexing executable."""
+    try:
+        executable = resources.files("laueanalysis.indexing.bin") / program_name
+        if executable.is_file():
+            return str(executable)
+    except (ModuleNotFoundError, FileNotFoundError):
+        pass
+    raise FileNotFoundError(
+        f"Could not locate executable {program_name!r} in "
+        "laueanalysis.indexing.bin package"
+    )
 
 
 def _is_executable(path: str) -> bool:

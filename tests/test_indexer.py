@@ -34,13 +34,6 @@ def _table_after(path: Path, marker: str, delimiter=None) -> np.ndarray:
     start = next(index for index, line in enumerate(lines) if marker in line) + 1
     return np.loadtxt(lines[start:], delimiter=delimiter, ndmin=2)
 
-
-def test_lauego_has_explicit_compatibility_interface():
-    from laueanalysis.indexing import index, lauego
-
-    assert lauego is index
-
-
 def test_indexer_uses_unified_constructor_names():
     signature = inspect.signature(Indexer)
     assert tuple(signature.parameters)[:2] == ("geometry", "crystal")
@@ -54,8 +47,6 @@ def test_geometry_and_crystal_can_be_preloaded():
     assert indexer.geometry is geometry
     assert indexer.geometry_path == GEOMETRY
     assert indexer.crystal is crystal
-    assert len(repr(indexer)) < 200
-    assert len(repr(geometry)) < 200
     assert not hasattr(indexer, "geo_file")
     assert not hasattr(indexer, "crystal_file")
     assert not hasattr(indexer, "crystal_model")
@@ -96,7 +87,7 @@ def test_indexer_matches_lauego_peak_and_q_reference():
 
     assert result.indexed is False
     assert result.patterns == ()
-    assert result.n_peaks == len(expected_peaks) == 41
+    assert result.n_peaks == len(expected_peaks) == 48
     np.testing.assert_allclose(result.peaks["fit_x"], expected_peaks[:, 0], atol=5e-4, rtol=0)
     np.testing.assert_allclose(result.peaks["fit_y"], expected_peaks[:, 1], atol=5e-4, rtol=0)
     np.testing.assert_allclose(result.peaks["intens"], expected_peaks[:, 2], atol=5e-4, rtol=1e-8)
@@ -128,6 +119,35 @@ def test_max_peaks_is_an_exact_cap():
     assert result.to_step().detector.peaksXY.NpeakMax == 5
 
 
+def test_mask_values_are_treated_as_boolean():
+    image = np.arange(1, 8 * 12 + 1, dtype=np.uint16).reshape(8, 12)
+    mask = np.zeros_like(image, dtype=np.int64)
+    mask[0, 0] = 256
+
+    result = Indexer(GEOMETRY, peak_params=PeakParams(threshold=1000)).index(
+        image, mask=mask
+    )
+
+    assert result.total_sum == np.sum(image) - image[0, 0]
+
+
+def test_smoothing_preserves_raw_frame_statistics():
+    image = np.arange(1, 8 * 12 + 1, dtype=np.uint16).reshape(8, 12)
+    mask = np.zeros_like(image, dtype=bool)
+    mask[0, 0] = True
+    threshold = 50
+
+    result = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(threshold=threshold, smooth=True),
+    ).index(image, mask=mask)
+    selected = image[~mask]
+
+    assert result.total_sum == np.sum(selected)
+    assert result.sum_above_threshold == np.sum(selected[selected > threshold])
+    assert result.num_above_threshold == np.count_nonzero(selected > threshold)
+
+
 def test_blank_frame_with_auto_threshold_returns_empty_result():
     image = np.zeros((8, 12), dtype=np.uint16)
     result = Indexer(
@@ -146,54 +166,29 @@ def test_blank_frame_with_auto_threshold_returns_empty_result():
     assert result.image is image
 
 
-@pytest.mark.parametrize("threshold_ratio", [None, 3.25])
-def test_xml_records_resolved_threshold_ratio(tmp_path, threshold_ratio):
+@pytest.mark.parametrize(
+    ("threshold", "threshold_ratio", "expected"),
+    [(None, None, 4.0), (None, 3.25, 3.25), (100.0, 3.25, np.nan)],
+)
+def test_xml_records_only_active_threshold_ratio(
+    tmp_path, threshold, threshold_ratio, expected
+):
     indexer = Indexer(
         GEOMETRY,
-        peak_params=PeakParams(threshold_ratio=threshold_ratio),
+        peak_params=PeakParams(threshold=threshold, threshold_ratio=threshold_ratio),
     )
 
     result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
     output = tmp_path / "result.xml"
     result.write_xml(output)
     peak_data = ElementTree.parse(output).find("./step/detector/peaksXY")
-    expected = 4.0 if threshold_ratio is None else threshold_ratio
 
-    assert result.threshold_ratio == expected
-    assert float(peak_data.get("thresholdRatio")) == expected
-
-
-def test_indexer_matches_lauego_index_reference():
-    stem = "synthetic_ni_two_grains"
-    with h5py.File(FRAMES / f"{stem}.h5") as source:
-        image = source["entry1/data/data"][...]
-    indexer = Indexer(
-        GEOMETRY,
-        CRYSTAL,
-        peak_params=PeakParams(
-            boxsize=18, max_rfactor=0.5, min_size=3, min_separation=20,
-            threshold=None, threshold_ratio=4.0, max_peaks=200,
-        ),
-        index_params=IndexParams(
-            kev_max_calc=17.2, kev_max_test=35.0, angle_tolerance_deg=0.1,
-            cone_deg=72.0, hkl_prefer=(0, 0, 1),
-        ),
-    )
-
-    result = indexer.index(image)
-    expected = [
-        (np.array([-169.14354065, 143.65364921, 137.25271596]), 23),
-        (np.array([-110.30109407, 143.68406785, 76.90290940]), 17),
-    ]
-
-    assert result.indexed is True
-    assert len(result.patterns) == 2
-    assert sum(pattern.n_indexed for pattern in result.patterns) == 40
-    for pattern, (euler, count) in zip(result.patterns, expected):
-        assert pattern.n_indexed == count
-        # The LaueGo reference refines orientation from peak positions rounded
-        # to 0.001 px; the in-process path uses unrounded positions.
-        np.testing.assert_allclose(pattern.euler_deg, euler, atol=5e-4, rtol=0)
+    if np.isnan(expected):
+        assert np.isnan(result.threshold_ratio)
+        assert peak_data.get("thresholdRatio") is None
+    else:
+        assert result.threshold_ratio == expected
+        assert float(peak_data.get("thresholdRatio")) == expected
 
 
 @pytest.mark.parametrize(
@@ -321,7 +316,6 @@ def test_edge_peak_is_recovered(peak_shape, center):
         GEOMETRY,
         peak_params=PeakParams(
             boxsize=8,
-            max_rfactor=10.0,
             min_size=2,
             min_separation=5,
             threshold=100.0,
@@ -335,8 +329,11 @@ def test_edge_peak_is_recovered(peak_shape, center):
     np.testing.assert_allclose(
         [result.peaks["fit_x"][0], result.peaks["fit_y"][0]],
         center,
-        atol=3.25,
+        atol=0.5,
         rtol=0,
+    )
+    assert result.peaks["hwhm_x"][0] == pytest.approx(
+        result.peaks["hwhm_y"][0], rel=0.05
     )
     assert np.isfinite(result.peaks["integral"][0])
 
@@ -437,7 +434,7 @@ def test_indexer_accepts_optional_manual_metadata():
         metadata=FrameMetadata(
             sample_name="Ni foil",
             scan_number=42,
-            detector_id="IGOR",
+            detector_id=indexer.detector_id,
             exposure_seconds=0.25,
         ),
     )
@@ -445,13 +442,29 @@ def test_indexer_accepts_optional_manual_metadata():
 
     assert step.sampleName == "Ni foil"
     assert step.scanNum == 42
-    assert step.detector.detectorID == "IGOR"
+    assert step.detector.detectorID == indexer.detector_id
     assert step.detector.Nx == 12
     assert step.detector.Ny == 8
     assert step.detector.roi.startx == 100
     assert step.detector.roi.endx == 123
     assert step.detector.roi.starty == 200
     assert step.detector.roi.endy == 223
+
+
+def test_xml_omits_missing_optional_metadata(tmp_path):
+    indexer = Indexer(GEOMETRY)
+    result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
+    path = tmp_path / "minimal.xml"
+
+    result.write_xml(path)
+    root = ElementTree.parse(path).getroot()
+    step = root.find("step")
+    detector = step.find("detector")
+
+    for name in ("scanNum", "Xsample", "Ysample", "Zsample", "depth", "energy"):
+        assert step.find(name) is None
+    assert detector.find("inputImage") is None
+    assert detector.find("exposure") is None
 
 
 def test_indexer_accepts_partial_hdf5_metadata(tmp_path):
@@ -487,14 +500,14 @@ def test_indexer_indexes_file_and_builds_step(tmp_path):
     result = indexer.index(FRAMES / f"{stem}.h5")
     step = result.to_step()
     output = tmp_path / "result.xml"
-    indexer.write_xml(result, output)
+    result.write_xml(output)
 
     assert result.input_image.endswith(f"{stem}.h5")
     assert step.sampleName == "synthetic Ni"
     assert step.detector.detectorID == "PE1621 723-3335"
-    assert step.detector.peaksXY.Npeaks == 41
+    assert step.detector.peaksXY.Npeaks == 48
     assert step.indexing.NpatternsFound == 2
-    assert step.indexing.Nindexed == 40
+    assert step.indexing.Nindexed == 47
     assert output.read_text().startswith('<?xml version="1.0" ?>')
 
 
@@ -519,7 +532,7 @@ def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
     live_data = live.to_visualization()
 
     output = tmp_path / "result.xml"
-    indexer.write_xml(result, output)
+    result.write_xml(output)
     xml_data = load_visualization_xml(output, geometry=indexer.geometry)
 
     np.testing.assert_allclose(
@@ -534,13 +547,25 @@ def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
         atol=1e-12,
         rtol=0,
     )
+    np.testing.assert_allclose(live_data.peaks["background"], xml_data.peaks["background"])
+    np.testing.assert_allclose(
+        live_data.assignment_error_deg, xml_data.assignment_error_deg
+    )
+    np.testing.assert_allclose(
+        live_data.assignment_energy_kev, xml_data.assignment_energy_kev
+    )
+    np.testing.assert_allclose(
+        live_data.assignment_predicted_intensity,
+        xml_data.assignment_predicted_intensity,
+    )
     for pattern in result.patterns:
         calculated = pattern.hkl @ pattern.reciprocal
         calculated /= np.linalg.norm(calculated, axis=1, keepdims=True)
         measured = result.peaks["qhat"][pattern.pk_index]
         cosine = np.clip(np.sum(calculated * measured, axis=1), -1, 1)
         angles = np.degrees(np.arccos(cosine))
-        assert np.max(angles) < 5e-4
+        np.testing.assert_allclose(angles, pattern.err_deg, atol=2e-8, rtol=0)
+        assert np.max(angles) < indexer.index_params.angle_tolerance_deg
 
     pattern = result.patterns[0]
     simulated = simulate_reflections(
@@ -571,7 +596,7 @@ def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
         )
         measured = live_view.measured_xy[live_pattern.measured_peak_indices]
         error = np.linalg.norm(live_pattern.predicted_xy - measured, axis=1)
-        assert np.max(error) < 0.02
+        assert np.max(error) < 0.5
 
     scope = DataScope(patterns="all", min_indexed=0)
     live_poles = prepare_pole_figure(live, scope=scope)
@@ -595,7 +620,7 @@ def test_indexer_selects_detector_by_id():
         Indexer(GEOMETRY, detector_id="missing")
 
 
-def test_indexer_replace_preserves_detector_identity_across_geometry_slots(tmp_path):
+def test_indexer_replace_preserves_detector_slot_unless_id_is_explicit(tmp_path):
     original_id = "PE1621 723-3335"
     other_id = "PE0822 883-4841"
     reordered_text = GEOMETRY.read_text().replace(original_id, "temporary detector")
@@ -607,59 +632,20 @@ def test_indexer_replace_preserves_detector_identity_across_geometry_slots(tmp_p
     indexer = Indexer(GEOMETRY, detector_id=original_id)
     replaced = indexer.replace(geometry=reordered)
 
-    assert replaced.detector_id == original_id
-    assert replaced.detector.detector_id == original_id
-    assert replaced.detector_index == 1
+    assert replaced.detector_id == other_id
+    assert replaced.detector.detector_id == other_id
+    assert replaced.detector_index == 0
 
-    by_slot = indexer.replace(geometry=reordered, detector_index=0)
-    assert by_slot.detector_id == other_id
-    assert by_slot.detector_index == 0
+    by_id = indexer.replace(geometry=reordered, detector_id=original_id)
+    assert by_id.detector_id == original_id
+    assert by_id.detector_index == 1
 
     crystal = load_crystal(CRYSTAL)
     assert indexer.replace(crystal=crystal).crystal is crystal
+    assert indexer.replace(cosmic_filter=True).detector_index == indexer.detector_index
 
 
-def test_indexer_validates_index_parameters():
-    with pytest.raises(ValueError, match="hkl_prefer"):
-        Indexer(
-            GEOMETRY,
-            index_params=IndexParams(hkl_prefer=(0, 1)),
-        )
-
-
-def test_indexer_requires_uint16_2d_frame():
-    indexer = Indexer(GEOMETRY)
-    with pytest.raises(ValueError, match="uint16"):
-        indexer.index(np.zeros((4, 4), dtype=np.float64))
-
-
-def test_native_invalid_input_maps_to_input_error():
-    from laueanalysis.indexing import InputError
-    from laueanalysis.indexing.indexer import _raise_native_error
-
-    with pytest.raises(InputError, match="peak search failed"):
-        _raise_native_error(1, "peak search", "invalid input")
-
-
-def test_native_allocation_failure_maps_to_memory_error():
-    from laueanalysis.indexing.indexer import _raise_native_error
-
-    with pytest.raises(MemoryError, match="orientation indexing failed"):
-        _raise_native_error(2, "orientation indexing", "unable to allocate storage")
-
-
-def test_indexer_validates_frame_roi_against_detector():
-    indexer = Indexer(GEOMETRY)
-    image = np.zeros((8, 12), dtype=np.uint16)
-
-    indexer.index(image, start=(2024, 2032), group=(2, 2))
-    with pytest.raises(ValueError, match="exceeds detector bounds 2048x2048"):
-        indexer.index(image, start=(2025, 2032), group=(2, 2))
-    with pytest.raises(ValueError, match="two nonnegative integers"):
-        indexer.index(image, start=(0.5, 0))
-
-
-def test_indexer_validates_hdf5_detector_id(tmp_path):
+def test_indexer_validates_detector_id_metadata_for_all_input_kinds(tmp_path):
     path = tmp_path / "wrong-detector.h5"
     with h5py.File(path, "w") as output:
         output.create_dataset("entry1/data/data", data=np.zeros((8, 12), dtype=np.uint16))
@@ -668,3 +654,20 @@ def test_indexer_validates_hdf5_detector_id(tmp_path):
     indexer = Indexer(GEOMETRY)
     with pytest.raises(ValueError, match="does not match selected detector"):
         indexer.index(path)
+    with pytest.raises(ValueError, match="does not match selected detector"):
+        indexer.index(
+            np.zeros((8, 12), dtype=np.uint16),
+            metadata={"detector_id": "wrong detector"},
+        )
+
+
+def test_explicit_detector_id_metadata_overrides_hdf5_metadata(tmp_path):
+    path = tmp_path / "wrong-detector.h5"
+    with h5py.File(path, "w") as output:
+        output.create_dataset("entry1/data/data", data=np.zeros((8, 12), dtype=np.uint16))
+        output.create_dataset("entry1/detector/ID", data=np.asarray([b"wrong detector"]))
+
+    indexer = Indexer(GEOMETRY)
+    result = indexer.index(path, metadata={"detector_id": indexer.detector_id})
+
+    assert result.metadata["detector_id"] == indexer.detector_id

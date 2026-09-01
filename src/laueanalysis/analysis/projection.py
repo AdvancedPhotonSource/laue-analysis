@@ -44,19 +44,24 @@ class SurfaceFrame:
     @classmethod
     def aps_34ide(cls, name="normal"):
         """Return a named APS 34-ID-E surface frame."""
-        ir2 = 1.0 / np.sqrt(2.0)
-        frames = {
-            "normal": ([1, 0, 0], [0, -ir2, -ir2], [0, ir2, -ir2]),
-            "F": ([1, 0, 0], [0, -ir2, -ir2], [0, ir2, -ir2]),
-            "X": ([0, -ir2, -ir2], [0, ir2, -ir2], [1, 0, 0]),
-            "H": ([1, 0, 0], [0, ir2, -ir2], [0, ir2, ir2]),
-            "Y": ([0, 0, 1], [1, 0, 0], [0, 1, 0]),
-            "Z": ([1, 0, 0], [0, 1, 0], [0, 0, 1]),
-        }
+        frames = cls.aps_34ide_presets()
         if name not in frames:
             raise ValueError(f"unknown APS 34-ID-E surface {name!r}; choose from {tuple(frames)}")
         tilt, roll, normal = frames[name]
         return cls(tilt, roll, normal, f"aps_34ide:{name}")
+
+    @staticmethod
+    def aps_34ide_presets():
+        """Return the named APS 34-ID-E surface vectors."""
+        ir2 = 1.0 / np.sqrt(2.0)
+        return {
+            "normal": ([1, 0, 0], [0, -ir2, -ir2], [0, ir2, -ir2]),
+            "X": ([0, -ir2, -ir2], [0, ir2, -ir2], [1, 0, 0]),
+            "H": ([1, 0, 0], [0, ir2, -ir2], [0, ir2, ir2]),
+            "Y": ([0, 0, 1], [1, 0, 0], [0, 1, 0]),
+            "Z": ([1, 0, 0], [0, 1, 0], [0, 0, 1]),
+            "F": ([1, 0, 0], [0, -ir2, -ir2], [0, ir2, -ir2]),
+        }
 
 
 def cubic_hkl_family(hkl):

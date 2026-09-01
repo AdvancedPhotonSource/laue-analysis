@@ -18,6 +18,9 @@ class HKLs:
     k: list = field(default_factory=lambda: [])
     l: list = field(default_factory=lambda: [])
     PkIndex: list = field(default_factory=lambda: [])
+    err_deg: list = field(default_factory=lambda: [])
+    energy_kev: list = field(default_factory=lambda: [])
+    pred_intens: list = field(default_factory=lambda: [])
 
     def fromString(self, val): #TODO
         for c in '[]()': #remove extra punctuation

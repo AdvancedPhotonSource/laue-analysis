@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
-from typing import Iterable, Mapping
+from typing import Iterable, Literal, Mapping
 
 import numpy as np
 
@@ -87,7 +87,7 @@ class PeakParams:
     min_separation: int = 10
     threshold: float | None = 100.0
     threshold_ratio: float | None = None
-    peak_shape: str = "Lorentzian"
+    peak_shape: Literal["Lorentzian", "Gaussian"] = "Lorentzian"
     max_peaks: int = 50
     smooth: bool = False
 
@@ -202,16 +202,16 @@ class Pattern:
     owns Python arrays copied from the native result.
     """
 
-    euler_deg: np.ndarray = field(repr=False)
-    rotation: np.ndarray = field(repr=False)
-    reciprocal: np.ndarray = field(repr=False)
+    euler_deg: np.ndarray
+    rotation: np.ndarray
+    reciprocal: np.ndarray
     goodness: float
     rms_error_deg: float
-    hkl: np.ndarray = field(repr=False)
-    pk_index: np.ndarray = field(repr=False)
-    err_deg: np.ndarray = field(repr=False)
-    energy_kev: np.ndarray = field(repr=False)
-    pred_intens: np.ndarray = field(repr=False)
+    hkl: np.ndarray
+    pk_index: np.ndarray
+    err_deg: np.ndarray
+    energy_kev: np.ndarray
+    pred_intens: np.ndarray
 
     def __repr__(self) -> str:
         return (
@@ -278,8 +278,7 @@ class FrameResult:
         Intensity threshold used by peak search. This is ``NaN`` when automatic
         thresholding receives no unmasked nonzero pixels.
     total_sum
-        Sum of unmasked frame pixel values. With ``smooth=True``, this is the
-        sum after smoothing.
+        Sum of unmasked raw frame pixel values.
     sum_above_threshold
         Sum of pixel values above ``threshold_used``.
     num_above_threshold
@@ -292,7 +291,8 @@ class FrameResult:
         Elapsed orientation-indexing time in seconds. Pixel-to-q conversion is
         not included in either timing field.
     threshold_ratio
-        Resolved automatic-threshold ratio supplied to native peak search.
+        Resolved automatic-threshold ratio supplied to native peak search, or
+        ``NaN`` when an absolute threshold made the ratio inactive.
     metadata
         Experiment metadata copied into the result.
     input_image
@@ -318,8 +318,8 @@ class FrameResult:
     to `False`.
     """
 
-    peaks: np.ndarray = field(repr=False)
-    patterns: tuple[Pattern, ...] = field(repr=False)
+    peaks: np.ndarray
+    patterns: tuple[Pattern, ...]
     threshold_used: float
     total_sum: float
     sum_above_threshold: float
@@ -623,8 +623,8 @@ class Indexer:
             raise InputError("max_rfactor must be positive")
         if peak.threshold_ratio is not None and peak.threshold_ratio <= 0:
             raise InputError("threshold_ratio must be positive or None")
-        if peak.peak_shape.upper()[:1] not in {"L", "G"}:
-            raise InputError("peak_shape must be Lorentzian or Gaussian")
+        if peak.peak_shape not in {"Lorentzian", "Gaussian"}:
+            raise InputError("peak_shape must be 'Lorentzian' or 'Gaussian'")
         if min(indexing.kev_max_calc, indexing.kev_max_test, indexing.angle_tolerance_deg, indexing.cone_deg) <= 0:
             raise InputError("indexing energy and angle parameters must be positive")
 
@@ -654,9 +654,9 @@ class Indexer:
             Optional finite sample depth in micrometres passed to pixel-to-q
             conversion.
         mask
-            Array with the same shape as ``frame``. Values are converted to
-            ``uint8`` and passed to native peak search, where nonzero pixels
-            are masked.
+            Array with the same shape as ``frame``. Values are converted to a
+            boolean ``uint8`` mask and passed to native peak search, where
+            nonzero pixels are masked.
         metadata
             Experiment metadata for XML output. Explicit values override
             metadata loaded from an HDF5 file.
@@ -691,10 +691,9 @@ class Indexer:
         can alias a contiguous array supplied by the caller. Native peak search
         uses a separate working copy, so smoothing does not modify that array.
 
-        ``total_sum`` excludes masked pixels and describes the smoothed working
-        image when smoothing is enabled. This differs from the LaueGo command
-        path: its ``smooth=True`` option affects fitting but records totals from
-        the unsmoothed image. Under automatic thresholding, a frame with no
+        Frame statistics exclude masked pixels and always describe the raw
+        input image. Smoothing applies only to peak detection and fitting. Under
+        automatic thresholding, a frame with no
         unmasked nonzero pixels returns a valid empty result with
         ``threshold_used`` set to ``NaN``.
 
@@ -702,16 +701,13 @@ class Indexer:
         raises an exception.
         """
         input_image = None
-        file_detector_id = None
         supplied_metadata = metadata.as_dict() if isinstance(metadata, FrameMetadata) else dict(metadata or {})
         if isinstance(frame, (str, Path)):
             input_image = str(frame)
             source, file_metadata, file_processing = read_h5_frame(frame)
-            file_detector_id = file_metadata.get("detector_id")
             supplied_metadata = {**file_metadata, **supplied_metadata}
             start = file_processing.get("start", start)
             group = file_processing.get("group", group)
-            depth = file_processing.get("depth", depth)
         else:
             source = np.asarray(frame)
         if source.ndim != 2 or source.dtype != np.uint16:
@@ -729,9 +725,10 @@ class Indexer:
             raise InputError("start must be two nonnegative integers and group two positive integers")
         start = tuple(int(value) for value in start)
         group = tuple(int(value) for value in group)
-        if file_detector_id is not None and file_detector_id != self.detector.detector_id:
+        detector_id = supplied_metadata.get("detector_id")
+        if detector_id is not None and detector_id != self.detector.detector_id:
             raise InputError(
-                f"frame detector_id {file_detector_id!r} does not match selected detector "
+                f"frame detector_id {detector_id!r} does not match selected detector "
                 f"{self.detector.detector_id!r}"
             )
         end_x, end_y = roi_inclusive_end(image.shape, start, group)
@@ -746,13 +743,16 @@ class Indexer:
         mask_buffer = None
         mask_pointer = ffi.NULL
         if mask is not None:
-            mask_buffer = np.ascontiguousarray(mask, dtype=np.uint8)
+            mask_buffer = np.ascontiguousarray(np.asarray(mask) != 0, dtype=np.uint8)
             if mask_buffer.shape != image.shape:
                 raise InputError(f"mask shape {mask_buffer.shape} does not match frame shape {image.shape}")
             mask_pointer = ffi.from_buffer("unsigned char[]", mask_buffer)
 
         threshold_ratio = (
             4.0 if self.peak_params.threshold_ratio is None else self.peak_params.threshold_ratio
+        )
+        recorded_threshold_ratio = (
+            threshold_ratio if self.peak_params.threshold is None else np.nan
         )
         params = ffi.new("laue_peak_params *")
         params.boxsize = self.peak_params.boxsize
@@ -761,7 +761,7 @@ class Indexer:
         params.min_separation = self.peak_params.min_separation
         params.threshold = np.nan if self.peak_params.threshold is None else self.peak_params.threshold
         params.threshold_ratio = threshold_ratio
-        params.peak_shape = 1 if self.peak_params.peak_shape.upper().startswith("G") else 0
+        params.peak_shape = 1 if self.peak_params.peak_shape == "Gaussian" else 0
         params.max_peaks = self.peak_params.max_peaks
         params.smooth = self.peak_params.smooth
         params.mask = mask_pointer
@@ -837,7 +837,7 @@ class Indexer:
                 peaks=peaks,
                 patterns=tuple(patterns),
                 threshold_used=result.threshold_used,
-                threshold_ratio=threshold_ratio,
+                threshold_ratio=recorded_threshold_ratio,
                 total_sum=result.total_sum,
                 sum_above_threshold=result.sum_above_threshold,
                 num_above_threshold=result.num_above_threshold,
@@ -928,32 +928,12 @@ class Indexer:
             "peak_params": self.peak_params,
             "index_params": self.index_params,
             "detector_index": self.detector_index,
-            "detector_id": self.detector_id,
             "cosmic_filter": self.cosmic_filter,
         }
-        if "detector_index" in changes and "detector_id" not in changes:
-            values["detector_id"] = None
+        if "detector_id" in changes:
+            values["detector_id"] = changes.pop("detector_id")
         values.update(changes)
         return type(self)(**values)
-
-    def write_xml(self, result: FrameResult, path: str | Path) -> None:
-        """Write one result in the LaueGo XML format.
-
-        Parameters
-        ----------
-        result
-            Result produced by an indexer.
-        path
-            Destination XML file. An existing file is replaced.
-
-        Raises
-        ------
-        RuntimeError
-            If ``result`` has no XML snapshot.
-        OSError
-            If the destination cannot be written.
-        """
-        write_step_xml(result.to_step(), str(path))
 
     def write_many_xml(self, results: Iterable[FrameResult], path: str | Path) -> None:
         """Write multiple results to one LaueGo XML document.
@@ -1023,7 +1003,7 @@ class Indexer:
                 setattr(step, destination, metadata[source])
         if "sample_position" in metadata:
             step.Xsample, step.Ysample, step.Zsample = metadata["sample_position"]
-        step.depth = "nan" if result.depth is None else str(result.depth)
+        step.depth = result.depth
         step.detector.inputImage = result.input_image
         step.detector.detectorID = metadata.get("detector_id", self.detector_id)
         step.detector.exposure = metadata.get("exposure_seconds")
@@ -1058,6 +1038,7 @@ class Indexer:
             peak_data.addPeak(*[str(peak[name]) for name in (
                 "fit_x", "fit_y", "intens", "integral", "hwhm_x", "hwhm_y", "tilt", "chisq"
             )])
+            peak_data.background.append(str(peak["background"]))
             peak_data.addQVector(*(str(value) for value in peak["qhat"]))
 
         indexing = Indexing(
@@ -1084,6 +1065,9 @@ class Indexer:
                 k=[str(value) for value in source.hkl[:, 1]],
                 l=[str(value) for value in source.hkl[:, 2]],
                 PkIndex=[str(value) for value in source.pk_index],
+                err_deg=[str(value) for value in source.err_deg],
+                energy_kev=[str(value) for value in source.energy_kev],
+                pred_intens=[str(value) for value in source.pred_intens],
             )
             indexing.patterns.append(StepPattern(
                 num=number,

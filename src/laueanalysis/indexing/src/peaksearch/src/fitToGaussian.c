@@ -225,8 +225,8 @@ gsl_vector * f)
 	//	printf("\n**xp**:\n");
 	for(i=0;i<n;i++) {
 		// if(i%nx==0) printf("\n");
-		xp = (i%ny - a4)* c/a2 - (i/nx - a5) * s/a2;
-		yp = (i%ny - a4) *s/a3 + (i/nx - a5) * c/a3;
+		xp = (i%nx - a4)* c/a2 - (i/nx - a5) * s/a2;
+		yp = (i%nx - a4) *s/a3 + (i/nx - a5) * c/a3;
 		u = 1./((xp*xp) + (yp*yp) + 1.);
 		Yi = a0 + a1 * u;
 		// printf("%5.2f ",xp);
@@ -277,8 +277,8 @@ gsl_matrix *J)
 		c = 1.;
 	}
 	for(i=0;i<n;i++){
-		xp = (i%ny - a4)* c/a2 - (i/nx - a5) * s/a2;
-		yp = (i%ny - a4) *s/a3 + (i/nx - a5) * c/a3;
+		xp = (i%nx - a4)* c/a2 - (i/nx - a5) * s/a2;
+		yp = (i%nx - a4) *s/a3 + (i/nx - a5) * c/a3;
 		u = 1./((xp*xp) + (yp*yp) + 1.);
 
 		gsl_matrix_set(J,i,0,1.);
@@ -499,8 +499,8 @@ double	*chisq)
 	for(i=0;i<n;i++) {
 		datai = data[i];
 		if (datai!=datai) continue;		/* skip NaNs in the data */
-		xp = (i%ny - a_fit[4]) * c/a_fit[2] - (i/nx - a_fit[5]) * s/a_fit[2];
-		yp = (i%ny - a_fit[4]) * s/a_fit[3] + (i/nx - a_fit[5]) * c/a_fit[3];
+		xp = (i%nx - a_fit[4]) * c/a_fit[2] - (i/nx - a_fit[5]) * s/a_fit[2];
+		yp = (i%nx - a_fit[4]) * s/a_fit[3] + (i/nx - a_fit[5]) * c/a_fit[3];
 		u = 1./((xp*xp) + (yp*yp) + 1.);
 		F = a_fit[0] + a_fit[1] * u;
 		chi = (F-datai) * (F-datai);

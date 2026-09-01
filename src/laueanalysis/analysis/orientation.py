@@ -95,11 +95,13 @@ def reciprocal_to_orientation(reciprocal, reference_reciprocal):
 
 
 def orientation_to_rodrigues(rotation):
-    """Convert a 3 by 3 rotation matrix to a Rodrigues vector.
+    """Convert a 3 by 3 rotation matrix to ``axis * tan(angle / 2)``.
 
-    At 180 degrees, where the conventional Rodrigues magnitude is singular, a
-    finite pi-magnitude axis vector is returned. The axis sign is inherently
-    ambiguous there; the first nonzero component is chosen positive.
+    The Rodrigues magnitude is singular at 180 degrees. Near that singularity,
+    the axis is recovered from the rotation eigenvectors and the effective angle
+    is clamped to ``pi - 1e-7`` radians, with the first nonzero axis component
+    chosen positive. Unlike the Laue Portal's zero-vector fallback, this retains
+    a deterministic axis and decodes to approximately 180 degrees.
     """
     rotation = np.asarray(rotation, dtype=float)
     if rotation.shape != (3, 3):
@@ -119,10 +121,8 @@ def orientation_to_rodrigues(rotation):
         first = np.flatnonzero(np.abs(axis) > 1e-12)
         if first.size and axis[first[0]] < 0:
             axis = -axis
-    else:
-        axis /= norm
-    if np.pi - angle < 1e-8:
-        return axis * angle
+        return axis * np.tan((np.pi - 1e-7) / 2.0)
+    axis /= norm
     return axis * np.tan(angle / 2.0)
 
 
@@ -171,7 +171,9 @@ def _hexagonal_symmetry_ops():
 
 
 CUBIC_SYMMETRY = _cubic_symmetry_ops()
+CUBIC_SYMMETRY.setflags(write=False)
 HEXAGONAL_SYMMETRY = _hexagonal_symmetry_ops()
+HEXAGONAL_SYMMETRY.setflags(write=False)
 
 
 def symmetry_operations(symmetry: str | int) -> np.ndarray:

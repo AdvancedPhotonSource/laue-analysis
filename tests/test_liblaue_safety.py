@@ -43,6 +43,7 @@ assert ffi.string(error) == b"invalid crystal parameters"
 
 assert lib.laue_geometry_detector_count(ffi.NULL) == 0
 assert lib.laue_geometry_find_detector(ffi.NULL, b"detector") == -1
+assert lib.laue_crystal_reciprocal(ffi.NULL, ffi.NULL) == 1
 assert lib.laue_geometry_detector_info(ffi.NULL, 0, info, error, 256) == 1
 assert ffi.string(error) == b"invalid detector index"
 

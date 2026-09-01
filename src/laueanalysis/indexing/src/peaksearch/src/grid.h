@@ -49,7 +49,6 @@ typedef struct {
 Grid*	grid_new(int height, int width);
 Grid*	grid_new_copy(Grid* g);
 Grid*	grid_new_copy_region(Grid* g, int x1, int y1, int x2, int y2);
-Grid*	grid_new_bin(Grid* g, int scale_exponent);
 void	grid_copy(Grid* destination, Grid* source);
 void	grid_copy_region(Grid* destination, Grid* source, int x1, int y1, int x2, int y2);
 static inline void grid_set_value(Grid* g, int x, int y, double value) {

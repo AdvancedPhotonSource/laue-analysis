@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from laueanalysis.indexing import index, IndexingResult
+from laueanalysis.indexing import IndexingResult, lauego
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,7 +105,7 @@ def _fake_run_p2q(*args, **kwargs):
 
 @pytest.mark.parametrize("template_has_depth", [True, False])
 def test_depth_override_applied_in_peaks_header(template_has_depth: bool):
-    # Use real file paths for consistency with index() naming, but processing is mocked.
+    # Use real file paths for consistency with lauego() naming, but processing is mocked.
     test_file = str(ROOT / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5")
     geo_file = str(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
     crystal_file = str(ROOT / "tests/config/Ni.xml")
@@ -122,7 +122,7 @@ def test_depth_override_applied_in_peaks_header(template_has_depth: bool):
          patch("laueanalysis.indexing.index._run_peaksearch", _make_fake_run_peaksearch(template)), \
          patch("laueanalysis.indexing.index._run_p2q", _fake_run_p2q):
         # Run indexing with depth_override; executables are mocked
-        result = index(
+        result = lauego(
             input_image=test_file,
             output_dir=temp_dir,
             geo_file=geo_file,

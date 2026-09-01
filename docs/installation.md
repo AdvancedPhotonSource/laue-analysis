@@ -27,6 +27,8 @@ The build needs these tools and libraries:
 
 Other minor versions of GSL and HDF5 can work, but the tests run against the versions above.
 
+Running the complete native memory regression test also requires Valgrind and a C compiler available as `cc`. Both are included in `environment.yml`; on Debian or Ubuntu install `valgrind` alongside `build-essential`.
+
 CUDA is not required. See [GPU reconstruction](#gpu-reconstruction).
 
 ## Install with conda (recommended)
@@ -72,7 +74,7 @@ Use this path on a Linux system that already provides the native dependencies, f
 1. Install the native dependencies. On Debian or Ubuntu:
 
    ```console
-   $ sudo apt-get install build-essential libgsl-dev libhdf5-dev zlib1g-dev
+   $ sudo apt-get install build-essential libgsl-dev libhdf5-dev zlib1g-dev valgrind
    ```
 
 2. Create and activate a virtual environment:

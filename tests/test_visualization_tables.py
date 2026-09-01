@@ -128,6 +128,13 @@ def test_empty_scoped_tables_keep_schema():
         assert len(table.columns) > 0
 
 
+def test_zero_frame_result_set_peak_table_keeps_peak_schema():
+    table = peak_table(ResultSet((), frame_ids=()))
+
+    assert len(table) == 0
+    assert {"fit_x", "fit_y", "background", "qhat_x", "qhat_y", "qhat_z"} <= set(table.columns)
+
+
 def test_choice_descriptors_match_portal_values_and_are_unique():
     assert tuple(choice.value for choice in AXIS_OPTIONS) == (
         "X", "Y", "Z", "H", "F", "depth", "Xlab", "Ylab", "Zlab", "Hlab", "Flab"

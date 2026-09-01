@@ -14,9 +14,6 @@ double	biggestIntensity(List *peaks, double maxIntens, double *x, double *y);
 void	removeSmallerNearbyPeaks(List *peaks, double px, double py, double pIntens, int minSeparation);
 static void deletePointList(List *points);
 static void deletePointValue(void *value);
-#ifdef OLD_UNUSED_CODE
-List*	find_maximas(Grid* image, double threshold, int npix, double saturation_level, int shiftx, int shifty);
-#endif
 
 
 #ifdef DEBUG
@@ -938,70 +935,6 @@ static void deletePointValue(void *value)
 {
 	point_delete((Point *)value);
 }
-
-#ifdef OLD_UNUSED_CODE
-/*not used, instead, centroid_2 is used for large blobs*/
-List* find_maximas(Grid* image, double threshold, int npix, double saturation_level, int shiftx, int shifty) {
-
-//	double max = grid_get_max(image);
-//	double min = grid_get_min(image);
-
-	int xdim = image->width;
-	int ydim = image->height;
-
-	/* get a copy of the image so that we may modify it with impunity */
-	Grid* filtered_image = grid_new_copy(image);
-
-
-	/* exclude border cells */
-	int x, y;
-	for (x = 0; x < xdim; x++) {
-		for (y = 0; y < ydim; y++) {
-			/* If this point is <= npix units away from any edge, lower it to below the threshold */
-			if ((x < npix) || (x > xdim - npix) || (y < npix) || (y > ydim - npix)) {
-				grid_set_value(filtered_image, x, y, threshold-1);
-			}
-		}
-	}
-
-
-	double value;						/* store the value of the pixel being looked at */
-	List* maximas = list_new();			/* store all of the maxima points we find */
-
-//	int x, y;
-	for (x = 0; x < xdim; x++) {
-		for (y = 0; y < ydim; y++) {
-
-			value = grid_get_value(filtered_image, x, y);
-
-			bool highest = true;
-
-			/* if this point is above the threshold, yet not saturated, check to see if it is the brightest in the region*/
-			if (value > threshold && value < saturation_level) {
-
-				/* loop over all cells in a grid from -npix to npix */
-				int cx, cy;
-
-				for (cx = -npix; cx < xdim && highest; cx++) {
-					for (cy = -npix; cy < ydim && highest; cy++) {
-
-						if (x+cx >= 0 && y+cy >= 0 && x+cx < xdim && y+cy <= ydim) {
-							if (grid_get_value(filtered_image, x+cx, y+cy) > value) {
-								highest = false; /* TODO: where is my labeled break / multi-level exit? */
-							}
-						}
-					}
-				}
-
-				/* if this is indeed the highest value in the region, then append this value to the list of points */
-				if (highest) list_append( maximas, point_new_initialized((double)(x+shiftx), (double)(y+shifty), value) );
-
-			}
-		}
-	}
-	return maximas;
-}
-#endif
 
 /*****************************************************************************/
 List* get_blob_list(Grid* image, Grid* bitmap, int *status) {

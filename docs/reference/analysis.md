@@ -4,13 +4,11 @@
 
 ## Reciprocal and orientation conventions
 
-Reciprocal basis vectors occupy the rows of each `(3, 3)` matrix. They include the $2\pi$ factor and use `1/nm`. For a cubic cell with lattice parameter $a$ in nm, each reciprocal row has magnitude $2\pi/a$. For a Miller-index row `hkl`, calculate its scattering vector as `hkl @ reciprocal`.
+See the [results guide](../guides/results.md) for the reciprocal-basis convention. {func}`~laueanalysis.analysis.lattice_params_to_reciprocal` takes cell lengths in nm and angles in degrees.
 
-{func}`~laueanalysis.analysis.lattice_params_to_reciprocal` takes `a`, `b`, and `c` in nm. It returns reciprocal rows in `1/nm`. Cell angles use degrees.
+An orientation matrix maps vectors from the reference crystal basis to the measured basis. {func}`~laueanalysis.analysis.reciprocal_to_orientation` calculates that matrix as `measured.T @ inv(reference.T)`. {func}`~laueanalysis.analysis.crystal_direction` applies the inverse orientation to a laboratory-frame direction.
 
-The direct basis has `c` parallel to positive z. The `b` vector lies in the yz plane, and `a` completes a right-handed basis. An orientation matrix maps vectors from this reference crystal basis to the measured basis. {func}`~laueanalysis.analysis.reciprocal_to_orientation` calculates that matrix as `measured.T @ inv(reference.T)`. {func}`~laueanalysis.analysis.crystal_direction` applies the inverse orientation to a laboratory-frame direction.
-
-Rotation matrices have shape `(3, 3)` and are dimensionless. Rodrigues vectors are also dimensionless except at 180 degrees, where {func}`~laueanalysis.analysis.orientation_to_rodrigues` returns a finite axis vector with magnitude $\pi$. Misorientation angles use degrees.
+Rotation matrices have shape `(3, 3)` and are dimensionless. Rodrigues vectors use the dimensionless $\hat{a}\tan(\theta/2)$ convention. At the 180-degree singularity, {func}`~laueanalysis.analysis.orientation_to_rodrigues` clamps the effective angle to $\pi - 10^{-7}$ radians while retaining a deterministic rotation axis. Misorientation angles use degrees.
 
 ## Lattice and orientation
 

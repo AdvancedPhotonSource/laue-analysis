@@ -3,8 +3,6 @@
 #ifndef _GRID_OPERATIONS_H_
 #define _GRID_OPERATIONS_H_
 
-Grid*	grid_new_bin(Grid* g, int scale_exponent);
-Grid*	grid_new_upscale(Grid* g, int scale_exponent);
 int	grid_smooth_boxcar(Grid* g, int range);
 int	grid_smooth_median(Grid* g, int range);
 int	grid_smooth_gauss(Grid* g, int range);

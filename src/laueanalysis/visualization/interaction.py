@@ -41,6 +41,10 @@ def selection_from_plotly(event_data) -> PlotlySelection:
     patterns = []
     peaks = []
     reflections = []
+    seen_frames = set()
+    seen_patterns = set()
+    seen_peaks = set()
+    seen_reflections = set()
     for point in points:
         if not isinstance(point, dict):
             raise ValueError("each Plotly event point must be a mapping")
@@ -53,21 +57,24 @@ def selection_from_plotly(event_data) -> PlotlySelection:
         if isinstance(frame_id, (bool, np.bool_)) or not isinstance(frame_id, (str, Integral)):
             raise ValueError("customdata frame IDs must be strings or integers")
         frame_id = int(frame_id) if isinstance(frame_id, Integral) else frame_id
-        if frame_id not in frames:
+        if frame_id not in seen_frames:
+            seen_frames.add(frame_id)
             frames.append(frame_id)
         if pattern_index is not None:
             if isinstance(pattern_index, (bool, np.bool_)) or not isinstance(pattern_index, Integral):
                 raise ValueError("customdata pattern indices must be integers or None")
             pattern_index = int(pattern_index)
             identity = (frame_id, pattern_index)
-            if identity not in patterns:
+            if identity not in seen_patterns:
+                seen_patterns.add(identity)
                 patterns.append(identity)
         if peak_index is not None:
             if isinstance(peak_index, (bool, np.bool_)) or not isinstance(peak_index, Integral):
                 raise ValueError("customdata peak indices must be integers or None")
             peak_index = int(peak_index)
             identity = (frame_id, peak_index)
-            if identity not in peaks:
+            if identity not in seen_peaks:
+                seen_peaks.add(identity)
                 peaks.append(identity)
         if peak_index is None and pattern_index is not None and len(customdata) >= 6:
             reflection = customdata[3:6]
@@ -77,7 +84,8 @@ def selection_from_plotly(event_data) -> PlotlySelection:
             ):
                 raise ValueError("customdata Miller indices must be integers")
             identity = (frame_id, pattern_index, *(int(value) for value in reflection))
-            if identity not in reflections:
+            if identity not in seen_reflections:
+                seen_reflections.add(identity)
                 reflections.append(identity)
     return PlotlySelection(
         tuple(frames), tuple(patterns), tuple(peaks), tuple(reflections)

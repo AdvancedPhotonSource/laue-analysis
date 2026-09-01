@@ -98,7 +98,7 @@ def test_atom_occupancy_round_trips_through_indexing_xml(tmp_path):
     indexer = Indexer(GEOMETRY, crystal)
     result = indexer.index(np.zeros((2, 2), dtype=np.uint16))
     path = tmp_path / "occupancy.xml"
-    indexer.write_xml(result, path)
+    result.write_xml(path)
 
     loaded = load_visualization_xml(path)
 
@@ -225,10 +225,39 @@ def test_declared_peak_count_preserves_rows_with_missing_fields(tmp_path):
     assert dataset.peaks["fit_y"][2] == 5
 
 
+@pytest.mark.parametrize(
+    ("fragment", "field"),
+    [
+        ("<Nx>nan</Nx>", "Nx"),
+        ('<Nx>1</Nx><peaksXY Npeaks="nan"/>', "peaksXY.Npeaks"),
+    ],
+)
+def test_malformed_integer_fields_report_file_step_and_field(tmp_path, fragment, field):
+    path = tmp_path / "malformed.xml"
+    path.write_text(f"<AllSteps><step><detector>{fragment}</detector></step></AllSteps>")
+
+    with pytest.raises(ValueError, match=rf"{path}.*step 0.*{field}"):
+        load_visualization_xml(path)
+
+
 def test_load_visualization_xml_accepts_explicit_geometry(legacy_xml):
     geometry = Geometry(GEOMETRY)
     dataset = load_visualization_xml(legacy_xml, geometry=geometry)
     assert dataset.geometry is geometry
+
+
+@requires_liblaue
+def test_embedded_relative_geometry_resolves_from_xml_directory(tmp_path):
+    geometry = tmp_path / "geometry.xml"
+    geometry.write_text(GEOMETRY.read_text())
+    path = tmp_path / "indexing.xml"
+    path.write_text(
+        """<AllSteps><step><detector><geoFile>geometry.xml</geoFile></detector></step></AllSteps>"""
+    )
+
+    dataset = load_visualization_xml(path)
+
+    assert dataset.geometry.path == geometry
 
 
 def test_missing_embedded_geometry_is_not_required(tmp_path):

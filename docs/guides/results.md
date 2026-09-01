@@ -105,7 +105,7 @@ The result records:
 - `peaksearch_seconds`
 - `indexing_seconds`
 
-`total_sum` excludes masked pixels. With `PeakParams(smooth=True)`, it sums the smoothed working image. This can differ from the LaueGo subprocess result because that path records totals before optional smoothing.
+`total_sum`, `sum_above_threshold`, and `num_above_threshold` exclude masked pixels and describe the raw input image. With `PeakParams(smooth=True)`, smoothing applies only to peak detection and fitting.
 
 `indexing_seconds` measures the orientation-indexing section. It includes the negligible branch when no crystal is supplied or too few peaks are present. Pixel-to-q conversion is not included in either timing field. `elapsed_seconds` therefore does not measure complete call latency.
 

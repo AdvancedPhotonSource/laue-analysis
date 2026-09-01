@@ -15,12 +15,7 @@ statistics.
 
 ## Indexed Pattern
 
-`Pattern.reciprocal` contains reciprocal basis vectors as rows in `1/nm`, including
-the `2*pi` factor. It uses the native basis orientation: the direct `c` vector
-is parallel to positive z and `b` lies in the yz plane. The crystal's space
-group applies native ideal-angle and equal-length constraints before this basis
-is constructed. See the [results guide](../guides/results.md) for the complete
-convention and migration note.
+See the [results guide](../guides/results.md) for the reciprocal-basis convention used by `Pattern.reciprocal`.
 
 ```{eval-rst}
 .. currentmodule:: laueanalysis.indexing

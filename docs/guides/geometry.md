@@ -43,26 +43,7 @@ A detector index is a physical slot from the geometry file. It is not a zero-bas
 
 Frame coordinates use zero-based `(x, y)` order. NumPy arrays use `[y, x]` indexing and have shape `(ny, nx)`.
 
-`start=(start_x, start_y)` gives the full-detector origin of an in-memory frame. `group=(group_x, group_y)` gives the positive integer detector-pixel grouping factor. The full-detector position used for conversion is the center of the corresponding group:
-
-```{math}
-x_d = start_x + x_f group_x + \frac{group_x - 1}{2}
-```
-
-```{math}
-y_d = start_y + y_f group_y + \frac{group_y - 1}{2}
-```
-
-Here, `(x_f, y_f)` is a fitted coordinate in the supplied frame and `(x_d, y_d)` is its full-detector coordinate.
-
-The complete frame region must fit inside the selected detector. For an image with shape `(ny, nx)`, the API checks:
-
-```text
-start_x + nx * group_x <= detector.nx
-start_y + ny * group_y <= detector.ny
-```
-
-See [Pixel-to-q conversion](../concepts/algorithms/pixel-to-q.md) for the subsequent physical-coordinate transformation.
+`start=(start_x, start_y)` gives the full-detector origin of an in-memory frame. `group=(group_x, group_y)` gives the positive integer detector-pixel grouping factor. The complete grouped frame must fit inside the selected detector. See [Pixel-to-q conversion](../concepts/algorithms/pixel-to-q.md) for the coordinate equations and physical transformation.
 
 ## Inspect detector metadata
 

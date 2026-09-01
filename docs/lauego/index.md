@@ -1,15 +1,13 @@
 # LaueGo interfaces
 
-The `index` and `lauego` names refer to the same subprocess-based compatibility function. It runs the `peaksearch`, `pix2qs`, and `euler` programs and writes intermediate text files beneath an output directory.
+The `lauego` function runs the `peaksearch`, `pix2qs`, and `euler` programs and writes intermediate text files beneath an output directory.
 
 New code should use the in-process API. The LaueGo function remains documented so existing workflows can migrate without assuming identical behavior.
 
 ## Current interfaces
 
 ```python
-from laueanalysis.indexing import index, lauego
-
-assert index is lauego
+from laueanalysis.indexing import lauego
 ```
 
 The function returns an `IndexingResult`, documented in the [LaueGo API reference](../reference/lauego.md). It reports success through fields such as `success` and `error` and stores output paths, logs, command history, counts, parsed LaueGo structures, and an optional XML path.

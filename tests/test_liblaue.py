@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 
+import h5py
 import numpy as np
 import pytest
 
@@ -38,12 +39,18 @@ def test_pixels_to_q_matches_lauego_reference(p2q_file):
     from laueanalysis.indexing._liblaue import Geometry, version
 
     geometry_file = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
-    peaks_file = ROOT / "tests/data/synthetic/baseline/peaks" / p2q_file.name.replace("p2q_", "peaks_")
+    stem = p2q_file.stem.removeprefix("p2q_")
+    peaks_file = ROOT / "tests/data/synthetic/baseline/peaks" / f"peaks_{stem}.txt"
+    frame_file = ROOT / "tests/data/synthetic/frames" / f"{stem}.h5"
 
     peak_rows = _table_after(peaks_file, "$peakList")
     expected = _table_after(p2q_file, "$N_Ghat+Intens", delimiter=",")[:, :3]
+    with h5py.File(frame_file) as frame:
+        detector = frame["entry1/detector"]
+        start = (int(detector["startx"][0]), int(detector["starty"][0]))
+        group = (int(detector["binx"][0]), int(detector["biny"][0]))
     geometry = Geometry(geometry_file)
-    actual = geometry.pixels_to_q(peak_rows[:, :2])
+    actual = geometry.pixels_to_q(peak_rows[:, :2], start=start, group=group)
 
     assert version() == "0.2.0"
     assert geometry.detector_count == 3
@@ -205,6 +212,17 @@ def test_geometry_rejects_malformed_detector_declarations(tmp_path, transform):
     path.write_text(transform(source.read_text()))
 
     with pytest.raises(ValueError, match="unable to read detector geometry"):
+        Geometry(path)
+
+
+def test_geometry_rejects_duplicate_detector_ids(tmp_path):
+    from laueanalysis.indexing._liblaue import Geometry
+
+    source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
+    path = tmp_path / "duplicate-id.xml"
+    path.write_text(source.read_text().replace("PE0822 883-4841", "PE1621 723-3335"))
+
+    with pytest.raises(ValueError, match="duplicate detector ID"):
         Geometry(path)
 
 

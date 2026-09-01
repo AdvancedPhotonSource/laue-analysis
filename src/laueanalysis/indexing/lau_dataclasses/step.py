@@ -1,5 +1,7 @@
 from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass, field
+import math
+
 import h5py
 
 from laueanalysis.indexing.lau_dataclasses.detector import Detector
@@ -50,7 +52,7 @@ class Step:
     Xsample: float = None
     Ysample: float = None
     Zsample: float = None
-    depth: str = 'nan' #default no depth
+    depth: float | None = None
     energy: float = None
     energyUnit: str = 'keV'
     hutchTemperature: float = None
@@ -81,30 +83,24 @@ class Step:
     def getXMLElem(self) -> Element:
         elem = Element("step")
         elem.set('original_xmlns', self.original_xmlns)
-        attrs = ['title', 'sampleName', 'userName', 'beamline',
-            'scanNum']
-        for attr in attrs:
-            sub = Element(attr)
-            sub.text = str(getattr(self, attr))
-            elem.append(sub)
 
-        SubElement(elem, 'date').text = self.dateExposed
-        attrs = ['beamBad', 'CCDshutter', 'lightOn',
-            'monoMode', 'Xsample', 'Ysample', 'Zsample', 'depth']
-        for attr in attrs:
-            sub = Element(attr)
-            sub.text = str(getattr(self, attr))
-            elem.append(sub)
+        def add(name, value):
+            if value is not None and not (isinstance(value, float) and math.isnan(value)):
+                SubElement(elem, name).text = str(value)
 
-        energy = SubElement(elem, 'energy')
-        energy.set('unit', self.energyUnit)
-        energy.text = str(self.energy)
-        attrs = ['hutchTemperature', 'sampleDistance']
+        for attr in ('title', 'sampleName', 'userName', 'beamline', 'scanNum'):
+            add(attr, getattr(self, attr))
 
-        for attr in attrs:
-            sub = Element(attr)
-            sub.text = str(getattr(self, attr))
-            elem.append(sub)
+        add('date', self.dateExposed)
+        for attr in ('beamBad', 'CCDshutter', 'lightOn', 'monoMode', 'Xsample', 'Ysample', 'Zsample', 'depth'):
+            add(attr, getattr(self, attr))
+
+        if self.energy is not None and not (isinstance(self.energy, float) and math.isnan(self.energy)):
+            energy = SubElement(elem, 'energy')
+            energy.set('unit', self.energyUnit)
+            energy.text = str(self.energy)
+        for attr in ('hutchTemperature', 'sampleDistance'):
+            add(attr, getattr(self, attr))
         elem.append(self.detector.getXMLElem())
         elem.append(self.indexing.getXMLElem())
 

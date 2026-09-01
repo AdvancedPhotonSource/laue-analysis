@@ -37,6 +37,8 @@ pytestmark = requires_liblaue
         (PeakParams(max_rfactor=0), "max_rfactor"),
         (PeakParams(threshold_ratio=-1), "threshold_ratio"),
         (PeakParams(peak_shape="Voigt"), "peak_shape"),
+        (PeakParams(peak_shape="Lemon"), "peak_shape"),
+        (PeakParams(peak_shape="G"), "peak_shape"),
     ],
 )
 def test_indexer_rejects_invalid_peak_parameters(peak_params, message):

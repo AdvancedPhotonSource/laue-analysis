@@ -31,14 +31,13 @@ dependencies = [
     "numpy>=1.20.0",
     "pandas>=2.0",
     "plotly>=6.0",
-    "pyyaml>=5.4",
 ]
 
 [project.urls]
 Repository = "https://github.com/AdvancedPhotonSource/laue-analysis"
 
 [project.optional-dependencies]
-test = ["pytest>=7.0"]
+test = ["pytest>=7.0", "pyyaml>=5.4"]
 docs = [
     "myst-parser>=4.0",
     "pydata-sphinx-theme>=0.16",

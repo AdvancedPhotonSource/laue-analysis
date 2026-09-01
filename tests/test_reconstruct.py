@@ -29,44 +29,35 @@ def test_reconstruction_geometry_parameter_is_unified():
     assert "geometry_file" not in inspect.signature(reconstruct_gpu).parameters
 
 
+@pytest.fixture
+def mock_subprocess():
+    with patch("subprocess.run") as mock:
+        help_response = MagicMock(
+            returncode=1,
+            stdout="Usage: WireScan -i <file> -o <file> -g <file>",
+            stderr="",
+        )
+        run_response = MagicMock(
+            returncode=0,
+            stdout="Reconstruction complete",
+            stderr="",
+        )
+        mock.side_effect = lambda args, **kwargs: (
+            help_response if "--help" in args else run_response
+        )
+        yield mock
+
+
+@pytest.fixture
+def mock_executable():
+    with patch("laueanalysis.reconstruct.reconstruct._find_executable") as mock:
+        mock.side_effect = lambda name="reconstructN_cpu": f"/path/to/{name}"
+        yield mock
+
+
 class TestReconstruct:
     """Test reconstruction functions."""
-    
-    @pytest.fixture
-    def mock_subprocess(self):
-        """Mock subprocess.run for unit tests."""
-        with patch('subprocess.run') as mock:
-            # Default return value for validation calls (--help)
-            help_response = MagicMock(
-                returncode=1,  # WireScan returns 1 for help
-                stdout="Usage: WireScan -i <file> -o <file> -g <file>",
-                stderr="",
-                timeout=None
-            )
-            # Default return value for actual reconstruction calls
-            run_response = MagicMock(
-                returncode=0,
-                stdout="Reconstruction complete",
-                stderr="",
-                timeout=None
-            )
-            
-            # Return help response for validation, run response for actual execution
-            def side_effect(*args, **kwargs):
-                if '--help' in args[0]:
-                    return help_response
-                return run_response
-            
-            mock.side_effect = side_effect
-            yield mock
-    
-    @pytest.fixture
-    def mock_executable(self):
-        """Mock the executable finder."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:
-            mock.return_value = '/path/to/reconstructN_cpu'
-            yield mock
-    
+
     def test_reconstruction_result_type(self):
         """Test that ReconstructionResult is properly defined."""
         result = ReconstructionResult(
@@ -81,9 +72,15 @@ class TestReconstruct:
         assert len(result.output_files) == 2
         assert result.error is None
     
-    def test_reconstruct_basic(self, mock_subprocess, mock_executable):
-        """Test basic reconstruction call."""
-        result = reconstruct(
+    @pytest.mark.parametrize(
+        ("reconstruct_function", "executable"),
+        [(reconstruct, "reconstructN_cpu"), (reconstruct_gpu, "reconstructN_gpu")],
+    )
+    def test_reconstruct_basic(
+        self, mock_subprocess, mock_executable, reconstruct_function, executable
+    ):
+        """Test basic CPU and GPU reconstruction calls."""
+        result = reconstruct_function(
             'input.h5',
             'output_',
             'geo.xml',
@@ -100,6 +97,7 @@ class TestReconstruct:
         call_args = mock_subprocess.call_args[0][0]
         
         # Check basic arguments
+        assert call_args[0] == f"/path/to/{executable}"
         assert '-i' in call_args
         assert 'input.h5' in call_args
         assert '-o' in call_args
@@ -111,9 +109,37 @@ class TestReconstruct:
         assert '-e' in call_args
         assert '10.0' in call_args
     
-    def test_reconstruct_with_all_options(self, mock_subprocess, mock_executable):
-        """Test reconstruction with all optional parameters."""
-        result = reconstruct(
+    def test_reconstruct_reports_only_new_or_updated_outputs_in_numeric_order(
+        self, tmp_path, mock_executable
+    ):
+        output_base = tmp_path / "recon_"
+        stale = tmp_path / "recon_1.h5"
+        stale.write_text("stale")
+
+        def run(*args, **kwargs):
+            (tmp_path / "recon_10.h5").write_text("new")
+            (tmp_path / "recon_2.h5").write_text("new")
+            return MagicMock(returncode=0, stdout="complete", stderr="")
+
+        with patch("subprocess.run", side_effect=run):
+            result = reconstruct(
+                "input.h5", str(output_base), "geo.xml", (0.0, 10.0)
+            )
+
+        assert result.output_files == [
+            str(tmp_path / "recon_2.h5"),
+            str(tmp_path / "recon_10.h5"),
+        ]
+
+    @pytest.mark.parametrize(
+        ("reconstruct_function", "wire_depths_flag"),
+        [(reconstruct, "--wireDepths"), (reconstruct_gpu, "-W")],
+    )
+    def test_reconstruct_with_all_options(
+        self, mock_subprocess, mock_executable, reconstruct_function, wire_depths_flag
+    ):
+        """Test shared CPU and GPU reconstruction options."""
+        result = reconstruct_function(
             'input.h5',
             'output_',
             'geo.xml',
@@ -157,12 +183,14 @@ class TestReconstruct:
         assert 'distortion.map' in call_args
         assert '-D' in call_args
         assert '1' in call_args
-        assert '--wireDepths' in call_args
+        assert wire_depths_flag in call_args
         assert 'depths.txt' in call_args
     
-    def test_wire_edge_mapping(self, mock_subprocess, mock_executable):
+    @pytest.mark.parametrize("reconstruct_function", [reconstruct, reconstruct_gpu])
+    def test_wire_edge_mapping(
+        self, mock_subprocess, mock_executable, reconstruct_function
+    ):
         """Test that wire edge names are properly mapped."""
-        # Test user-friendly names
         for user_name, expected in [
             ('leading', 'l'),
             ('trailing', 't'),
@@ -172,7 +200,7 @@ class TestReconstruct:
             ('t', 't'),
             ('b', 'b')
         ]:
-            result = reconstruct(
+            reconstruct_function(
                 'input.h5', 'output_', 'geo.xml', (0, 10),
                 wire_edge=user_name
             )
@@ -180,20 +208,22 @@ class TestReconstruct:
             idx = call_args.index('-w')
             assert call_args[idx + 1] == expected
     
-    def test_invalid_wire_edge(self, mock_executable):
+    @pytest.mark.parametrize("reconstruct_function", [reconstruct, reconstruct_gpu])
+    def test_invalid_wire_edge(self, mock_executable, reconstruct_function):
         """Test that invalid wire edge raises ValueError."""
         with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
             with pytest.raises(ValueError, match="Invalid wire_edge"):
-                reconstruct(
+                reconstruct_function(
                     'input.h5', 'output_', 'geo.xml', (0, 10),
                     wire_edge='invalid'
                 )
     
-    def test_invalid_depth_range(self, mock_executable):
+    @pytest.mark.parametrize("reconstruct_function", [reconstruct, reconstruct_gpu])
+    def test_invalid_depth_range(self, mock_executable, reconstruct_function):
         """Test that invalid depth range raises ValueError."""
         with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
             with pytest.raises(ValueError, match="Invalid depth range"):
-                reconstruct(
+                reconstruct_function(
                     'input.h5', 'output_', 'geo.xml', (10, 5)  # Start > end
                 )
     
@@ -227,6 +257,13 @@ class TestReconstruct:
                 assert 'timed out' in result.error
                 assert result.return_code == -1
     
+    def test_executable_validation_wraps_oserror(self):
+        from laueanalysis.reconstruct.reconstruct import _validate_executable
+
+        with patch('subprocess.run', side_effect=OSError("Exec format error")):
+            with pytest.raises(RuntimeError, match="Exec format error"):
+                _validate_executable("broken-executable")
+
     def test_subprocess_exception(self, mock_executable):
         """Test handling of subprocess exceptions."""
         with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
@@ -334,153 +371,26 @@ class TestReconstruct:
                 print(f"Error: {result.error}")
                 print(f"Log: {result.log[:500]}")
 
-
 class TestReconstructGPU:
-    """Test GPU reconstruction functions."""
-    
-    @pytest.fixture
-    def mock_subprocess(self):
-        """Mock subprocess.run for unit tests."""
-        with patch('subprocess.run') as mock:
-            # Default return value for validation calls (--help)
-            help_response = MagicMock(
-                returncode=1,  # WireScan returns 1 for help
-                stdout="Usage: WireScan -i <file> -o <file> -g <file>",
-                stderr="",
-                timeout=None
-            )
-            # Default return value for actual reconstruction calls
-            run_response = MagicMock(
-                returncode=0,
-                stdout="GPU Reconstruction complete",
-                stderr="",
-                timeout=None
-            )
-            
-            # Return help response for validation, run response for actual execution
-            def side_effect(*args, **kwargs):
-                if '--help' in args[0]:
-                    return help_response
-                return run_response
-            
-            mock.side_effect = side_effect
-            yield mock
-    
-    @pytest.fixture
-    def mock_gpu_executable(self):
-        """Mock the GPU executable finder."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:
-            def side_effect(name='reconstructN_cpu'):
-                if name == 'reconstructN_gpu':
-                    return '/path/to/reconstructN_gpu'
-                return '/path/to/reconstructN_cpu'
-            mock.side_effect = side_effect
-            yield mock
-    
-    def test_reconstruct_gpu_basic(self, mock_subprocess, mock_gpu_executable):
-        """Test basic GPU reconstruction call."""
+    """Test GPU-specific reconstruction behavior."""
+
+    def test_gpu_specific_command_options(self, mock_subprocess, mock_executable):
         result = reconstruct_gpu(
             'input.h5',
             'output_',
             'geo.xml',
             (0.0, 10.0),
-            resolution=1.0
+            cuda_rows=16,
         )
-        
-        assert isinstance(result, ReconstructionResult)
+
         assert result.success is True
-        assert result.return_code == 0
-        
-        # Verify subprocess was called with GPU executable
-        mock_subprocess.assert_called()
         call_args = mock_subprocess.call_args[0][0]
-        
-        # Check basic arguments
-        assert call_args[0] == '/path/to/reconstructN_gpu'
-        assert '-i' in call_args
-        assert 'input.h5' in call_args
-        assert '-o' in call_args
-        assert 'output_' in call_args
-        assert '-g' in call_args
-        assert 'geo.xml' in call_args
-        assert '-s' in call_args
-        assert '0.0' in call_args
-        assert '-e' in call_args
-        assert '10.0' in call_args
-        assert '-R' in call_args
-        assert '8' in call_args  # Default cuda_rows
-    
-    def test_reconstruct_gpu_with_options(self, mock_subprocess, mock_gpu_executable):
-        """Test GPU reconstruction with optional parameters."""
-        result = reconstruct_gpu(
-            'input.h5',
-            'output_',
-            'geo.xml',
-            (-5.0, 5.0),
-            resolution=0.5,
-            image_range=(1, 100),
-            verbose=2,
-            percent_brightest=50.0,
-            wire_edge='both',
-            memory_limit_mb=256,
-            normalization='norm_tag',
-            output_pixel_type=3,
-            distortion_map='distortion.map',
-            detector_number=1,
-            wire_depths_file='depths.txt',
-            cuda_rows=16
-        )
-        
-        assert result.success is True
-        
-        # Check all parameters in command
-        call_args = mock_subprocess.call_args[0][0]
-        assert '-r' in call_args
-        assert '0.5' in call_args
-        assert '-f' in call_args
-        assert '1' in call_args
-        assert '-l' in call_args
-        assert '100' in call_args
-        assert '-v' in call_args
-        assert '2' in call_args
-        assert '-p' in call_args
-        assert '50.0' in call_args
-        assert '-w' in call_args
-        assert 'b' in call_args  # 'both' maps to 'b'
-        assert '-m' in call_args
-        assert '256' in call_args
-        assert '-n' in call_args
-        assert 'norm_tag' in call_args
-        assert '-t' in call_args
-        assert '3' in call_args
-        assert '-d' in call_args
-        assert 'distortion.map' in call_args
-        assert '-D' in call_args
-        assert '1' in call_args
-        assert '-W' in call_args  # GPU uses -W not --wireDepths
-        assert 'depths.txt' in call_args
-        assert '-R' in call_args
-        assert '16' in call_args  # Custom cuda_rows
-    
-    def test_gpu_does_not_have_cpu_only_params(self, mock_subprocess, mock_gpu_executable):
-        """Test that GPU version doesn't have CPU-only parameters."""
-        result = reconstruct_gpu(
-            'input.h5',
-            'output_',
-            'geo.xml',
-            (0.0, 10.0)
-        )
-        
-        call_args = mock_subprocess.call_args[0][0]
-        
-        # These CPU-only parameters should NOT be in GPU command
-        assert '-C' not in call_args  # cosmic_filter
-        assert '-E' not in call_args  # norm_exponent
-        assert '-T' not in call_args  # norm_threshold
-        assert '-N' not in call_args  # num_threads
-        # Note: -R is used but for cuda_rows, not rows_per_stripe
-    
-    
+        assert call_args[call_args.index('-R') + 1] == '16'
+        assert '-C' not in call_args
+        assert '-E' not in call_args
+        assert '-T' not in call_args
+        assert '-N' not in call_args
+
     def test_find_gpu_executable_function(self):
         """Test the public find_gpu_executable function."""
         with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:

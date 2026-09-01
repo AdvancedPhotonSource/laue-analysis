@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from laueanalysis.analysis import SurfaceFrame
+
 
 @dataclass(frozen=True)
 class Choice:
@@ -42,13 +44,9 @@ POLE_COLOR_MODES = (
     Choice("uniform", "Uniform"),
 )
 
-SURFACE_PRESETS = (
-    Choice("normal", "APS 34-ID-E sample normal"),
-    Choice("X", "APS 34-ID-E X"),
-    Choice("H", "APS 34-ID-E H"),
-    Choice("Y", "APS 34-ID-E Y"),
-    Choice("Z", "APS 34-ID-E Z"),
-    Choice("F", "APS 34-ID-E F"),
+SURFACE_PRESETS = tuple(
+    Choice(name, "APS 34-ID-E sample normal" if name == "normal" else f"APS 34-ID-E {name}")
+    for name in SurfaceFrame.aps_34ide_presets()
 )
 
 PALETTE_OPTIONS = (

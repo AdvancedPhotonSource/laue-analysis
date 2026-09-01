@@ -1,5 +1,6 @@
 from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass, field
+import math
 
 
 @dataclass
@@ -46,6 +47,7 @@ class PeaksXY:
     tilt: list = field(default_factory=lambda: [])
     tiltUnit: str = "degree"
     chisq: list = field(default_factory=lambda: [])
+    background: list = field(default_factory=lambda: [])
     Qx: list = field(default_factory=lambda: [])
     Qy: list = field(default_factory=lambda: [])
     Qz: list = field(default_factory=lambda: [])
@@ -85,7 +87,7 @@ class PeaksXY:
 
         for attr in attrs:
             val = getattr(self, attr)
-            if val is not None:
+            if val is not None and not (isinstance(val, float) and math.isnan(val)):
                 elem.set(attr, str(val))
 
         if self.NpeakMax is not None:
@@ -113,7 +115,7 @@ class PeaksXY:
             sub.set('unit', getattr(self, attr + 'Unit'))
             elem.append(sub)
 
-        attrs = ['chisq', 'Qx', 'Qy', 'Qz']
+        attrs = ['chisq', 'background', 'Qx', 'Qy', 'Qz']
         for attr in attrs:
             SubElement(elem, attr).text = ' '.join(getattr(self, attr))
 

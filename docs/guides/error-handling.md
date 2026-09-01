@@ -85,12 +85,6 @@ Record enough context to reproduce the call:
 
 Do not log full frame arrays. Remove user names, sample names, local paths, and other sensitive acquisition metadata before sharing a report.
 
-## Retry limits
-
-Do not retry unchanged input after `InputError`. A numerical `IndexingError` also needs investigation before retry because the same inputs can reproduce the same failure.
-
-A transient file-access failure can be retried only when the application can identify a transient cause. `laueanalysis` does not classify I/O failures as transient.
-
 No peaks or no patterns is not a failure and does not raise an exception. Apply a separate scientific acceptance policy to those results.
 
 ## Reflection simulation failures

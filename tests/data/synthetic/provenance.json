@@ -1,5 +1,5 @@
 {
-  "generated_at_commit": "5d7ea472edc96764903ff23826e2b00a7f6a1352",
+  "generated_at_commit": "44b5c441c065f5e7331dbf1e3a9024246534e4a6",
   "laueanalysis_version": "0.1.0",
   "liblaue_version": "0.2.0",
   "numpy": "2.5.2",
@@ -33,18 +33,18 @@
   },
   "frames": {
     "synthetic_ni_grain_a": {
-      "n_peaks": 18,
+      "n_peaks": 24,
       "n_patterns": 1,
-      "n_indexed": 18,
+      "n_indexed": 24,
       "files": {
         "peaks": "peaks_synthetic_ni_grain_a.txt",
         "p2q": "p2q_synthetic_ni_grain_a.txt",
         "index": "index_synthetic_ni_grain_a.txt"
       },
-      "simulated_reflections": 21,
-      "sha256": "b46fd851192381f672506811c3be55fdbdd0c49fb3494466fc1ff5b55ef1b896",
+      "simulated_reflections": 24,
+      "sha256": "27afcac7ae660daa625ebf0fa108049c24619b9c5359c6adaa3193b91aeaed97",
       "roi": null,
-      "size_bytes": 31501,
+      "size_bytes": 32342,
       "grains": [
         [
           1.0,
@@ -79,18 +79,18 @@
       ]
     },
     "synthetic_ni_two_grains": {
-      "n_peaks": 41,
+      "n_peaks": 48,
       "n_patterns": 2,
-      "n_indexed": 40,
+      "n_indexed": 47,
       "files": {
         "peaks": "peaks_synthetic_ni_two_grains.txt",
         "p2q": "p2q_synthetic_ni_two_grains.txt",
         "index": "index_synthetic_ni_two_grains.txt"
       },
-      "simulated_reflections": 45,
-      "sha256": "5531cd491e5467ad346479099167ad7d2b42d36215b7fe790e3bf406d86f95ae",
+      "simulated_reflections": 48,
+      "sha256": "6b38532f8da9aa580e7cdd6219872a49111ea701c9c552d11d7619eac83a5527",
       "roi": null,
-      "size_bytes": 37597,
+      "size_bytes": 38421,
       "grains": [
         [
           1.0,
@@ -109,11 +109,12 @@
       ]
     },
     "synthetic_ni_empty": {
-      "n_peaks": 0,
+      "n_peaks": 1,
       "n_patterns": 0,
       "n_indexed": 0,
       "files": {
-        "peaks": "peaks_synthetic_ni_empty.txt"
+        "peaks": "peaks_synthetic_ni_empty.txt",
+        "p2q": "p2q_synthetic_ni_empty.txt"
       },
       "simulated_reflections": 0,
       "sha256": "746956dd43cc971534bf41729c661164808e1f2b803b68062ca9374c6055c352",

@@ -17,5 +17,5 @@ The preferred API either indexes one frame with `index_frame` or reuses an
 .. currentmodule:: laueanalysis.indexing
 
 .. autoclass:: Indexer
-   :members: index, index_many, replace, write_xml, write_many_xml
+   :members: index, index_many, replace, write_many_xml
 ```

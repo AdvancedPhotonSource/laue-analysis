@@ -16,6 +16,7 @@ from laueanalysis.analysis import (
     cubic_ipf_colors,
     misorientation_matrix,
     orientation_to_rodrigues,
+    crystal_direction,
     pole_color_radius,
     pole_figure_points,
     rodrigues_colors,
@@ -85,6 +86,7 @@ class MapData:
     palette: str | None = None
     color_limits: tuple[float, float] | None = None
     indexed: np.ndarray | None = None
+    spatial_axes: bool = True
 
     def __post_init__(self):
         count = len(self.frame_ids)
@@ -275,36 +277,25 @@ def _pattern_rows(dataset, scope):
 
 def _frame_axis(dataset, name):
     positions = dataset.sample_positions
-    depth = dataset.depths
-    h = (positions[:, 1] + positions[:, 2]) / np.sqrt(2.0)
-    f = (-positions[:, 1] + positions[:, 2]) / np.sqrt(2.0)
-    lab = -positions.copy()
-    lab[:, 2] += depth
-    h_lab = (lab[:, 1] + lab[:, 2]) / np.sqrt(2.0)
-    f_lab = (-lab[:, 1] + lab[:, 2]) / np.sqrt(2.0)
-    axes = {
-        "X": (positions[:, 0], "X motor (um)"),
-        "Y": (positions[:, 1], "Y motor (um)"),
-        "Z": (positions[:, 2], "Z motor (um)"),
-        "H": (h, "H (um)"),
-        "F": (f, "F (um)"),
-        "depth": (dataset.depths, "Depth (um)"),
-        "Xlab": (lab[:, 0], "X lab (um)"),
-        "Ylab": (lab[:, 1], "Y lab (um)"),
-        "Zlab": (lab[:, 2], "Z lab (um)"),
-        "Hlab": (h_lab, "H lab (um)"),
-        "Flab": (f_lab, "F lab (um)"),
-    }
-    if name not in axes:
+    labels = dict((choice.value, choice.label) for choice in AXIS_OPTIONS)
+    if name not in labels:
         raise ValueError(f"unknown axis {name!r}; choose from {_AXIS_VALUES}")
-    if name in {"depth", "Zlab", "Hlab", "Flab"}:
-        missing = [
-            dataset.frame_ids[index]
-            for index in np.flatnonzero(~np.isfinite(dataset.depths))
-        ]
-        if missing:
-            raise ValueError(f"axis {name!r} requires finite depth for frames {missing}")
-    return axes[name]
+    if name in "XYZ" and len(name) == 1:
+        values = positions[:, "XYZ".index(name)]
+    elif name == "depth":
+        values = dataset.depths
+    elif name in ("H", "F"):
+        sign = 1 if name == "H" else -1
+        values = (sign * positions[:, 1] + positions[:, 2]) / np.sqrt(2.0)
+    else:
+        lab = -positions.copy()
+        lab[:, 2] += dataset.depths
+        if name in ("Xlab", "Ylab", "Zlab"):
+            values = lab[:, ("Xlab", "Ylab", "Zlab").index(name)]
+        else:
+            sign = 1 if name == "Hlab" else -1
+            values = (sign * lab[:, 1] + lab[:, 2]) / np.sqrt(2.0)
+    return values, labels[name]
 
 
 def _aligned_values(values, dataset, rows, alignment, name):
@@ -342,12 +333,9 @@ def _crystal_directions(rotations, normal):
         if not np.isfinite(rotation).all():
             continue
         try:
-            direction = np.linalg.solve(rotation, normal)
-        except np.linalg.LinAlgError:
-            continue
-        norm = np.linalg.norm(direction)
-        if np.isfinite(norm) and norm > 0:
-            directions[index] = direction / norm
+            directions[index] = crystal_direction(rotation, normal)
+        except (ValueError, np.linalg.LinAlgError):
+            pass
     return directions
 
 
@@ -484,7 +472,18 @@ def prepare_map(
     resolved = [_resolve_axis(axis, dataset, rows) for axis in axes]
     coordinates = np.column_stack([item[0] for item in resolved]) if rows.size else np.empty((0, len(axes)))
     if len(coordinates) and not np.isfinite(coordinates).all():
-        raise ValueError("selected map coordinates contain missing or non-finite values")
+        invalid = ~np.isfinite(coordinates).all(axis=1)
+        frame_ids = tuple(dict.fromkeys(
+            dataset.frame_ids[index]
+            for index in dataset.pattern_frame_indices[rows[invalid]]
+        ))
+        shown = frame_ids[:5]
+        suffix = ", ..." if len(frame_ids) > len(shown) else ""
+        names = tuple(axis if isinstance(axis, str) else axis.label for axis in axes)
+        raise ValueError(
+            f"map axes {names} contain missing or non-finite coordinates for frames "
+            f"{shown}{suffix}"
+        )
     colors, kind, label, palette, limits = _map_colors(
         color,
         dataset,
@@ -508,6 +507,7 @@ def prepare_map(
         palette,
         limits,
         indexed,
+        all(isinstance(axis, str) for axis in axes),
     )
 
 
@@ -629,7 +629,8 @@ def prepare_detector_view(
         pattern_rows = pattern_rows[[np.argmin(dataset.pattern_indices[pattern_rows])]]
     elif patterns != "all":
         if isinstance(patterns, str):
-            raise ValueError("patterns must be 'best', 'all', or a sequence of ranks")
+            detail = "; 'all_frames' is available only through DataScope" if patterns == "all_frames" else ""
+            raise ValueError(f"patterns must be 'best', 'all', or a sequence of ranks{detail}")
         requested = tuple(patterns)
         if any(
             isinstance(value, (bool, np.bool_))

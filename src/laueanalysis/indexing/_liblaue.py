@@ -7,6 +7,7 @@ from importlib import resources
 from os import fspath
 from pathlib import Path
 from typing import Optional
+import xml.etree.ElementTree as ET
 
 import numpy as np
 from cffi import FFI
@@ -335,6 +336,16 @@ class Geometry:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        try:
+            detector_ids = [
+                (node.findtext("{*}ID") or "").strip()
+                for node in ET.parse(self.path).findall(".//{*}Detectors/{*}Detector")
+            ]
+        except (OSError, ET.ParseError) as error:
+            raise ValueError(f"Failed to load geometry {path}: {error}") from error
+        duplicates = sorted({value for value in detector_ids if value and detector_ids.count(value) > 1})
+        if duplicates:
+            raise ValueError(f"Failed to load geometry {path}: duplicate detector ID {duplicates[0]!r}")
         error = ffi.new("char[256]")
         library = get_library()
         handle = library.laue_geometry_from_file(fspath(path).encode(), error, 256)

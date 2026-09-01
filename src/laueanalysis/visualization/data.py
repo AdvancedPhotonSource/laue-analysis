@@ -9,9 +9,16 @@ from typing import Iterable, Literal, Sequence
 import numpy as np
 
 from laueanalysis.indexing import Crystal, FrameResult, Geometry
+from laueanalysis.indexing.indexer import PEAK_DTYPE
 
 FrameId = str | int
 PatternSelection = Literal["best", "all", "all_frames"] | tuple[int, ...]
+
+
+def _nonnegative_integer(value, name):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral) or value < 0:
+        raise ValueError(f"{name} must be a nonnegative integer")
+    return int(value)
 
 
 def _readonly(value, *, dtype=None, shape=None, name="array"):
@@ -65,37 +72,22 @@ class DataScope:
             patterns = tuple(patterns)
             object.__setattr__(self, "patterns", patterns)
         if patterns not in ("best", "all", "all_frames"):
-            if not isinstance(patterns, tuple) or any(
-                isinstance(value, (bool, np.bool_))
-                or not isinstance(value, Integral)
-                or value < 0
-                for value in patterns
-            ):
+            if not isinstance(patterns, tuple):
                 raise ValueError(
                     "patterns must be 'best', 'all', 'all_frames', or a tuple of nonnegative ranks"
                 )
-            patterns = tuple(int(value) for value in patterns)
+            try:
+                patterns = tuple(_nonnegative_integer(value, "pattern rank") for value in patterns)
+            except ValueError as error:
+                raise ValueError(
+                    "patterns must be 'best', 'all', 'all_frames', or a tuple of nonnegative ranks"
+                ) from error
             object.__setattr__(self, "patterns", patterns)
             if len(set(patterns)) != len(patterns):
                 raise ValueError("pattern ranks must be unique")
-        if (
-            isinstance(self.min_indexed, (bool, np.bool_))
-            or not isinstance(self.min_indexed, Integral)
-            or self.min_indexed < 0
-        ):
-            raise ValueError("min_indexed must be a nonnegative integer")
-        object.__setattr__(self, "min_indexed", int(self.min_indexed))
-        if (
-            self.min_detected is not None
-            and (
-                isinstance(self.min_detected, (bool, np.bool_))
-                or not isinstance(self.min_detected, Integral)
-                or self.min_detected < 0
-            )
-        ):
-            raise ValueError("min_detected must be a nonnegative integer or None")
+        object.__setattr__(self, "min_indexed", _nonnegative_integer(self.min_indexed, "min_indexed"))
         if self.min_detected is not None:
-            object.__setattr__(self, "min_detected", int(self.min_detected))
+            object.__setattr__(self, "min_detected", _nonnegative_integer(self.min_detected, "min_detected"))
 
     def pattern_mask(self, dataset: "VisualizationDataset") -> np.ndarray:
         """Return a mask selecting pattern rows from a dataset."""
@@ -336,7 +328,7 @@ class VisualizationDataset:
                 assignment_energy.extend(pattern.energy_kev)
                 assignment_intensity.extend(pattern.pred_intens)
 
-        peak_dtype = results[0].peaks.dtype if results else np.dtype([])
+        peak_dtype = results[0].peaks.dtype if results else PEAK_DTYPE
         peaks = np.concatenate(peak_arrays) if peak_arrays else np.empty(0, dtype=peak_dtype)
         return cls(
             frame_ids=result_set.frame_ids,

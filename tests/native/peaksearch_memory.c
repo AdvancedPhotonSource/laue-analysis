@@ -25,6 +25,18 @@ static void add_gaussian(unsigned short *pixels, int center_x, int center_y)
     }
 }
 
+static void add_saturated_plateau(unsigned short *pixels, int center_x, int center_y)
+{
+    int x;
+    int y;
+
+    for (y = center_y - 5; y <= center_y + 5; ++y) {
+        for (x = center_x - 5; x <= center_x + 5; ++x) {
+            pixels[y * IMAGE_WIDTH + x] = 65535;
+        }
+    }
+}
+
 int main(void)
 {
     unsigned short pixels[IMAGE_WIDTH * IMAGE_HEIGHT];
@@ -33,9 +45,10 @@ int main(void)
     int index;
 
     for (index = 0; index < IMAGE_WIDTH * IMAGE_HEIGHT; ++index) pixels[index] = 10;
-    add_gaussian(pixels, 3, 16);
-    add_gaussian(pixels, 32, 20);
-    add_gaussian(pixels, 46, 44);
+    add_gaussian(pixels, 12, 12);
+    add_gaussian(pixels, 38, 14);
+    add_gaussian(pixels, 20, 46);
+    add_saturated_plateau(pixels, 66, 48);
 
     params.boxsize = 6;
     params.max_rfactor = 1.0;
@@ -54,6 +67,12 @@ int main(void)
             fprintf(stderr, "peak search %d failed: %s\n", iteration, result.message);
             laue_frame_result_free(&result);
             return status;
+        }
+        if (result.n_peaks != 3) {
+            fprintf(stderr, "peak search %d returned %d peaks, expected 3\n",
+                    iteration, result.n_peaks);
+            laue_frame_result_free(&result);
+            return 1;
         }
         laue_frame_result_free(&result);
     }

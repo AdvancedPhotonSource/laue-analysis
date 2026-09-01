@@ -124,8 +124,9 @@ class Crystal:
     source
         Optional source XML path retained as provenance.
     setting
-        Optional explicit space-group setting, such as ``"R"`` or ``"H"``
-        for trigonal crystals.
+        Optional space-group setting retained as provenance, such as ``"R"``
+        or ``"H"`` for trigonal crystals. The native model infers its axes from
+        the cell angles rather than this value.
 
     Raises
     ------

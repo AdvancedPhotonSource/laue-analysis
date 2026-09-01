@@ -157,7 +157,6 @@ def indexed_peak_table(source, *, scope=None):
     """Return assignments joined with their detected peak and pattern values."""
     dataset = _dataset(source)
     assignments = assignment_table(dataset, scope=scope)
-    count = len(assignments)
     peak_rows = {
         (int(frame), int(peak)): row
         for row, (frame, peak) in enumerate(zip(
@@ -171,7 +170,7 @@ def indexed_peak_table(source, *, scope=None):
     ], dtype=int)
     columns = dict(assignments.columns)
     for name in dataset.peaks.dtype.names or ():
-        values = dataset.peaks[name][rows] if count else dataset.peaks[name][:0]
+        values = dataset.peaks[name][rows]
         if values.ndim == 1:
             columns[name] = values
         else:

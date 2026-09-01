@@ -2,12 +2,6 @@
 
 This page records the current local workflow for Python, native, test, and documentation changes.
 
-```{toctree}
-:maxdepth: 1
-
-simulation-performance
-```
-
 ## Build the project
 
 Install the native dependencies listed in [Installation](../installation.md), then install an editable copy with the test and documentation extras:
@@ -55,7 +49,7 @@ Run a focused module while developing a change:
 $ python -m pytest tests/test_indexer.py
 ```
 
-Tests run against the installed package, never against `src/` directly. Native tests skip when the installed `laueanalysis` package does not contain `liblaue.so`. A passing run with skipped native tests does not validate the native code. Review the skip summary (`-rs`). The only expected skip is the GPU reconstruction executable check.
+Tests run against the installed package, never against `src/` directly. Native tests skip when the installed `laueanalysis` package does not contain `liblaue.so`. A passing run with skipped native tests does not validate the native code. Review the skip summary (`-rs`). Expected skips cover an unavailable GPU reconstruction executable and, outside CI, a missing Valgrind executable or C compiler for the native memory harness.
 
 CI runs with `--require-native`. That option fails the session when `liblaue.so` is missing from the installed package or when any test skips for another reason.
 
@@ -102,7 +96,7 @@ A code block that demonstrates exact output must have a test that checks that ou
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every pull request and push to `main`. The job installs the package from a clean checkout on Ubuntu with Python 3.12, runs the test suite with `--require-native`, builds the documentation with warnings as errors, builds the sdist and wheel, checks their contents with `.github/scripts/inspect_artifacts.py`, installs the wheel into a separate virtual environment, and runs `.github/scripts/smoke_test.py` there. The job then removes `liblaue.so` from the installed package and confirms that the test gate fails.
+`.github/workflows/ci.yml` runs on every pull request and push to `main`. The job installs Valgrind and the package from a clean checkout on Ubuntu with Python 3.12, runs the test suite with `--require-native`, builds the documentation with warnings as errors, builds the sdist and wheel, and checks their contents with `.github/scripts/inspect_artifacts.py`. It then replaces the source installation with the wheel in the same Conda environment and runs `.github/scripts/smoke_test.py` from outside the checkout. Finally, it removes `liblaue.so` from the installed package and confirms that the test gate fails.
 
 The workflow does not publish or keep build artifacts.
 

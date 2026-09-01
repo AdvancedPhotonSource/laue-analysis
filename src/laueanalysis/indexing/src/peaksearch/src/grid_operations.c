@@ -10,95 +10,6 @@
 #define MIN(X,Y) ( ((X)>(Y)) ? (Y) : (X) )
 #endif
 
-Grid* grid_new_bin(Grid* g, int scale_exponent) {
-
-/*	int pixel_ratio = (int)pow(2., scale_exponent); */
-	int pixel_ratio = 1 << scale_exponent;
-	int pixels_in_pixel;
-	
-	/* calculate the maximum index that will be addressed when filling the binned grid with values, and make that the new height/width */
-	int new_height = ((g->height-1) / pixel_ratio) + 1;
-	int new_width = ((g->width-1) / pixel_ratio) + 1;
-
-	Grid* new_grid = grid_new(new_height, new_width);
-	
-	//return new_grid;
-	
-	/* TODO: Average it first, or add it first? Adding first means single division op, so less fp loss, but will we ever top out? */
-	
-	/* whole image */
-	int x, y;
-	for (x = 0; x < g->width; x+=pixel_ratio){
-		for (y = 0; y < g->height; y+=pixel_ratio){
-		
-			double average=0.0;
-			pixels_in_pixel = 0;
-					
-			/* single pixel on new image */
-			int dx, dy;
-			for (dx = 0; dx < pixel_ratio; dx++){
-				for (dy = 0; dy < pixel_ratio; dy++){
-				
-					if (x+dx < g->width && y+dy < g->height){
-						pixels_in_pixel++;
-						average += grid_get_value(g, x+dx, y+dy);
-					}
-				
-				}
-			}
-			
-			grid_set_value(new_grid, x / pixel_ratio, y / pixel_ratio, average / pixels_in_pixel);
-
-		
-		}
-	}
-	
-	return new_grid;
-
-}
-
-Grid* grid_new_upscale(Grid* g, int scale_exponent) {
-
-	int pixel_ratio = 1 << scale_exponent;
-//	int pixel_ratio = (int)pow(2., scale_exponent);
-//	int pixels_in_pixel;
-	
-	/* calculate the size of the new grid */
-	int new_height = g->height * pixel_ratio;
-	int new_width = g->width * pixel_ratio;
-
-	Grid* new_grid = grid_new(new_height, new_width);
-	
-	//return new_grid;
-	
-	/* TODO: Average it first, or add it first? Adding first means single division op, so less fp loss, but will we ever top out? */
-	
-	/* whole image */
-	int x, y;
-	for (x = 0; x < g->width; x+=pixel_ratio){
-		for (y = 0; y < g->height; y+=pixel_ratio){
-		
-					
-			/* single pixel on new image */
-			int dx, dy;
-			for (dx = 0; dx < pixel_ratio; dx++){
-				for (dy = 0; dy < pixel_ratio; dy++){
-				
-					if (x*pixel_ratio+dx < new_grid->width && y*pixel_ratio+dy < new_grid->height){
-						grid_set_value(new_grid, x*pixel_ratio+dx, y*pixel_ratio+dy, grid_get_value(g, x, y));
-					}
-				
-				}
-			}
-			
-		
-		}
-	}
-	
-	return new_grid;
-
-}
-
 //apply smooth filter (averaging) on image with filter size 2*range+1 by 2*range+1
 int grid_smooth_boxcar(Grid* g, int range) {
 
@@ -167,7 +78,7 @@ int grid_smooth_median(Grid* g, int range) {
 				}
 			}
 			shell_sort(median_values, pixels_counted);
-			if (pixels_counted % 2 == 0) median = median_values[pixels_counted / 2] + median_values[pixels_counted / 2 + 1] / 2.0;
+			if (pixels_counted % 2 == 0) median = (median_values[pixels_counted / 2 - 1] + median_values[pixels_counted / 2]) / 2.0;
 			else						 median = median_values[pixels_counted / 2];
 			grid_set_value(smoothed_grid, x, y, median);
 		} /* end loops around centrepoint */
@@ -180,7 +91,6 @@ int grid_smooth_median(Grid* g, int range) {
 }
 
 
-#warning "change the gaussian smoothing to allow sizes other than 2, JZT"
 int grid_smooth_gauss(Grid* g, int Nf2) {
 	/* use a Gaussian kernel that is (Nf x Nf).  NOTE, Nf must be 5! */
 	/* see:	http://homepages.inf.ed.ac.uk/rbf/HIPR2/gsmooth.htm */
@@ -216,8 +126,8 @@ int grid_smooth_gauss(Grid* g, int Nf2) {
 	if (!temp_grid) { free(filter); return 1; }
 
 	for (ip=0;ip<Nx;ip++) {						/* smooth along the X direction */
-		lo = MAX(ip-Nf2,0);
-		hi = MIN(ip+Nf2,Nx-1);
+		lo = ip > (size_t)Nf2 ? ip - (size_t)Nf2 : 0;
+		hi = MIN(ip + (size_t)Nf2, Nx - 1);
 		for (jp=0;jp<Ny;jp++) {
 			for (m=lo,val=0.0; m<=hi; m++) val += grid_get_value(g,m,jp)*filter[m+Nf2-ip];
 			grid_set_value(temp_grid,ip,jp,val);
@@ -225,8 +135,8 @@ int grid_smooth_gauss(Grid* g, int Nf2) {
 	}
 
 	for (jp=0;jp<Ny;jp++) {						/* smooth along the Y direction */
-		lo = MAX(jp-Nf2,0);
-		hi = MIN(jp+Nf2,Ny-1);
+		lo = jp > (size_t)Nf2 ? jp - (size_t)Nf2 : 0;
+		hi = MIN(jp + (size_t)Nf2, Ny - 1);
 		for (ip=0;ip<Nx;ip++) {
 			for (m=lo,val=0.0; m<=hi; m++) val += grid_get_value(temp_grid,ip,m)*filter[m+Nf2-jp];
 			grid_set_value(g,ip,jp,val);
@@ -242,7 +152,8 @@ int grid_smooth_gauss(Grid* g, int Nf2) {
 /* wikipedia saves you time */
 void shell_sort(double A[], int size)
 {
-  int i, j, increment, temp;
+  int i, j, increment;
+  double temp;
   increment = size / 2;
  
   while (increment > 0)
@@ -308,7 +219,6 @@ Point* centroid(Grid* image, int shiftx, int shifty){
 	
 }
 
-#warning "This is one really wierd routine, I am not sure it is right, JZT"
 /*for finding the center of a large blob, i.e. size >=10*10*/
 Point* centroid_2(Grid* image, int shiftx, int shifty){
 

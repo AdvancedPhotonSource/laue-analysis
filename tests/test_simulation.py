@@ -665,3 +665,8 @@ def test_constructed_crystal_system_code_paths(space_group, cell):
         energy_range_kev=(1.0, 40.0),
     )
     assert isinstance(result, SimulationResult)
+    assert result.hkl.shape == result.q.shape
+    assert result.detector_xy.shape == (len(result.hkl), 2)
+    assert result.energy_kev.shape == result.relative_intensity.shape == (len(result.hkl),)
+    assert np.isfinite(result.q).all()
+    assert np.isfinite(result.detector_xy).all()
