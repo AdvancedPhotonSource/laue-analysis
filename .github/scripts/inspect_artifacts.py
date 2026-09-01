@@ -1,4 +1,4 @@
-"""Check sdist and wheel contents for the artifact policy in BUILD_DEPLOYMENT_PLAN.md.
+"""Check sdist and wheel contents against the packaging policy.
 
 Usage: python .github/scripts/inspect_artifacts.py dist/
 Exits non-zero on any violation.
@@ -12,7 +12,11 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-NATIVE_FILES = {"liblaue.so", "peaksearch", "pix2qs", "euler", "reconstructN_cpu"}
+# CLI programs must carry the exec bit. liblaue.so is dlopen()ed, which needs
+# read only — CMake on Debian-family systems installs shared libraries 0644
+# (CMAKE_INSTALL_SO_NO_EXE), so the wheel legitimately ships it either way.
+NATIVE_EXECUTABLES = {"peaksearch", "pix2qs", "euler", "reconstructN_cpu"}
+NATIVE_FILES = NATIVE_EXECUTABLES | {"liblaue.so"}
 GENERATED = re.compile(r"\.(so|o|a|whl|pyc)$|/bin/(peaksearch|pix2qs|euler|reconstructN_[a-z]+)$|egg-info|/_build/|__pycache__")
 NATIVE_SOURCE = re.compile(r"\.(c|h|cu)$|/indexing/src/|/reconstruct/source/|makefile", re.IGNORECASE)
 
@@ -46,10 +50,13 @@ def check_wheel(path: Path) -> list[str]:
     for n in names:
         if NATIVE_SOURCE.search(n):
             problems.append(f"wheel contains native source/build file: {n}")
-        if n.rsplit("/", 1)[-1] in NATIVE_FILES:
+        base = n.rsplit("/", 1)[-1]
+        if base in NATIVE_FILES:
             mode = (z.getinfo(n).external_attr >> 16) & 0o777
-            if not mode & 0o111:
+            if base in NATIVE_EXECUTABLES and not mode & 0o111:
                 problems.append(f"wheel entry is not executable: {n} (mode {oct(mode)})")
+            if not mode & 0o444:
+                problems.append(f"wheel entry is not readable: {n} (mode {oct(mode)})")
     if not any("_vendor/jzt/elementData.xml" in n for n in names):
         problems.append("wheel is missing the JZT element data")
     if not path.name.endswith("py3-none-linux_x86_64.whl"):
