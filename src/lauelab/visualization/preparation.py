@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Backend-neutral preparation of maps, pole figures, and detector views."""
 
 from __future__ import annotations

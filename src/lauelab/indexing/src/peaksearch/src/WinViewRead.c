@@ -1,3 +1,5 @@
+/* Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+   Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE */
 /*
  Routines for reading in and looking at Roper (formerly Princeton Instruments) 
  '*.spe' files from a CCD.

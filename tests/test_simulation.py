@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Scientific and model tests for the public reflection simulation API."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Stateless conversion of Plotly events to scientific identities."""
 
 from __future__ import annotations

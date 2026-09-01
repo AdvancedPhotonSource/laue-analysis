@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Shared pytest configuration.
 
 Native availability is decided from the *imported* ``lauelab`` package

@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Generate the synthetic Laue frames and LaueGo reference outputs used by the tests.
 
 The frames are simulated: for each named orientation set, the package's own

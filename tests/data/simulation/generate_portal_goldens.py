@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Regenerate the pre-port JZT simulation baselines.
 
 This is a provenance tool, not a routine test helper.  Run it against the

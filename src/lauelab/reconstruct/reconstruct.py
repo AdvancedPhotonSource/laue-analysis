@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Wire scan reconstruction functions for Laue analysis."""
 
 from typing import List, Tuple, Optional, Union, NamedTuple

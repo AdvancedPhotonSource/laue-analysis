@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 from pathlib import Path
 
 from lauelab.indexing.index import _parse_peaks_output, _parse_npatterns_found, _parse_indexing_output

@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Smoke test for an installed lauelab wheel.
 
 Run with ``python -I`` from a directory outside the repository so that only

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Regenerate reviewed Phase 2 normalized simulation fixtures.
 
 Run from repository root after deliberately reviewing scientific changes::

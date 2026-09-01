@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Check sdist and wheel contents against the packaging policy.
 
 Usage: python .github/scripts/inspect_artifacts.py dist/

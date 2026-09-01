@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Measure cold and warm reflection-simulation performance."""
 
 from __future__ import annotations

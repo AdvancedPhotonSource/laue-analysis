@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Deterministic CPU wire-scan reconstruction reference.
 
 This module builds a small synthetic wire scan whose contents are fully

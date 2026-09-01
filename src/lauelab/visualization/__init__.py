@@ -1,3 +1,5 @@
+# Copyright © 2026 UChicago Argonne, LLC. All rights reserved.
+# Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Data models shared by Laue visualization and tabular APIs."""
 
 from .data import DataScope, ResultSet, VisualizationDataset
