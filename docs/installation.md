@@ -38,8 +38,8 @@ Use this path at APS and for alpha testing. `environment.yml` provides the compi
 1. Clone the repository:
 
    ```console
-   $ git clone https://github.com/AdvancedPhotonSource/laue-analysis.git
-   $ cd laue-analysis
+   $ git clone https://github.com/AdvancedPhotonSource/lauelab.git
+   $ cd lauelab
    ```
 
 2. Create and activate the environment:
@@ -154,7 +154,7 @@ The source distribution and repository include the CUDA source and a stand-alone
 
 ## Report a problem
 
-Open an issue in the [laue-analysis repository](https://github.com/AdvancedPhotonSource/laue-analysis/issues). Include:
+Open an issue in the [lauelab repository](https://github.com/AdvancedPhotonSource/lauelab/issues). Include:
 
 - The `lauelab` version or Git commit
 - Operating system, Python version, and whether you used conda or a virtual environment

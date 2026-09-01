@@ -28,8 +28,7 @@ extensions = [
 ]
 
 # llms.txt and llms-full.txt for AI agents (llmstxt.org). Page links resolve
-# against html_baseurl; update it if the repository or Pages URL changes.
-html_baseurl = "https://advancedphotonsource.github.io/laue-analysis/"
+# against html_baseurl, defined with the other html_* settings below.
 llms_txt_title = "lauelab"
 llms_txt_summary = (
     "Python bindings to native Laue diffraction indexing at APS beamline "
@@ -74,16 +73,16 @@ html_static_path = ["_static"]
 html_title = "lauelab documentation"
 html_logo = "_static/lauelab-logo.svg"
 html_favicon = "_static/lauelab-logo.svg"
-html_baseurl = "https://advancedphotonsource.github.io/laue-analysis/"
+html_baseurl = "https://advancedphotonsource.github.io/lauelab/"
 html_theme_options = {
-    "github_url": "https://github.com/AdvancedPhotonSource/laue-analysis",
+    "github_url": "https://github.com/AdvancedPhotonSource/lauelab",
     "navbar_align": "left",
     "show_toc_level": 2,
     "use_edit_page_button": True,
 }
 html_context = {
     "github_user": "AdvancedPhotonSource",
-    "github_repo": "laue-analysis",
+    "github_repo": "lauelab",
     "github_version": "main",
     "doc_path": "docs",
 }
