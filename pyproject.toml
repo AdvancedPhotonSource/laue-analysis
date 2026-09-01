@@ -40,6 +40,7 @@ Repository = "https://github.com/AdvancedPhotonSource/laue-analysis"
 test = ["pytest>=7.0", "pyyaml>=5.4"]
 docs = [
     "myst-parser>=4.0",
+    "sphinx-llms-txt>=0.7",
     "pydata-sphinx-theme>=0.16",
     "sphinx>=8.2,<9",
 ]
@@ -68,6 +69,7 @@ editable.mode = "redirect"
 # that is not needed to build, test, or document the package.
 sdist.exclude = [
     ".github/",
+    "contributing/",
     "sandbox/",
     "workflow/",
     "docs/_build/",

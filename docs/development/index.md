@@ -81,7 +81,7 @@ Use NumPy-style docstrings for public objects. Include a public object explicitl
 
 State shapes, dtypes, units, coordinate order, defaults, ownership, exceptions, and observable behavior where relevant. Use cross-references to connect guides and reference entries instead of copying long descriptions.
 
-The documentation writing profile is maintained in `sandbox/writing_format/documentation_style_profile.md` in development workspaces. Apply its scientific notation, coordinate, example, and editing rules to narrative changes.
+The documentation writing style is defined in `contributing/writing-style.md`. Apply its scientific notation, coordinate, example, and editing rules to narrative changes.
 
 ## Validate examples
 

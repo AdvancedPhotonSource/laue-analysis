@@ -24,7 +24,18 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx_llms_txt",
 ]
+
+# llms.txt and llms-full.txt for AI agents (llmstxt.org). Page links resolve
+# against html_baseurl; update it if the repository or Pages URL changes.
+html_baseurl = "https://advancedphotonsource.github.io/laue-analysis/"
+llms_txt_title = "lauelab"
+llms_txt_summary = (
+    "Python bindings to native Laue diffraction indexing at APS beamline "
+    "34-ID-E, with reflection simulation, orientation analysis, "
+    "visualization, and wire-scan reconstruction."
+)
 
 source_suffix = {
     ".md": "markdown",
