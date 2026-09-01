@@ -1,5 +1,5 @@
 $filetype	IndexFile
-// Found 1 patterns, indexed 24 out of 24 spots in 00:00:02 = (2.46 sec)
+// Found 1 patterns, indexed 24 out of 24 spots in 00:00:03 = (2.78 sec)
 // ------------------------------------------------------------
 $peakFile		'<work>/p2q/p2q_synthetic_ni_grain_b.txt'		// input data file
 $keVmaxCalc		17.2 			// max energy (keV) for calculated hkl
@@ -10,7 +10,7 @@ $cone		72 				// angle from the preferred hkl to look for acceptable hkl when ca
 $NpatternsFound		1		// number of patterns found
 $Nindexed		24 			// number of spots indexed
 $NiData		24 				// total number of data spots
-$executionTime		2.46	// execution time (sec)
+$executionTime		2.78	// execution time (sec)
 // ------------------------------------------------------------
 // these are parameters from header of $peakFile
 $structureDesc		Ni

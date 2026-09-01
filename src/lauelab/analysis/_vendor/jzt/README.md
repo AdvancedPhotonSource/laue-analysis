@@ -1,7 +1,7 @@
 # Private JZT snapshot
 
 This directory contains a private snapshot of the legacy JZT Laue simulator.
-It is an implementation detail of `laueanalysis`; its modules and classes are
+It is an implementation detail of `lauelab`; its modules and classes are
 not a supported API.
 
 ## Provenance
