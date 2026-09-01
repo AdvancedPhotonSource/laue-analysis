@@ -102,6 +102,11 @@ def test_load_crystal_preserves_explicit_rhombohedral_setting(tmp_path):
         ("<crystal/>", "no cell"),
         ("<crystal><cell/></crystal>", "no cell length a"),
         ("<crystal><cell><a>1</a></cell></crystal>", "no space group"),
+        (
+            "<crystal><space_group_IT_number>1</space_group_IT_number>"
+            "<cell><a>1</a><c>1</c><alpha>90</alpha><beta>90</beta><gamma>90</gamma></cell></crystal>",
+            "cell field b",
+        ),
     ],
 )
 def test_load_crystal_reports_missing_required_sections(tmp_path, xml, message):

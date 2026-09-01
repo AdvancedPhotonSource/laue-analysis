@@ -42,8 +42,9 @@ HDF5 `start` and `group` values take precedence over values passed to `index()`.
 For an in-memory frame, `start=(x, y)` identifies the frame's zero-based origin on the full detector. `group=(x, y)` gives the number of detector pixels represented by one frame pixel along each axis.
 
 ```python
+region = np.zeros((512, 512), dtype=np.uint16)
 result = indexer.index(
-    frame,
+    region,
     start=(100, 200),
     group=(2, 2),
 )

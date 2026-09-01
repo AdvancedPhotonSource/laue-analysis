@@ -121,6 +121,7 @@ LAUE_API laue_crystal *laue_crystal_create(const char *name, int space_group,
                                             const laue_atom *atoms, size_t n_atoms,
                                             char *err, size_t errlen);
 LAUE_API void laue_crystal_free(laue_crystal *crystal);
+LAUE_API int laue_crystal_reciprocal(const laue_crystal *crystal, double recip[3][3]);
 LAUE_API int laue_geometry_detector_count(const laue_geometry *geometry);
 LAUE_API int laue_geometry_find_detector(const laue_geometry *geometry, const char *detector_id);
 LAUE_API int laue_geometry_detector_info(const laue_geometry *geometry, int detector_index,

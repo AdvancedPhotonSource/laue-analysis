@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from laueanalysis.analysis import lattice_params_to_reciprocal, recip_to_orientation
+from laueanalysis.analysis import lattice_params_to_reciprocal, reciprocal_to_orientation
 from laueanalysis.indexing import Atom, Cell, Crystal, Geometry
 from laueanalysis.indexing.indexer import PEAK_DTYPE
 
@@ -56,16 +56,34 @@ def _load_crystal(steps):
         for atom in node.findall("atom"):
             position = np.fromstring(atom.text or "", sep=" ")
             if len(position) == 3 and atom.get("symbol"):
-                atoms.append(Atom(atom.get("symbol"), tuple(position), label=atom.get("label")))
+                try:
+                    occupancy = float(atom.get("occupancy", "1"))
+                except ValueError:
+                    occupancy = 1.0
+                atoms.append(Atom(
+                    atom.get("symbol"),
+                    tuple(position),
+                    occupancy=occupancy,
+                    label=atom.get("label"),
+                ))
         number, separator, setting = space_group.partition(":")
-        return Crystal(
-            _text(node, "structureDesc") or "LaueGo XML crystal",
-            int(number),
-            Cell(*parameters, unit=unit),
-            tuple(atoms),
-            source=_text(node, "xtlFile"),
-            setting=setting if separator else None,
-        )
+        try:
+            space_group_number = int(number)
+        except ValueError:
+            continue
+        if separator and setting.upper() not in {"H", "R"}:
+            continue
+        try:
+            return Crystal(
+                _text(node, "structureDesc") or "LaueGo XML crystal",
+                space_group_number,
+                Cell(*parameters, unit=unit),
+                tuple(atoms),
+                source=_text(node, "xtlFile"),
+                setting=setting.upper() if setting else None,
+            )
+        except (TypeError, ValueError):
+            continue
     return None
 
 
@@ -112,7 +130,7 @@ def load_visualization_xml(path, *, geometry=None, frame_ids=None):
             cell.alpha,
             cell.beta,
             cell.gamma,
-            rhombohedral=crystal.setting == "R",
+            space_group=crystal.space_group,
         )
 
     positions = np.full((len(steps), 3), np.nan)
@@ -193,7 +211,7 @@ def load_visualization_xml(path, *, geometry=None, frame_ids=None):
             rotation = np.full((3, 3), np.nan)
             if reference_recip is not None and np.isfinite(reciprocal).all():
                 try:
-                    rotation = recip_to_orientation(reciprocal, reference_recip)
+                    rotation = reciprocal_to_orientation(reciprocal, reference_recip)
                 except np.linalg.LinAlgError:
                     pass
             pattern_row = len(pattern_indices)

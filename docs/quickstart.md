@@ -1,77 +1,64 @@
 # Quickstart
 
-This example processes one synthetic detector frame. You need a 34-ID-E geometry file that describes the detector and a crystal XML file that describes the material.
+This example processes synthetic nickel data shipped with the repository. Run each block from the repository root after installing the package. The data is for API demonstrations and regression tests. A tutorial based on reviewed experimental data will follow.
 
 ## Prepare the inputs
 
-An in-memory frame must be a two-dimensional `numpy.uint16` array. Its shape is `(ny, nx)`, while peak coordinates use `(x, y)` order.
-
-The following frame contains three synthetic bright regions. It demonstrates the API, not a physical diffraction simulation.
+Use the included HDF5 frame, 34-ID-E detector geometry, and nickel crystal description:
 
 ```python
 from pathlib import Path
 
-import numpy as np
+from laueanalysis.indexing import load_crystal, load_geometry
 
-geometry_file = Path("geometry.xml")
-crystal_file = Path("crystal.xml")
-
-frame = np.zeros((2048, 2048), dtype=np.uint16)
-frame[510:517, 720:727] = 800
-frame[980:987, 1310:1317] = 1200
-frame[1450:1457, 430:437] = 1000
+root = Path.cwd()
+frame = root / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5"
+geometry = load_geometry(
+    root / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
+)
+crystal = load_crystal(root / "tests/config/Ni.xml")
 ```
 
-The geometry must match the frame dimensions and detector. The crystal description must match the material if you want orientation indexing.
+The frame is a two-dimensional `numpy.uint16` image with shape `(ny, nx)`. Peak coordinates use zero-based `(x, y)` order. The geometry and crystal files match this synthetic frame.
 
 ## Index one frame
 
-Use {func}`~laueanalysis.indexing.index_frame` when you have one frame or when convenience matters more than reusing parsed configuration.
+Use {func}`~laueanalysis.indexing.index_frame` for a single frame:
 
 ```python
 from laueanalysis.indexing import index_frame
 
-result = index_frame(
-    frame,
-    geometry=geometry_file,
-    crystal=crystal_file,
-)
-
-print(f"detected peaks: {result.n_peaks}")
+result = index_frame(frame, geometry=geometry, crystal=crystal)
+print(result)
 print(f"indexed assignments: {result.n_indexed}")
-print(f"patterns: {result.n_patterns}")
 ```
 
-`index_frame` retains the input image in `result.image` by default. Pass `keep_image=False` if the result does not need it.
-
-A valid call can return no crystal patterns. In that case, `result.indexed` is `False`, while peak data and frame statistics remain available.
+The result contains detected peaks, two synthetic crystal orientations, frame statistics, and the retained image. Pass `keep_image=False` if later work does not need the image. A valid call can return no crystal patterns. In that case, `result.indexed` is `False`, while peak data and frame statistics remain available.
 
 ## Reuse an indexer
 
-Construct {class}`~laueanalysis.indexing.Indexer` once when frames share geometry, crystal, detector selection, and processing parameters. The object retains parsed native configuration between calls.
+Construct {class}`~laueanalysis.indexing.Indexer` once when frames share geometry, crystal, detector selection, and processing parameters:
 
 ```python
 from laueanalysis.indexing import Indexer
 
-indexer = Indexer(geometry_file, crystal_file)
+indexer = Indexer(geometry, crystal)
+frames = sorted((root / "tests/data/synthetic/frames").glob("*.h5"))
+results = indexer.index_many(frames)
 
-first = indexer.index(frame)
-second = indexer.index(frame.copy(), keep_image=False)
-```
-
-Use `indexer.index_many(frames)` for a sequential batch. Results preserve input order, and batch processing does not retain images by default.
-
-```python
-results = indexer.index_many([frame, frame.copy()])
-assert [item.image_shape for item in results] == [(2048, 2048), (2048, 2048)]
+assert len(results) == 4
 assert all(item.image is None for item in results)
 ```
+
+`index_many()` processes frames sequentially, preserves their order, and does not retain images by default.
 
 ## Inspect the result
 
 `result.peaks` is a structured NumPy array. Each row contains a fitted `(x, y)` position, fit measurements, and a three-component `qhat` vector.
 
 ```python
+import numpy as np
+
 xy = np.column_stack((result.peaks["fit_x"], result.peaks["fit_y"]))
 qhat = result.peaks["qhat"]
 
@@ -96,10 +83,14 @@ Attach the indexer's crystal and geometry to the result, then plot the detector 
 ```python
 from laueanalysis.visualization import ResultSet, plot_detector_view
 
-result_set = ResultSet.from_indexer(indexer, [first])
+result_set = ResultSet(
+    results,
+    crystal=crystal,
+    geometry=geometry,
+)
 figure = plot_detector_view(
     result_set,
-    frame_id=0,
+    frame_id=3,
     image=True,
     patterns="best",
 )
@@ -115,7 +106,7 @@ See [Visualization data](guides/visualization.md) for maps, pole figures, detect
 XML output is explicit in the in-process API. Writing XML does not create peak, pixel-to-q, or indexing text files.
 
 ```python
-result.write_xml("indexed-frame.xml")
+results[3].write_xml("indexed-frame.xml")
 ```
 
 This format exists for compatibility with the established 34-ID-E XML workflow. Use `FrameResult` directly for new Python analysis.
@@ -128,7 +119,7 @@ Catch invalid user or data input separately from native numerical failures:
 from laueanalysis.indexing import IndexingError, InputError
 
 try:
-    result = indexer.index(frame)
+    checked_result = indexer.index(frames[0])
 except InputError as error:
     print(f"Check the frame and configuration: {error}")
 except IndexingError as error:

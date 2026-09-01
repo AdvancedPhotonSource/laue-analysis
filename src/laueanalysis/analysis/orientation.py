@@ -8,47 +8,99 @@ import numpy as np
 
 
 def lattice_params_to_reciprocal(
-    a, b, c, alpha_deg, beta_deg, gamma_deg, *, rhombohedral=False
+    a, b, c, alpha_deg, beta_deg, gamma_deg, *, space_group=None
 ):
-    """Return reciprocal basis rows, optionally using JZT rhombohedral axes."""
-    alpha, beta, gamma = np.radians([alpha_deg, beta_deg, gamma_deg])
-    cos_a, cos_b, cos_g = np.cos([alpha, beta, gamma])
-    if rhombohedral:
-        if not np.allclose([a, b, c], a) or not np.allclose(
-            [alpha_deg, beta_deg, gamma_deg], alpha_deg
-        ):
-            raise ValueError("rhombohedral axes require equal lengths and equal angles")
-        p = np.sqrt(1.0 + 2.0 * cos_a)
-        q = np.sqrt(1.0 - cos_a)
-        diagonal = a * (p + 2.0 * q) / 3.0
-        off_diagonal = a * (p - q) / 3.0
-        direct = np.full((3, 3), off_diagonal)
-        np.fill_diagonal(direct, diagonal)
+    """Return the native reciprocal basis as rows in inverse input-length units.
+
+    ``a``, ``b``, and ``c`` must use one common length unit; the returned basis
+    uses its inverse (normally ``1/nm`` in the public analysis API). Angles are
+    in degrees, and reciprocal vectors include the ``2*pi`` factor.
+
+    The direct basis follows native ``setDirectRecip``: ``c`` is parallel to
+    positive z, ``b`` lies in the yz plane, and ``a`` completes a right-handed
+    basis. When ``space_group`` is provided, native crystal-system constraints
+    are applied before constructing the basis. For a trigonal space group,
+    angles within the native tolerance of ``(90, 90, 120)`` select hexagonal
+    axes; all other angles select rhombohedral axes.
+    """
+    lengths = np.asarray([a, b, c], dtype=float)
+    angles = np.radians(np.asarray([alpha_deg, beta_deg, gamma_deg], dtype=float))
+    if not np.isfinite(lengths).all() or np.any(lengths <= 0):
+        raise ValueError("cell lengths must be finite and positive")
+    if not np.isfinite(angles).all() or np.any(angles <= 0) or np.any(angles >= np.pi):
+        raise ValueError("cell angles must be finite and between 0 and 180 degrees")
+    if space_group is not None:
+        if not isinstance(space_group, (int, np.integer)) or not 1 <= space_group <= 230:
+            raise ValueError("space_group must be between 1 and 230")
+        a, b, c = lengths
+        alpha, beta, gamma = angles
+        using_hex_axes = (
+            abs(np.pi / 2.0 - alpha)
+            + abs(np.pi / 2.0 - beta)
+            + abs(2.0 * np.pi / 3.0 - gamma)
+        ) < 1e-9
+        if space_group >= 195:
+            b = c = a
+            alpha = beta = gamma = np.pi / 2.0
+        elif space_group >= 168:
+            b = a
+            alpha = beta = np.pi / 2.0
+            gamma = 2.0 * np.pi / 3.0
+        elif space_group >= 143:
+            b = a
+            if using_hex_axes:
+                alpha = beta = np.pi / 2.0
+                gamma = 2.0 * np.pi / 3.0
+            else:
+                c = a
+                beta = gamma = alpha
+        elif space_group >= 75:
+            b = a
+            alpha = beta = gamma = np.pi / 2.0
+        elif space_group >= 16:
+            alpha = beta = gamma = np.pi / 2.0
+        elif space_group >= 3:
+            alpha = gamma = np.pi / 2.0
     else:
-        sin_g = np.sin(gamma)
-        volume = np.sqrt(
-            1.0 - cos_a**2 - cos_b**2 - cos_g**2
-            + 2.0 * cos_a * cos_b * cos_g
-        )
-        direct = np.array([
-            [a, 0.0, 0.0],
-            [b * cos_g, b * sin_g, 0.0],
-            [c * cos_b, c * (cos_a - cos_b * cos_g) / sin_g, c * volume / sin_g],
-        ])
+        a, b, c = lengths
+        alpha, beta, gamma = angles
+
+    sin_alpha = np.sin(alpha)
+    cos_alpha, cos_beta, cos_gamma = np.cos([alpha, beta, gamma])
+    cos_alpha = 0.0 if abs(cos_alpha) < 1e-14 else cos_alpha
+    cos_beta = 0.0 if abs(cos_beta) < 1e-14 else cos_beta
+    cos_gamma = 0.0 if abs(cos_gamma) < 1e-14 else cos_gamma
+    phi_squared = (
+        1.0 - cos_alpha**2 - cos_beta**2 - cos_gamma**2
+        + 2.0 * cos_alpha * cos_beta * cos_gamma
+    )
+    if phi_squared <= 0 or sin_alpha == 0:
+        raise ValueError("cell parameters do not define a valid lattice")
+    phi = np.sqrt(phi_squared)
+    direct = np.array([
+        [a * phi / sin_alpha, a * (cos_gamma - cos_alpha * cos_beta) / sin_alpha, a * cos_beta],
+        [0.0, b * sin_alpha, b * cos_alpha],
+        [0.0, 0.0, c],
+    ])
     return 2.0 * np.pi * np.linalg.inv(direct).T
 
 
-def recip_to_orientation(recip_lattice, reference_recip):
+def reciprocal_to_orientation(reciprocal, reference_reciprocal):
     """Return the orientation matrix for measured and reference lattices."""
-    measured = np.asarray(recip_lattice, dtype=float)
-    reference = np.asarray(reference_recip, dtype=float)
+    measured = np.asarray(reciprocal, dtype=float)
+    reference = np.asarray(reference_reciprocal, dtype=float)
     if measured.shape != (3, 3) or reference.shape != (3, 3):
         raise ValueError("reciprocal lattices must have shape (3, 3)")
     return measured.T @ np.linalg.inv(reference.T)
 
 
 def orientation_to_rodrigues(rotation):
-    """Convert a 3 by 3 rotation matrix to a Rodrigues vector."""
+    """Convert a 3 by 3 rotation matrix to a Rodrigues vector.
+
+    At 180 degrees, where the conventional Rodrigues magnitude is singular, a
+    finite pi-magnitude axis vector is returned. The axis sign is inherently
+    ambiguous there; the first nonzero component is chosen positive.
+    """
     rotation = np.asarray(rotation, dtype=float)
     if rotation.shape != (3, 3):
         raise ValueError("rotation must have shape (3, 3)")
@@ -61,9 +113,17 @@ def orientation_to_rodrigues(rotation):
         rotation[1, 0] - rotation[0, 1],
     ])
     norm = np.linalg.norm(axis)
-    if norm < 1e-12:
-        return np.zeros(3)
-    return axis / norm * np.tan(angle / 2.0)
+    if norm < 1e-8:
+        values, vectors = np.linalg.eigh(rotation + np.eye(3))
+        axis = vectors[:, np.argmax(values)]
+        first = np.flatnonzero(np.abs(axis) > 1e-12)
+        if first.size and axis[first[0]] < 0:
+            axis = -axis
+    else:
+        axis /= norm
+    if np.pi - angle < 1e-8:
+        return axis * angle
+    return axis * np.tan(angle / 2.0)
 
 
 def crystal_direction(rotation, lab_direction):
@@ -80,7 +140,7 @@ def crystal_direction(rotation, lab_direction):
 
 
 def _rotation_matrix(axis, angle_deg):
-    axis = np.asarray(axis, dtype=float)
+    axis = np.array(axis, dtype=float)
     axis /= np.linalg.norm(axis)
     x, y, z = axis
     angle = np.radians(angle_deg)
@@ -165,7 +225,10 @@ def misorientation_from_reference(rotations, reference_index, *, operations=None
         for rotation in rotations
     ])
     vectors = np.asarray([orientation_to_rodrigues(rotation) for rotation in reduced])
-    angles = 2.0 * np.degrees(np.arctan(np.linalg.norm(vectors, axis=1)))
+    angles = np.asarray([
+        np.degrees(np.arccos(np.clip((np.trace(rotation) - 1.0) / 2.0, -1.0, 1.0)))
+        for rotation in reduced
+    ])
     return vectors, angles
 
 

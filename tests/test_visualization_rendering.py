@@ -18,6 +18,7 @@ from laueanalysis.visualization import (
     plot_pole_figure,
     prepare_detector_view,
     prepare_map,
+    prepare_pole_figure,
     selection_from_plotly,
 )
 
@@ -31,7 +32,7 @@ def _pattern(count):
     return Pattern(
         euler_deg=np.zeros(3),
         rotation=np.eye(3),
-        recip=np.eye(3),
+        reciprocal=np.eye(3),
         goodness=10 + count,
         rms_error_deg=0.1,
         hkl=np.tile([1, 0, -1], (count, 1)),
@@ -95,6 +96,19 @@ def test_plot_map_renders_prepared_2d_data_with_stable_identity():
     assert figure.layout.xaxis.title.text == "X motor (um)"
 
 
+def test_prepared_sources_reject_preparation_keywords():
+    map_data = prepare_map(_result_set())
+    pole_data = prepare_pole_figure(_result_set())
+    detector_data = prepare_detector_view(_result_set(), frame_id="a")
+
+    with pytest.raises(TypeError, match="color"):
+        plot_map(map_data, color="n_indexed")
+    with pytest.raises(TypeError, match="hkl"):
+        plot_pole_figure(pole_data, hkl=(1, 0, 0))
+    with pytest.raises(TypeError, match="patterns"):
+        plot_detector_view(detector_data, patterns="all")
+
+
 def test_plot_map_3d_uses_opaque_markers_and_validates_updates():
     figure = plot_map(_result_set(), axes=("X", "Y", "Z"), color="cubic_ipf")
 
@@ -117,6 +131,8 @@ def test_plot_map_empty_scope_returns_annotated_figure():
 def test_plot_pole_figure_has_semantic_roles_and_hover_limit():
     figure = plot_pole_figure(
         _result_set(),
+        pole_center=(0.1, -0.2),
+        pole_color_radius_deg=15.0,
         hover_point_limit=0,
         trace_update={"boundary": {"line": {"color": "white"}}},
     )
@@ -217,11 +233,12 @@ def test_plot_detector_view_raw_simulation_argument_is_prepared_once(monkeypatch
         "prepare_detector_view",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("reran")),
     )
-    plot_detector_view(
-        prepared,
-        simulation_energy_range_kev=(9.0, 19.0),
-        show_simulated=False,
-    )
+    with pytest.raises(TypeError, match="simulation_energy_range_kev"):
+        plot_detector_view(
+            prepared,
+            simulation_energy_range_kev=(9.0, 19.0),
+            show_simulated=False,
+        )
 
 
 def test_plot_detector_view_propagates_preparation_errors(monkeypatch):

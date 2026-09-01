@@ -158,7 +158,7 @@ laue_crystal *laue_crystal_create(const char *name, int space_group,
             crystal->value.atomType[i].Zatom = atomicNumber((char *)atoms[i].name);
         }
     }
-    if (UpdateInternalsOfCrystalStructure(&crystal->value)) {
+    if (ForceLatticeToStructure(&crystal->value)) {
         freeCrystalStructure(&crystal->value);
         free(crystal);
         set_error(err, errlen, "unable to initialize crystal");
@@ -173,6 +173,13 @@ void laue_crystal_free(laue_crystal *crystal)
     if (!crystal) return;
     freeCrystalStructure(&crystal->value);
     free(crystal);
+}
+
+int laue_crystal_reciprocal(const laue_crystal *crystal, double recip[3][3])
+{
+    if (!crystal || !recip) return LAUE_INVALID_ARGUMENT;
+    export_reciprocal_rows(recip, crystal->value.recip);
+    return LAUE_OK;
 }
 
 int laue_geometry_detector_count(const laue_geometry *geometry)
@@ -298,8 +305,16 @@ int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
             }
         }
         if (!used) {
-            result->status = LAUE_INVALID_ARGUMENT;
-            snprintf(result->message, sizeof(result->message), "image has no unmasked nonzero pixels");
+            result->nx = nx;
+            result->ny = ny;
+            result->threshold_used = NAN;
+            result->total_sum = 0.0;
+            result->sum_above_threshold = 0.0;
+            result->num_above_threshold = 0;
+            result->peak_minwidth = params->min_size / 4.0;
+            result->peak_maxwidth = params->boxsize * 1.5;
+            result->peak_max_cent_to_fit = params->boxsize;
+            result->peak_boxsize = params->boxsize;
             goto cleanup;
         }
         average = sum / used;

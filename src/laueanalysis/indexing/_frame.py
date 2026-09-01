@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from numbers import Real
 from pathlib import Path
 
 import numpy as np
@@ -46,6 +47,17 @@ def read_h5_frame(path: str | Path):
             return value.decode("utf-8")
         return value.item() if isinstance(value, np.generic) else value
 
+    def integer(source, name):
+        value = scalar(source, name)
+        if value is None:
+            return None
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+            raise ValueError(f"HDF5 field {name!r} must be an integer")
+        converted = int(value)
+        if not np.isfinite(value) or value != converted:
+            raise ValueError(f"HDF5 field {name!r} must be an integer")
+        return converted
+
     with h5py.File(path, "r") as source:
         image = source["entry1/data/data"][...]
         shutter = scalar(source, "entry1/microDiffraction/CCDshutter")
@@ -85,12 +97,12 @@ def read_h5_frame(path: str | Path):
 
         processing = {}
         start = (
-            scalar(source, "entry1/detector/startx"),
-            scalar(source, "entry1/detector/starty"),
+            integer(source, "entry1/detector/startx"),
+            integer(source, "entry1/detector/starty"),
         )
         group = (
-            scalar(source, "entry1/detector/binx"),
-            scalar(source, "entry1/detector/biny"),
+            integer(source, "entry1/detector/binx"),
+            integer(source, "entry1/detector/biny"),
         )
         if all(value is not None for value in start):
             processing["start"] = start

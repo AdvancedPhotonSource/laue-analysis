@@ -221,6 +221,21 @@ def test_sort_uses_hkl_for_last_bit_float_differences(monkeypatch, perturbed_ind
     np.testing.assert_array_equal(result.hkl, hkls)
 
 
+def test_harmonic_representative_uses_stable_float_order(monkeypatch):
+    candidates = [
+        _spot([4, 0, -2], np.nextafter(20.0, np.inf), np.nextafter(8.0, np.inf)),
+        _spot([2, 0, -1], 20.0, 8.0),
+    ]
+    _mock_candidates(monkeypatch, candidates)
+
+    result = simulate_reflections(
+        *_simple_inputs(),
+        energy_range_kev=(6.0, 30.0),
+    )
+
+    np.testing.assert_array_equal(result.hkl, [[2, 0, -1]])
+
+
 def test_energy_bounds_are_inclusive_and_off_detector_points_are_removed(monkeypatch):
     candidates = [
         _spot([2, 0, -1], 6.0, 3.0),

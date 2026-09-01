@@ -37,5 +37,6 @@ $executionTime	0.89		// execution time (sec)
 //
 // fitted peak positions relative to the start of the ROI (not detector origin)
 //    peak positions are in zero based binned pixels
-$Npeaks		0				// number of fitted peaks in following table
+$Npeaks		1				// number of fitted peaks in following table
 $peakList	8 0			// fitX fitY intens integral hwhmX hwhmY tilt chisq
+128.000000 128.000000 27.500000 0.000000 3.000000 3.000000 0.000000 0.000000

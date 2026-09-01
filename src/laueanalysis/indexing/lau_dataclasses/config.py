@@ -58,7 +58,7 @@ class LaueConfig:
     min_size: int = None
     min_separation: int = None
     threshold: float = None
-    thresholdRatio: float = -1
+    thresholdRatio: Optional[float] = None
     peakShape: str = None
     max_peaks: int = None
     maskFile: str = None

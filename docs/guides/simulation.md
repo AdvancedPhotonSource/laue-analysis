@@ -23,14 +23,14 @@ detector = geometry.detector(detector_slot)
 pattern = frame_result.patterns[0]
 simulation = simulate_reflections(
     crystal,
-    pattern.recip,
+    pattern.reciprocal,
     detector,
     energy_range_kev=(6.0, 30.0),
     depth=0.0,
 )
 ```
 
-The example assumes that `frame_result` contains at least one indexed pattern. `pattern.recip` is the fitted reciprocal matrix. Use this matrix directly because it contains the indexed orientation and any fitted lattice change.
+The example assumes that `frame_result` contains at least one indexed pattern. `pattern.reciprocal` is the fitted reciprocal matrix. Use this matrix directly because it contains the indexed orientation and any fitted lattice change.
 
 ```{warning}
 Detector indices are physical geometry slots. Active detector slots can be sparse. Use `find_detector()` when you know the detector ID.

@@ -55,7 +55,7 @@ Cell angles use degrees. Cell lengths support `"angstrom"`, `"A"`, `"nm"`, and `
 
 ```python
 cell_angstrom = nickel.cell.in_angstrom
-assert cell_angstrom.a == 3.5238
+assert abs(cell_angstrom.a - 3.5238) < 1e-12
 assert cell_angstrom.unit == "angstrom"
 ```
 

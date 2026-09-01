@@ -1,5 +1,6 @@
 """Tests for the reconstruction functional API."""
 
+import inspect
 import os
 import tempfile
 import pytest
@@ -19,6 +20,13 @@ from laueanalysis.reconstruct import (
     find_gpu_executable,
     gpu_available
 )
+
+
+def test_reconstruction_geometry_parameter_is_unified():
+    assert "geometry" in inspect.signature(reconstruct).parameters
+    assert "geometry_file" not in inspect.signature(reconstruct).parameters
+    assert "geometry" in inspect.signature(reconstruct_gpu).parameters
+    assert "geometry_file" not in inspect.signature(reconstruct_gpu).parameters
 
 
 class TestReconstruct:

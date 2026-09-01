@@ -43,7 +43,7 @@ result = indexer.index(
 
 `ResultSet.from_indexer()` copies the indexer's crystal and geometry references. Crystal context is required for cubic pole figures and inverse pole figure colors. Geometry is required for detector back-projection.
 
-Call `result_set.to_visualization()` when you need the normalized arrays. Preparation and table functions also accept `ResultSet` directly.
+Call `result_set.to_visualization()` when you need the normalized arrays. This conversion copies result arrays into one read-only columnar snapshot. It also copies retained images. Later changes to a `FrameResult` do not change the snapshot. Preparation and table functions also accept `ResultSet` directly and perform this conversion for each call.
 
 ## Load LaueGo XML
 
@@ -84,11 +84,12 @@ This selects the lowest pattern rank in each frame and requires at least three a
 from laueanalysis.visualization import DataScope
 
 all_patterns = DataScope(patterns="all", min_indexed=3)
+all_frames = DataScope(patterns="all_frames")
 selected_ranks = DataScope(patterns=(0, 2), min_indexed=3)
 detected_threshold = DataScope(min_indexed=3, min_detected=5)
 ```
 
-An empty selection is valid. Prepared arrays keep their documented dimensionality, and tables keep their columns.
+`patterns="all_frames"` lets `peak_table` include detected peaks from frames with no indexed patterns. Pattern filtering applies only to frames where patterns exist. An empty selection is valid. Prepared arrays keep their documented dimensionality, and tables keep their columns.
 
 Stable IDs do not depend on row order. A pattern uses `(frame_id, pattern_index)`, and a peak uses `(frame_id, peak_index)`.
 
@@ -257,10 +258,12 @@ pole_data = prepare_pole_figure(
     hkl=(1, 1, 0),
     surface="normal",
     color="hsv_position",
+    pole_center=(0.0, 0.0),
+    pole_color_radius_deg=22.5,
 )
 ```
 
-`pole_data.points` has shape `(n, 2)`. One pattern can produce several rows, so its stable identity can occur more than once. Inspect {data}`~laueanalysis.visualization.POLE_COLOR_MODES` for the available colors: `"hsv_position"`, `"ipf"`, and `"uniform"`.
+`pole_data.points` has shape `(n, 2)`. One pattern can produce several rows, so its stable identity can occur more than once. `pole_center` and `pole_color_radius_deg` use the same names as pole HSV coloring in `prepare_map()`. Inspect {data}`~laueanalysis.visualization.POLE_COLOR_MODES` for the available colors: `"hsv_position"`, `"ipf"`, and `"uniform"`.
 
 HKL-family generation and IPF colors currently support cubic crystals only. The function rejects other crystal systems instead of applying cubic symmetry to them.
 
@@ -287,7 +290,7 @@ Pass `simulation_energy_range_kev=(low, high)` to add predicted missing reflecti
 
 ## Work with tables
 
-The table functions return immutable, named NumPy columns. Call `.to_dataframe()` for pandas operations.
+The table functions return immutable, named NumPy columns. In Jupyter, the last `Table` value in a cell renders as an HTML table. Call `.to_dataframe()` for pandas operations.
 
 | Function | One row per record | Stable identity columns |
 |---|---|---|
@@ -320,7 +323,7 @@ Keep these spaces separate when you combine prepared data with other software:
 | Detector rotation vector | Axis-angle vector in radians |
 | Scattering vector | Components in the 34-ID-E laboratory convention |
 | `Pattern.rotation` | Canonical modern orientation matrix |
-| `Pattern.recip` | Rows follow the reciprocal-matrix convention used by the indexer |
+| `Pattern.reciprocal` | Rows follow the reciprocal-matrix convention used by the indexer |
 
 For grouped data, the frame-to-detector conversion maps a frame coordinate to the center of its full-detector pixel group. Detector slots are physical geometry slots and can be sparse.
 

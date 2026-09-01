@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+from conftest import requires_liblaue
+
 from laueanalysis.analysis import (
     CUBIC_SYMMETRY,
     HEXAGONAL_SYMMETRY,
@@ -22,6 +24,8 @@ from laueanalysis.analysis import (
     symmetry_operations,
     symmetry_reduce_orientation,
 )
+from laueanalysis.indexing import Cell, Crystal
+from laueanalysis.indexing._liblaue import NativeCrystal
 
 
 def _rotation_about_z(angle_deg):
@@ -33,43 +37,41 @@ def _rotation_about_z(angle_deg):
     ])
 
 
+@requires_liblaue
 @pytest.mark.parametrize(
     ("space_group", "cell"),
     [
         (1, (0.4, 0.5, 0.6, 70, 80, 75)),
-        (3, (0.4, 0.5, 0.6, 90, 105, 90)),
-        (16, (0.4, 0.5, 0.6, 90, 90, 90)),
-        (75, (0.4, 0.4, 0.6, 90, 90, 90)),
-        ("146:H", (0.4, 0.4, 0.6, 90, 90, 120)),
-        (168, (0.4, 0.4, 0.6, 90, 90, 120)),
-        (195, (0.4, 0.4, 0.4, 90, 90, 90)),
+        (3, (0.4, 0.5, 0.6, 88, 105, 92)),
+        (16, (0.4, 0.5, 0.6, 88, 91, 92)),
+        (75, (0.4, 0.5, 0.6, 88, 91, 92)),
+        pytest.param(146, (0.4, 0.5, 0.6, 70, 80, 75), id="trigonal-rhombohedral"),
+        pytest.param(146, (0.4, 0.5, 0.6, 90, 90, 120), id="trigonal-hexagonal"),
+        (168, (0.4, 0.5, 0.6, 88, 91, 115)),
+        (195, (0.4, 0.5, 0.6, 88, 91, 92)),
     ],
 )
-def test_reciprocal_lattice_matches_jzt_general_basis(space_group, cell):
+def test_reciprocal_lattice_matches_native_crystal(space_group, cell):
+    crystal = Crystal("test", space_group, Cell(*cell))
+    expected = NativeCrystal.create(crystal).reciprocal()
+
+    actual = lattice_params_to_reciprocal(*cell, space_group=space_group)
+
+    np.testing.assert_allclose(actual, expected, atol=1e-12, rtol=1e-14)
+
+
+def test_jzt_basis_has_equivalent_reciprocal_metric():
     from laueanalysis.analysis._vendor.jzt.Lattice import Lattice3D
 
-    expected = np.asarray(Lattice3D(space_group, cell).recip).T
-    np.testing.assert_allclose(lattice_params_to_reciprocal(*cell), expected, atol=1e-12)
+    cell = (0.4, 0.5, 0.6, 70, 80, 75)
+    native_basis = lattice_params_to_reciprocal(*cell, space_group=1)
+    jzt_basis = np.asarray(Lattice3D(1, cell).recip).T
 
-
-def test_reciprocal_lattice_matches_jzt_rhombohedral_basis():
-    from laueanalysis.analysis._vendor.jzt.Lattice import Lattice3D
-
-    cell = (0.5, 0.5, 0.5, 70, 70, 70)
-    expected = np.asarray(Lattice3D("146:R", cell).recip).T
-    actual = lattice_params_to_reciprocal(*cell, rhombohedral=True)
-
-    np.testing.assert_allclose(actual, expected, atol=1e-12)
-    general = lattice_params_to_reciprocal(*cell)
-    np.testing.assert_allclose(actual @ actual.T, general @ general.T, atol=1e-12)
-    rotation = actual.T @ np.linalg.inv(general.T)
-    np.testing.assert_allclose(rotation.T @ rotation, np.eye(3), atol=1e-12)
-    assert np.linalg.det(rotation) == pytest.approx(1.0)
-
-
-def test_rhombohedral_basis_rejects_inconsistent_cell():
-    with pytest.raises(ValueError, match="equal lengths and equal angles"):
-        lattice_params_to_reciprocal(0.5, 0.6, 0.5, 70, 70, 70, rhombohedral=True)
+    np.testing.assert_allclose(
+        native_basis @ native_basis.T,
+        jzt_basis @ jzt_basis.T,
+        atol=1e-12,
+    )
 
 
 def test_aps_surface_frames_are_right_handed_and_read_only():
@@ -118,6 +120,29 @@ def test_symmetry_and_misorientation_primitives():
     assert misorientation_angle(rotation, rotation, operations=CUBIC_SYMMETRY) == pytest.approx(0)
     with pytest.raises(ValueError, match="supported"):
         symmetry_operations(1)
+
+
+@pytest.mark.parametrize("angle", [180, 180 - 1e-7])
+def test_rodrigues_and_misorientation_handle_180_degree_rotation(angle):
+    rotation = _rotation_about_z(angle)
+
+    np.testing.assert_allclose(
+        orientation_to_rodrigues(rotation), [0, 0, np.radians(angle)], atol=1e-8
+    )
+    vectors, angles = misorientation_from_reference(
+        np.asarray([np.eye(3), rotation]), 0
+    )
+    np.testing.assert_allclose(vectors[1], [0, 0, np.radians(angle)], atol=1e-8)
+    assert angles[1] == pytest.approx(angle)
+    assert angles[1] == pytest.approx(misorientation_angle(rotation, np.eye(3)))
+
+
+def test_rotation_matrix_does_not_mutate_input_axis():
+    from laueanalysis.analysis.orientation import _rotation_matrix
+
+    axis = np.array([2.0, 0.0, 0.0])
+    _rotation_matrix(axis, 30)
+    np.testing.assert_array_equal(axis, [2.0, 0.0, 0.0])
 
 
 def test_orientation_reduction_and_misorientation_are_distinct():

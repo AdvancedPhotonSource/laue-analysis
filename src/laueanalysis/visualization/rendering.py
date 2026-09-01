@@ -19,6 +19,42 @@ from .preparation import (
 _BACKGROUND = "rgb(245, 245, 245)"
 
 
+class _PreparationDefault:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return repr(self.value)
+
+
+_AXES_DEFAULT = _PreparationDefault(("X", "Y"))
+_COLOR_DEFAULT = _PreparationDefault("n_indexed")
+_NONE_DEFAULT = _PreparationDefault(None)
+_HKL_DEFAULT = _PreparationDefault((1, 0, 0))
+_CENTER_DEFAULT = _PreparationDefault((0.0, 0.0))
+_RADIUS_DEFAULT = _PreparationDefault(22.5)
+_PATTERNS_DEFAULT = _PreparationDefault("all")
+
+
+def _prepared_data(source, data_type, function_name, preparation):
+    supplied = tuple(
+        name for name, value, _ in preparation
+        if not isinstance(value, _PreparationDefault)
+    )
+    if isinstance(source, data_type):
+        if supplied:
+            raise TypeError(
+                f"{function_name} preparation keywords are invalid for prepared source: "
+                f"{', '.join(supplied)}"
+            )
+        return source
+    return None
+
+
+def _value_or_default(value, default):
+    return value.value if isinstance(value, _PreparationDefault) else value
+
+
 def _rgb(values):
     array = np.asarray(values, dtype=float)
     if array.shape == (3,):
@@ -79,14 +115,14 @@ def _add_empty_annotation(figure, text):
 def plot_map(
     source,
     *,
-    axes=("X", "Y"),
-    color="n_indexed",
-    scope=None,
-    surface=None,
-    misorientation_reference=None,
-    pole_hkl=(1, 0, 0),
-    pole_center=(0.0, 0.0),
-    pole_color_radius_deg=22.5,
+    axes=_AXES_DEFAULT,
+    color=_COLOR_DEFAULT,
+    scope=_NONE_DEFAULT,
+    surface=_NONE_DEFAULT,
+    misorientation_reference=_NONE_DEFAULT,
+    pole_hkl=_HKL_DEFAULT,
+    pole_center=_CENTER_DEFAULT,
+    pole_color_radius_deg=_RADIUS_DEFAULT,
     marker_size=10,
     layout_update=None,
     trace_update=None,
@@ -97,17 +133,22 @@ def plot_map(
     :class:`VisualizationDataset`. Semantic trace roles are ``"data"`` and
     ``"unindexed"``.
     """
-    data = source if isinstance(source, MapData) else prepare_map(
-        source,
-        axes=axes,
-        color=color,
-        scope=scope,
-        surface=surface,
-        misorientation_reference=misorientation_reference,
-        pole_hkl=pole_hkl,
-        pole_center=pole_center,
-        pole_color_radius_deg=pole_color_radius_deg,
+    preparation = (
+        ("axes", axes, ("X", "Y")),
+        ("color", color, "n_indexed"),
+        ("scope", scope, None),
+        ("surface", surface, None),
+        ("misorientation_reference", misorientation_reference, None),
+        ("pole_hkl", pole_hkl, (1, 0, 0)),
+        ("pole_center", pole_center, (0.0, 0.0)),
+        ("pole_color_radius_deg", pole_color_radius_deg, 22.5),
     )
+    data = _prepared_data(source, MapData, "plot_map", preparation)
+    if data is None:
+        data = prepare_map(
+            source,
+            **{name: _value_or_default(value, default) for name, value, default in preparation},
+        )
     if isinstance(marker_size, bool) or not np.isfinite(marker_size) or marker_size <= 0:
         raise ValueError("marker_size must be positive and finite")
 
@@ -194,12 +235,12 @@ def plot_map(
 def plot_pole_figure(
     source,
     *,
-    hkl=(1, 0, 0),
-    scope=None,
-    surface=None,
-    color="hsv_position",
-    center=(0.0, 0.0),
-    color_radius_deg=22.5,
+    hkl=_HKL_DEFAULT,
+    scope=_NONE_DEFAULT,
+    surface=_NONE_DEFAULT,
+    color=_PreparationDefault("hsv_position"),
+    pole_center=_CENTER_DEFAULT,
+    pole_color_radius_deg=_RADIUS_DEFAULT,
     marker_size=7,
     hover_point_limit=100_000,
     layout_update=None,
@@ -209,15 +250,20 @@ def plot_pole_figure(
 
     Semantic trace roles are ``"data"``, ``"boundary"``, and ``"reference"``.
     """
-    data = source if isinstance(source, PoleFigureData) else prepare_pole_figure(
-        source,
-        hkl=hkl,
-        scope=scope,
-        surface=surface,
-        color=color,
-        center=center,
-        color_radius_deg=color_radius_deg,
+    preparation = (
+        ("hkl", hkl, (1, 0, 0)),
+        ("scope", scope, None),
+        ("surface", surface, None),
+        ("color", color, "hsv_position"),
+        ("pole_center", pole_center, (0.0, 0.0)),
+        ("pole_color_radius_deg", pole_color_radius_deg, 22.5),
     )
+    data = _prepared_data(source, PoleFigureData, "plot_pole_figure", preparation)
+    if data is None:
+        data = prepare_pole_figure(
+            source,
+            **{name: _value_or_default(value, default) for name, value, default in preparation},
+        )
     if isinstance(marker_size, bool) or not np.isfinite(marker_size) or marker_size <= 0:
         raise ValueError("marker_size must be positive and finite")
     if hover_point_limit is not None and (
@@ -317,11 +363,11 @@ def plot_pole_figure(
 def plot_detector_view(
     source,
     *,
-    frame_id=None,
-    patterns="all",
-    image=None,
-    detector_index=None,
-    simulation_energy_range_kev=None,
+    frame_id=_NONE_DEFAULT,
+    patterns=_PATTERNS_DEFAULT,
+    image=_NONE_DEFAULT,
+    detector_index=_NONE_DEFAULT,
+    simulation_energy_range_kev=_NONE_DEFAULT,
     show_detected=True,
     show_indexed=True,
     show_simulated=True,
@@ -338,18 +384,21 @@ def plot_detector_view(
     Semantic trace roles are ``"image"``, ``"boundary"``, ``"detected"``,
     ``"indexed"``, and ``"simulated"``.
     """
-    if isinstance(source, DetectorViewData):
-        data = source
-    else:
+    preparation = (
+        ("frame_id", frame_id, None),
+        ("patterns", patterns, "all"),
+        ("image", image, None),
+        ("detector_index", detector_index, None),
+        ("simulation_energy_range_kev", simulation_energy_range_kev, None),
+    )
+    data = _prepared_data(source, DetectorViewData, "plot_detector_view", preparation)
+    if data is None:
+        frame_id = _value_or_default(frame_id, None)
         if frame_id is None:
             raise TypeError("frame_id is required when source is not DetectorViewData")
         data = prepare_detector_view(
             source,
-            frame_id=frame_id,
-            patterns=patterns,
-            image=image,
-            detector_index=detector_index,
-            simulation_energy_range_kev=simulation_energy_range_kev,
+            **{name: _value_or_default(value, default) for name, value, default in preparation},
         )
     if isinstance(marker_size, bool) or not np.isfinite(marker_size) or marker_size <= 0:
         raise ValueError("marker_size must be positive and finite")

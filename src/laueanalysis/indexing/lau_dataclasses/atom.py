@@ -13,6 +13,7 @@ class Atom:
     symbol: str = None
     label: str = None
     values: str = None
+    occupancy: float = None
 
     def fromDescription(self, description):
             description = description.replace('}', '').replace('{', '').split()
@@ -25,5 +26,7 @@ class Atom:
         elem.set("n", str(self.n))
         elem.set("symbol", self.symbol)
         elem.set("label", self.label)
+        if self.occupancy is not None:
+            elem.set("occupancy", str(self.occupancy))
         elem.text = self.values
         return elem

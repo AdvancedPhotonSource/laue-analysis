@@ -11,7 +11,7 @@ import numpy as np
 from laueanalysis.indexing import Crystal, FrameResult, Geometry
 
 FrameId = str | int
-PatternSelection = Literal["best", "all"] | tuple[int, ...]
+PatternSelection = Literal["best", "all", "all_frames"] | tuple[int, ...]
 
 
 def _readonly(value, *, dtype=None, shape=None, name="array"):
@@ -46,7 +46,9 @@ class DataScope:
     ----------
     patterns
         ``"best"`` selects the lowest pattern rank in each frame, ``"all"``
-        selects every pattern, and a tuple selects explicit pattern ranks.
+        selects every pattern, ``"all_frames"`` additionally retains frames
+        with no patterns in frame-based tables, and a tuple selects explicit
+        pattern ranks. Pattern filters apply only where patterns exist.
     min_indexed
         Minimum number of indexed assignments required for a selected pattern.
     min_detected
@@ -62,25 +64,38 @@ class DataScope:
         if isinstance(patterns, list):
             patterns = tuple(patterns)
             object.__setattr__(self, "patterns", patterns)
-        if patterns not in ("best", "all"):
+        if patterns not in ("best", "all", "all_frames"):
             if not isinstance(patterns, tuple) or any(
-                isinstance(value, bool) or not isinstance(value, int) or value < 0
+                isinstance(value, (bool, np.bool_))
+                or not isinstance(value, Integral)
+                or value < 0
                 for value in patterns
             ):
-                raise ValueError("patterns must be 'best', 'all', or a tuple of nonnegative ranks")
+                raise ValueError(
+                    "patterns must be 'best', 'all', 'all_frames', or a tuple of nonnegative ranks"
+                )
+            patterns = tuple(int(value) for value in patterns)
+            object.__setattr__(self, "patterns", patterns)
             if len(set(patterns)) != len(patterns):
                 raise ValueError("pattern ranks must be unique")
-        if isinstance(self.min_indexed, bool) or not isinstance(self.min_indexed, int) or self.min_indexed < 0:
+        if (
+            isinstance(self.min_indexed, (bool, np.bool_))
+            or not isinstance(self.min_indexed, Integral)
+            or self.min_indexed < 0
+        ):
             raise ValueError("min_indexed must be a nonnegative integer")
+        object.__setattr__(self, "min_indexed", int(self.min_indexed))
         if (
             self.min_detected is not None
             and (
-                isinstance(self.min_detected, bool)
-                or not isinstance(self.min_detected, int)
+                isinstance(self.min_detected, (bool, np.bool_))
+                or not isinstance(self.min_detected, Integral)
                 or self.min_detected < 0
             )
         ):
             raise ValueError("min_detected must be a nonnegative integer or None")
+        if self.min_detected is not None:
+            object.__setattr__(self, "min_detected", int(self.min_detected))
 
     def pattern_mask(self, dataset: "VisualizationDataset") -> np.ndarray:
         """Return a mask selecting pattern rows from a dataset."""
@@ -92,7 +107,7 @@ class DataScope:
                 rows = np.flatnonzero(dataset.pattern_frame_indices == frame_index)
                 if len(rows):
                     selected[rows[np.argmin(dataset.pattern_indices[rows])]] = True
-        elif self.patterns != "all":
+        elif self.patterns not in ("all", "all_frames"):
             selected &= np.isin(dataset.pattern_indices, self.patterns)
         selected &= dataset.pattern_n_indexed >= self.min_indexed
         if self.min_detected is not None:
@@ -102,9 +117,23 @@ class DataScope:
 
 @dataclass(frozen=True)
 class ResultSet:
-    """Ordered indexing results with shared crystal and geometry context."""
+    """Ordered indexing results with shared crystal and geometry context.
 
-    results: tuple[FrameResult, ...]
+    Parameters
+    ----------
+    results
+        Frame results in acquisition or application order.
+    frame_ids
+        Optional unique string or integer identifier for each result. By
+        default, identifiers are zero-based positions in ``results``.
+    crystal
+        Crystal context used for pole figures, orientation colors, and
+        reflection simulation.
+    geometry
+        Detector geometry used for detector views and back-projection.
+    """
+
+    results: tuple[FrameResult, ...] = field(repr=False)
     frame_ids: tuple[FrameId, ...] | None = None
     crystal: Crystal | None = None
     geometry: Geometry | None = None
@@ -121,13 +150,21 @@ class ResultSet:
         if self.geometry is not None and not isinstance(self.geometry, Geometry):
             raise TypeError("geometry must be a Geometry or None")
 
+    def __repr__(self) -> str:
+        return (
+            f"ResultSet(n_frames={len(self.results)}, "
+            f"n_peaks={sum(result.n_peaks for result in self.results)}, "
+            f"n_patterns={sum(result.n_patterns for result in self.results)}, "
+            f"crystal={self.crystal is not None}, geometry={self.geometry is not None})"
+        )
+
     @classmethod
     def from_indexer(cls, indexer, results: Iterable[FrameResult], *, frame_ids=None):
         """Construct a result set using an indexer's shared context."""
         return cls(
             tuple(results),
             frame_ids=frame_ids,
-            crystal=indexer.crystal_model,
+            crystal=indexer.crystal,
             geometry=indexer.geometry,
         )
 
@@ -170,6 +207,12 @@ class VisualizationDataset:
     assignment_predicted_intensity: np.ndarray
     crystal: Crystal | None = None
     geometry: Geometry | None = field(default=None, repr=False, compare=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"VisualizationDataset(n_frames={self.n_frames}, n_peaks={len(self.peaks)}, "
+            f"n_patterns={self.n_patterns}, n_assignments={self.n_assignments})"
+        )
 
     def __post_init__(self):
         frame_count = len(self.frame_ids)
@@ -280,7 +323,7 @@ class VisualizationDataset:
                 pattern_frames.append(frame_index)
                 pattern_indices.append(pattern_index)
                 rotations.append(pattern.rotation)
-                reciprocals.append(pattern.recip)
+                reciprocals.append(pattern.reciprocal)
                 goodness.append(pattern.goodness)
                 rms_error.append(pattern.rms_error_deg)
                 n_indexed.append(pattern.n_indexed)

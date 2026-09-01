@@ -161,7 +161,7 @@ def _run_peaksearch(input_image: str, output_dir: str,
                    boxsize: int, max_rfactor: float, min_size: int,
                    min_separation: int, threshold: int, peak_shape: str,
                    max_peaks: int, mask_file: Optional[str],
-                   threshold_ratio: float, smooth: bool,
+                   threshold_ratio: Optional[float], smooth: bool,
                    timeout: int = 300) -> Tuple[bool, str, str, int, str]:
     """
     Run the peaksearch executable.
@@ -177,7 +177,7 @@ def _run_peaksearch(input_image: str, output_dir: str,
         peak_shape: Peak shape ('L', 'G', etc.).
         max_peaks: Maximum number of peaks.
         mask_file: Optional mask file path.
-        threshold_ratio: Threshold ratio (-1 to disable).
+        threshold_ratio: Threshold ratio. `None` uses the executable default.
         smooth: Whether to apply smoothing.
         timeout: Command timeout in seconds.
         
@@ -214,7 +214,7 @@ def _run_peaksearch(input_image: str, output_dir: str,
         cmd.extend(['-t', str(threshold)])
     if mask_file:
         cmd.extend(['-K', mask_file])
-    if threshold_ratio != -1:
+    if threshold_ratio is not None:
         cmd.extend(['-T', str(threshold_ratio)])
     if smooth:
         cmd.extend(['-S'])  # Note: -S doesn't take a parameter
@@ -438,7 +438,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
           peak_shape: str = 'L',
           max_peaks: int = 50,
           mask_file: Optional[str] = None,
-          threshold_ratio: float = -1,
+          threshold_ratio: Optional[float] = None,
           smooth: bool = False,
           # Indexing parameters
           index_kev_max_calc: float = 30.0,
@@ -483,8 +483,8 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     mask_file
         Optional path to a peak-search mask file.
     threshold_ratio
-        Automatic threshold ratio. ``-1`` disables the corresponding command
-        option in the LaueGo executable.
+        Automatic threshold ratio. `None` uses the LaueGo executable default
+        of ``4.0``.
     smooth
         Apply the LaueGo peak-search smoothing option.
     index_kev_max_calc
@@ -523,6 +523,10 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
     function.
     """
     
+    if threshold_ratio is not None and threshold_ratio <= 0:
+        raise ValueError("threshold_ratio must be positive or None")
+    resolved_threshold_ratio = 4.0 if threshold_ratio is None else threshold_ratio
+
     # Set up output directories
     try:
         subdirs = _setup_output_dirs(output_dir)
@@ -741,7 +745,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 peak_shape=peak_shape,
                 max_peaks=max_peaks,
                 mask_file=mask_file,
-                threshold_ratio=threshold_ratio,
+                threshold_ratio=resolved_threshold_ratio,
                 index_kev_max_calc=index_kev_max_calc,
                 index_kev_max_test=index_kev_max_test,
                 index_angle_tolerance=index_angle_tolerance,

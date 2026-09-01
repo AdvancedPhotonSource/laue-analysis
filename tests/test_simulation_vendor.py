@@ -84,6 +84,8 @@ def _simulate_raw(golden):
         EHI=metadata["energy_range_kev"][1],
         Nmax=100_000,
     )
+    assert pattern._all_spots
+    assert isinstance(pattern._candidate_limit_reached, bool)
     hkl = np.asarray(
         [[int(spot.hkl.item(0, axis)) for axis in range(3)] for spot in spots],
         dtype=np.int64,

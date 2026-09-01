@@ -1,7 +1,7 @@
 # Native build for laueanalysis.
 #
 # This is the single maintained build definition for the CPU native
-# components (see BUILD_DEPLOYMENT_PLAN.md).  It is consumed both directly
+# components. It is consumed both directly
 # (cmake -S . -B build) and through scikit-build-core during
 # `python -m pip install .`.  Install destinations are relative to the
 # install prefix so that scikit-build-core can point them into the wheel.

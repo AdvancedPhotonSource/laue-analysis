@@ -24,7 +24,7 @@ class PeaksXY:
     peakProgram: str = None
     minwidth: float = None
     threshold: float = None
-    thresholdRatio: int = -1
+    thresholdRatio: float = None
     maxRfactor: float = None
     maxwidth: float = None
     maxCentToFit: float = None
@@ -56,7 +56,7 @@ class PeaksXY:
             if val is None:
                 self.__dict__[key] = val
                 return
-            floats = ['minwidth', 'threshold', 'maxRfactor', 'maxwidth', 'maxCentToFit', 'executionTime']
+            floats = ['minwidth', 'threshold', 'thresholdRatio', 'maxRfactor', 'maxwidth', 'maxCentToFit', 'executionTime']
             if key in ['Npeaks']:
                 val = int(val)
             elif key in floats:

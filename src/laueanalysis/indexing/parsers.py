@@ -128,7 +128,7 @@ def parse_full_step_data(
     peak_shape: str = 'L',
     max_peaks: int = 50,
     mask_file: Optional[str] = None,
-    threshold_ratio: float = -1,
+    threshold_ratio: float = 4.0,
     index_kev_max_calc: float = 30.0,
     index_kev_max_test: float = 35.0,
     index_angle_tolerance: float = 0.12,

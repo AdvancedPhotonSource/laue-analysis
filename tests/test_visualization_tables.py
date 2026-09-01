@@ -27,7 +27,7 @@ def _dataset():
     pattern = Pattern(
         euler_deg=np.zeros(3),
         rotation=np.eye(3),
-        recip=np.eye(3),
+        reciprocal=np.eye(3),
         goodness=12,
         rms_error_deg=0.2,
         hkl=np.array([[1, 0, 0], [1, 1, 0], [1, 1, 1]]),
@@ -67,11 +67,51 @@ def test_normalized_tables_have_expected_cardinality_and_ids():
     assert indexed["goodness"].tolist() == [12, 12, 12]
 
 
+def test_peak_table_all_frames_includes_unindexed_frame_peaks():
+    indexed = _dataset()
+    empty_pattern_result = FrameResult(
+        peaks=np.zeros(2, dtype=PEAK_DTYPE),
+        patterns=(),
+        threshold_used=10,
+        total_sum=20,
+        sum_above_threshold=10,
+        num_above_threshold=2,
+        peaksearch_seconds=0.1,
+        indexing_seconds=0.0,
+        metadata={"sample_position": (4, 5, 6)},
+        image_shape=(8, 8),
+    )
+    dataset = ResultSet(
+        (
+            FrameResult(
+                peaks=indexed.peaks,
+                patterns=(),
+                threshold_used=10,
+                total_sum=100,
+                sum_above_threshold=50,
+                num_above_threshold=4,
+                peaksearch_seconds=0.1,
+                indexing_seconds=0.2,
+                metadata={"sample_position": (1, 2, 3)},
+                image_shape=(8, 8),
+            ),
+            empty_pattern_result,
+        ),
+        frame_ids=("frame-a", "frame-b"),
+    ).to_visualization()
+
+    table = peak_table(dataset, scope=DataScope(patterns="all_frames"))
+
+    assert len(table) == 6
+    assert table["frame_id"].tolist() == ["frame-a"] * 4 + ["frame-b"] * 2
+
+
 def test_tables_convert_to_independent_dataframes():
     table = indexed_peak_table(_dataset())
     dataframe = table.to_dataframe()
 
     assert isinstance(dataframe, pd.DataFrame)
+    assert "<table" in table._repr_html_()
     assert list(dataframe.query("energy_kev >= 11")["peak_index"]) == [2, 3]
     dataframe.loc[0, "fit_x"] = -1
     assert table["fit_x"][0] == 10

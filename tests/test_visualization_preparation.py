@@ -41,7 +41,7 @@ def _pattern(count, rotation=None):
     return Pattern(
         euler_deg=np.zeros(3),
         rotation=np.eye(3) if rotation is None else rotation,
-        recip=np.eye(3),
+        reciprocal=np.eye(3),
         goodness=10 + count,
         rms_error_deg=0.1,
         hkl=np.tile([1, 0, -1], (count, 1)),
@@ -131,6 +131,15 @@ def test_prepare_map_empty_scope_has_stable_shapes():
     assert prepared.coordinates.shape == (0, 2)
     assert prepared.colors.shape == (0,)
     assert prepared.frame_ids == ()
+
+
+@pytest.mark.parametrize("axis", ["depth", "Zlab", "Hlab", "Flab"])
+def test_depth_dependent_axes_name_frames_with_missing_depth(axis):
+    dataset = _result_set().to_visualization()
+    dataset = replace(dataset, depths=np.array([np.nan, 2.0]))
+
+    with pytest.raises(ValueError, match=rf"{axis}.*'a'"):
+        prepare_map(dataset, axes=("X", axis))
 
 
 def test_prepare_map_requires_real_coordinates():
@@ -225,9 +234,12 @@ def test_prepare_pole_figure_preserves_pattern_identity_and_is_read_only():
         _result_set(with_context=True),
         hkl=(1, 0, 0),
         scope=DataScope(patterns="all", min_indexed=0),
+        pole_center=(0.1, -0.2),
+        pole_color_radius_deg=15.0,
     )
 
     assert isinstance(prepared, PoleFigureData)
+    assert prepared.center == (0.1, -0.2)
     assert len(prepared.points) > 0
     assert set(zip(prepared.frame_ids, prepared.pattern_indices, strict=True)) == {
         ("a", 0),
@@ -276,6 +288,10 @@ def test_prepare_detector_view_validates_frame_and_image():
         prepare_detector_view(result_set, frame_id="a", image=np.zeros(3))
     with pytest.raises(ValueError, match="patterns"):
         prepare_detector_view(result_set, frame_id="a", patterns="first")
+    prepared = prepare_detector_view(
+        result_set, frame_id="a", patterns=(np.int64(1),)
+    )
+    assert [pattern.pattern_index for pattern in prepared.patterns] == [1]
 
 
 def test_detector_simulation_data_normalizes_validates_and_owns_arrays():

@@ -12,7 +12,7 @@ def _pattern(count, goodness=10.0):
     return Pattern(
         euler_deg=np.zeros(3),
         rotation=np.eye(3),
-        recip=np.eye(3),
+        reciprocal=np.eye(3),
         goodness=goodness,
         rms_error_deg=0.1,
         hkl=np.tile([1, 0, 0], (count, 1)),
@@ -46,6 +46,8 @@ def test_result_set_validates_ids_and_preserves_results():
     result_set = ResultSet(results, frame_ids=("a", "b"))
     assert result_set.results == results
     assert result_set.frame_ids == ("a", "b")
+    assert len(repr(results[0])) < 200
+    assert len(repr(result_set)) < 200
     with pytest.raises(ValueError, match="unique"):
         ResultSet(results, frame_ids=("same", "same"))
     with pytest.raises(ValueError, match="contain 2"):
@@ -86,6 +88,8 @@ def test_visualization_dataset_normalizes_all_record_levels():
     assert not dataset.sample_positions.flags.writeable
     assert not dataset.pattern_rotations.flags.writeable
     assert not dataset.images[0].flags.writeable
+    assert len(repr(result_set.results[0].patterns[0])) < 200
+    assert len(repr(dataset)) < 200
 
 
 def test_result_set_rejects_invalid_context():
@@ -101,7 +105,16 @@ def test_visualization_dataset_preserves_missing_positions():
     assert np.isnan(dataset.sample_positions).all()
 
 
-def test_data_scope_validates_values():
+def test_data_scope_accepts_numpy_integers_and_validates_values():
+    scope = DataScope(
+        patterns=(np.int64(2),),
+        min_indexed=np.int64(1),
+        min_detected=np.int64(3),
+    )
+    assert scope.patterns == (2,)
+    assert scope.min_indexed == 1
+    assert scope.min_detected == 3
+    assert all(type(value) is int for value in scope.patterns)
     with pytest.raises(ValueError, match="patterns"):
         DataScope(patterns="first")
     with pytest.raises(ValueError, match="min_indexed"):

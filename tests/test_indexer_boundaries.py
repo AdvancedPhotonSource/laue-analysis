@@ -35,6 +35,7 @@ pytestmark = requires_liblaue
         (PeakParams(min_separation=0), "positive"),
         (PeakParams(max_peaks=0), "positive"),
         (PeakParams(max_rfactor=0), "max_rfactor"),
+        (PeakParams(threshold_ratio=-1), "threshold_ratio"),
         (PeakParams(peak_shape="Voigt"), "peak_shape"),
     ],
 )
@@ -107,6 +108,55 @@ def test_hdf5_metadata_override_and_processing_values(tmp_path):
     assert result.to_step().sampleName == "supplied"
 
 
+def test_hdf5_integral_float_processing_values_are_coerced(tmp_path):
+    path = tmp_path / "integral-floats.h5"
+    with h5py.File(path, "w") as output:
+        output.create_dataset("entry1/data/data", data=np.zeros((4, 5), dtype=np.uint16))
+        output.create_dataset("entry1/detector/startx", data=10.0)
+        output.create_dataset("entry1/detector/starty", data=20.0)
+        output.create_dataset("entry1/detector/binx", data=2.0)
+        output.create_dataset("entry1/detector/biny", data=3.0)
+
+    result = Indexer(GEOMETRY).index(path)
+
+    assert result.start == (10, 20)
+    assert result.group == (2, 3)
+    assert all(type(value) is int for value in result.start + result.group)
+
+
+def test_hdf5_rejects_nonintegral_processing_value_with_field_name(tmp_path):
+    path = tmp_path / "nonintegral.h5"
+    with h5py.File(path, "w") as output:
+        output.create_dataset("entry1/data/data", data=np.zeros((4, 5), dtype=np.uint16))
+        output.create_dataset("entry1/detector/startx", data=10.5)
+        output.create_dataset("entry1/detector/starty", data=20)
+
+    with pytest.raises(ValueError, match="entry1/detector/startx"):
+        Indexer(GEOMETRY).index(path)
+
+
+def test_index_normalizes_numpy_start_and_group_to_integer_tuples():
+    result = Indexer(GEOMETRY).index(
+        np.zeros((4, 5), dtype=np.uint16),
+        start=np.array([10, 20], dtype=np.int64),
+        group=np.array([2, 3], dtype=np.int64),
+    )
+
+    assert result.start == (10, 20)
+    assert result.group == (2, 3)
+    assert all(type(value) is int for value in result.start + result.group)
+
+
+def test_hdf5_detector_mismatch_is_reported_before_roi_bounds(tmp_path):
+    path = tmp_path / "wrong-detector.h5"
+    with h5py.File(path, "w") as output:
+        output.create_dataset("entry1/data/data", data=np.zeros((4096, 4096), dtype=np.uint16))
+        output.create_dataset("entry1/detector/ID", data="WRONG")
+
+    with pytest.raises(InputError, match="does not match selected detector"):
+        Indexer(GEOMETRY).index(path)
+
+
 def test_hdf5_without_roi_metadata_preserves_explicit_processing_values(tmp_path):
     path = tmp_path / "frame.h5"
     with h5py.File(path, "w") as output:
@@ -154,6 +204,18 @@ def test_batch_order_and_image_retention():
     assert [result.image_shape for result in retained] == [(3, 4), (3, 5)]
     assert all(result.image is frame for result, frame in zip(retained, frames))
     assert all(result.image is None for result in discarded)
+
+
+def test_index_many_continues_after_blank_auto_threshold_frame():
+    frames = [np.full((3, 4), value, dtype=np.uint16) for value in (1, 0, 2)]
+    indexer = Indexer(GEOMETRY, peak_params=PeakParams(threshold=None))
+
+    results = indexer.index_many(frames)
+
+    assert len(results) == 3
+    assert [result.n_peaks for result in results] == [0, 0, 0]
+    assert np.isnan(results[1].threshold_used)
+    assert [result.total_sum for result in results] == [12, 0, 24]
 
 
 def _short_peak_frame():

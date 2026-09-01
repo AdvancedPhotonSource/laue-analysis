@@ -12,8 +12,10 @@ configuration
 results
 geometry
 crystals
+analysis
 simulation
 visualization
+reconstruction
 errors
 lauego
 ```

@@ -52,12 +52,22 @@ class Table:
 
         return pd.DataFrame({name: values.copy() for name, values in self.columns.items()})
 
+    def _repr_html_(self):
+        """Return the pandas HTML representation used by notebook displays."""
+        return self.to_dataframe()._repr_html_()
+
 
 def _selected_pattern_rows(dataset, scope):
     return np.flatnonzero((scope or DataScope()).pattern_mask(dataset))
 
 
 def _selected_frame_mask(dataset, scope):
+    scope = scope or DataScope()
+    if scope.patterns == "all_frames":
+        mask = np.ones(dataset.n_frames, dtype=bool)
+        if scope.min_detected is not None:
+            mask &= dataset.frame_n_peaks >= scope.min_detected
+        return mask
     rows = _selected_pattern_rows(dataset, scope)
     mask = np.zeros(dataset.n_frames, dtype=bool)
     mask[dataset.pattern_frame_indices[rows]] = True

@@ -5,7 +5,7 @@
 #include "liblaue.h"
 
 enum {
-    IMAGE_WIDTH = 64,
+    IMAGE_WIDTH = 80,
     IMAGE_HEIGHT = 64,
     REPEAT_COUNT = 5
 };
@@ -33,7 +33,7 @@ int main(void)
     int index;
 
     for (index = 0; index < IMAGE_WIDTH * IMAGE_HEIGHT; ++index) pixels[index] = 10;
-    add_gaussian(pixels, 16, 16);
+    add_gaussian(pixels, 3, 16);
     add_gaussian(pixels, 32, 20);
     add_gaussian(pixels, 46, 44);
 

@@ -91,6 +91,23 @@ else:
     assert completed.returncode == 0, completed.stderr
 
 
+def test_saturated_frame_does_not_overflow_native_stack():
+    script = r'''
+import numpy as np
+from laueanalysis.indexing import Indexer, PeakParams
+
+indexer = Indexer(
+    "tests/data/geo/geoN_2022-03-29_14-15-05.xml",
+    peak_params=PeakParams(threshold=100),
+)
+indexer.index(np.full((350, 350), 500, np.uint16))
+'''
+
+    completed = _run_python(script)
+
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_repeated_peak_search_releases_native_allocations(tmp_path):
     valgrind = shutil.which("valgrind")
     compiler = shutil.which("cc")
@@ -129,8 +146,9 @@ def test_repeated_peak_search_releases_native_allocations(tmp_path):
             valgrind,
             "--quiet",
             "--leak-check=full",
-            "--show-leak-kinds=definite",
-            "--errors-for-leak-kinds=definite",
+            "--show-leak-kinds=all",
+            "--errors-for-leak-kinds=all",
+            "--track-origins=yes",
             "--error-exitcode=99",
             str(executable),
         ],

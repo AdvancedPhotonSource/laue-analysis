@@ -59,7 +59,7 @@ The in-process path:
 
 The LaueGo `peak_shape` argument commonly uses `"L"` or `"G"`. `PeakParams.peak_shape` defaults to the clearer `"Lorentzian"` spelling but accepts either initial.
 
-In LaueGo, `threshold_ratio=-1` means that the command option is omitted. In the in-process API, `threshold=None` selects automatic thresholding, and `threshold_ratio` controls its scale. Review this setting rather than copying `-1` mechanically.
+In both APIs, `threshold_ratio=None` uses the native default of `4.0`; the LaueGo path does this by omitting the `-T` command option. In the in-process API, `threshold=None` selects automatic thresholding, and `threshold_ratio` controls its scale.
 
 ## Result mapping
 

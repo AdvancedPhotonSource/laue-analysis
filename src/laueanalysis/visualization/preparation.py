@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -274,7 +275,7 @@ def _pattern_rows(dataset, scope):
 
 def _frame_axis(dataset, name):
     positions = dataset.sample_positions
-    depth = np.nan_to_num(dataset.depths, nan=0.0)
+    depth = dataset.depths
     h = (positions[:, 1] + positions[:, 2]) / np.sqrt(2.0)
     f = (-positions[:, 1] + positions[:, 2]) / np.sqrt(2.0)
     lab = -positions.copy()
@@ -296,6 +297,13 @@ def _frame_axis(dataset, name):
     }
     if name not in axes:
         raise ValueError(f"unknown axis {name!r}; choose from {_AXIS_VALUES}")
+    if name in {"depth", "Zlab", "Hlab", "Flab"}:
+        missing = [
+            dataset.frame_ids[index]
+            for index in np.flatnonzero(~np.isfinite(dataset.depths))
+        ]
+        if missing:
+            raise ValueError(f"axis {name!r} requires finite depth for frames {missing}")
     return axes[name]
 
 
@@ -460,7 +468,12 @@ def prepare_map(
     pole_center=(0.0, 0.0),
     pole_color_radius_deg=22.5,
 ):
-    """Prepare a two- or three-dimensional spatial map."""
+    """Prepare a two- or three-dimensional spatial map.
+
+    ``scope=None`` uses ``DataScope(patterns="best", min_indexed=3)``. This
+    differs from detector-view preparation, whose ``patterns`` argument
+    defaults to ``"all"``.
+    """
     dataset = _dataset(source)
     if len(axes) not in (2, 3):
         raise ValueError("axes must contain two or three entries")
@@ -505,10 +518,15 @@ def prepare_pole_figure(
     scope=None,
     surface=None,
     color="hsv_position",
-    center=(0.0, 0.0),
-    color_radius_deg=22.5,
+    pole_center=(0.0, 0.0),
+    pole_color_radius_deg=22.5,
 ):
-    """Prepare stereographic pole positions for selected patterns."""
+    """Prepare stereographic pole positions for selected patterns.
+
+    ``scope=None`` uses ``DataScope(patterns="best", min_indexed=3)``. This
+    differs from detector-view preparation, whose ``patterns`` argument
+    defaults to ``"all"``.
+    """
     dataset = _dataset(source)
     if dataset.crystal is None:
         raise ValueError("crystal context is required for a cubic pole figure")
@@ -525,8 +543,10 @@ def prepare_pole_figure(
     points, local_rows = points[finite], local_rows[finite]
     selected_rows = rows[local_rows]
     if color == "hsv_position":
-        radius = pole_color_radius(center, color_radius_deg)
-        pattern_colors = closest_pole_colors(points, local_rows, len(rows), center=center, radius=radius)
+        radius = pole_color_radius(pole_center, pole_color_radius_deg)
+        pattern_colors = closest_pole_colors(
+            points, local_rows, len(rows), center=pole_center, radius=radius
+        )
         colors = pattern_colors[local_rows]
         color_kind = "rgb"
     elif color == "ipf":
@@ -548,7 +568,7 @@ def prepare_pole_figure(
         hkl=tuple(int(value) for value in hkl),
         color_kind=color_kind,
         color_radius=radius,
-        center=tuple(float(value) for value in center),
+        center=tuple(float(value) for value in pole_center),
     )
 
 
@@ -577,7 +597,12 @@ def prepare_detector_view(
     detector_index=None,
     simulation_energy_range_kev=None,
 ):
-    """Prepare measured, indexed, and optional simulated detector overlays."""
+    """Prepare measured, indexed, and optional simulated detector overlays.
+
+    ``patterns="all"`` includes every indexed pattern in the selected frame.
+    Map and pole-figure preparation instead use the default ``DataScope``,
+    which selects the best pattern with at least three assignments.
+    """
     dataset = _dataset(source)
     frame_index = _frame_index(dataset, frame_id)
     if dataset.geometry is None:
@@ -606,8 +631,14 @@ def prepare_detector_view(
         if isinstance(patterns, str):
             raise ValueError("patterns must be 'best', 'all', or a sequence of ranks")
         requested = tuple(patterns)
-        if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in requested):
+        if any(
+            isinstance(value, (bool, np.bool_))
+            or not isinstance(value, Integral)
+            or value < 0
+            for value in requested
+        ):
             raise ValueError("pattern ranks must be nonnegative integers")
+        requested = tuple(int(value) for value in requested)
         pattern_rows = pattern_rows[np.isin(dataset.pattern_indices[pattern_rows], requested)]
 
     indexed_mask = np.zeros(len(peak_rows), dtype=bool)

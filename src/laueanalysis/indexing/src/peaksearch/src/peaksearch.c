@@ -302,7 +302,7 @@ int		*status)
 
 	/* process each point in the blob list */
 	ListNode* blob=blobs->head;
-	while(blob !=EMPTY_NODE && (peaks->size <= NpeakMax)) {
+	while(blob !=EMPTY_NODE && (peaks->size < NpeakMax)) {
 		x = ((Point*)blob->value)->x;
 		y = ((Point*)blob->value)->y;
 		intens = ((Point*)blob->value)->value;
@@ -568,18 +568,18 @@ double	*integr) {		/* general parameters about the image */
 		/* first row of image_roi */
 		int i;
 		for(i=0; i<xxdim;i++)
-			edgebackground[i]=grid_get_value(image_roi,0,i);
+			edgebackground[i]=grid_get_value(image_roi,i,0);
 
 		/* last row of image_roi */
 		for(i=xxdim; i<2*xxdim;i++)
-			edgebackground[i]=grid_get_value(image_roi,yydim-1,i-xxdim);
+			edgebackground[i]=grid_get_value(image_roi,i-xxdim,yydim-1);
 
 		/* first column of image_roi except first and last row */
 		for(i=2*xxdim; i<2*xxdim+yydim-2;i++)
-			edgebackground[i]=grid_get_value(image_roi,i-2*xxdim +1,0);
+			edgebackground[i]=grid_get_value(image_roi,0,i-2*xxdim +1);
 
 		for(i=2*xxdim+yydim-2; i<n_roi-n_roi_b;i++)
-			edgebackground[i]=grid_get_value(image_roi,i-(2*xxdim+yydim-2)+1,xxdim-1);
+			edgebackground[i]=grid_get_value(image_roi,xxdim-1,i-(2*xxdim+yydim-2)+1);
 
 
 		double background = median(edgebackground, n_roi-n_roi_b);
@@ -1037,27 +1037,47 @@ List* get_blob_list(Grid* image, Grid* bitmap, int *status) {
 
 /* given a starting point inside a blob, find all points in the blob */
 int get_blob_points(Grid* image, Grid* bitmap, List* list, int x, int y) {
+	const size_t capacity = (size_t)image->width * (size_t)image->height;
+	size_t *stack = malloc(capacity * sizeof(*stack));
+	size_t size = 0;
+	int status = 0;
 
-	double value = grid_get_value(image, x, y);
-	Point *point = point_new_initialized(x, y, value);
-	if (!point || list_append(list, point)) { point_delete(point); return 1; }
+	if (!stack) return 1;
+	stack[size++] = (size_t)y * (size_t)image->width + (size_t)x;
 	grid_set_value(bitmap, x, y, 0);
 
-	/* recurse */
-	int dx, dy;
-	for (dx = -1; dx <= 1; dx++) {
-		for (dy = -1; dy <= 1; dy++) {
-			/* we're not going out of bounds, the value in the pixel of interest is 1, and dx and dy aren't both 0 */
-			if ( x+dx >= 0 && x+dx < image->width && y+dy >= 0 && y+dy < image->height && (dx != 0 || dy != 0) ) {
+	while (size > 0) {
+		size_t index = stack[--size];
+		int point_x = (int)(index % (size_t)image->width);
+		int point_y = (int)(index / (size_t)image->width);
+		Point *point = point_new_initialized(
+			point_x, point_y, grid_get_value(image, point_x, point_y));
+		int dx, dy;
 
-				if (grid_get_value(bitmap, x+dx, y+dy) == 1) {
-					if (get_blob_points(image, bitmap, list, x+dx, y+dy)) return 1;
+		if (!point || list_append(list, point)) {
+			point_delete(point);
+			status = 1;
+			break;
+		}
+
+		for (dx = -1; dx <= 1; dx++) {
+			for (dy = -1; dy <= 1; dy++) {
+				int neighbor_x = point_x + dx;
+				int neighbor_y = point_y + dy;
+				if (neighbor_x >= 0 && neighbor_x < image->width &&
+					neighbor_y >= 0 && neighbor_y < image->height &&
+					(dx != 0 || dy != 0) &&
+					grid_get_value(bitmap, neighbor_x, neighbor_y) == 1) {
+					stack[size++] = (size_t)neighbor_y * (size_t)image->width +
+						(size_t)neighbor_x;
+					grid_set_value(bitmap, neighbor_x, neighbor_y, 0);
 				}
 			}
-
 		}
 	}
-	return 0;
+
+	free(stack);
+	return status;
 }
 
 

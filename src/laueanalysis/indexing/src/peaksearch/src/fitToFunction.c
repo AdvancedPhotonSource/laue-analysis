@@ -444,14 +444,14 @@ static int Lorentz2DFit(double *a, Grid *image, double *a_fit){
   ay[2]=a[3];
   ay[3]=a[0];
 
-  x=malloc((size_t)ny*sizeof(double));
-  y=malloc((size_t)nx*sizeof(double));
+  x=malloc((size_t)nx*sizeof(double));
+  y=malloc((size_t)ny*sizeof(double));
   if (!x || !y) goto cleanup;
-  for(i=0;i<ny;i++) x[i]=grid_get_value(image,i,iy);
-  for(i=0;i<nx;i++) y[i]=grid_get_value(image,ix,i);
+  for(i=0;i<nx;i++) x[i]=grid_get_value(image,i,iy);
+  for(i=0;i<ny;i++) y[i]=grid_get_value(image,ix,i);
 
-  paramsX.n = ny; paramsX.y = x;
-  paramsY.n = nx; paramsY.y = y;
+  paramsX.n = nx; paramsX.y = x;
+  paramsY.n = ny; paramsY.y = y;
   status = fitLorentz_1D(ax,&paramsX,ax_fit);
   if (status != GSL_SUCCESS) goto cleanup;
   status = fitLorentz_1D(ay,&paramsY,ay_fit);

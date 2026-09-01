@@ -53,7 +53,7 @@ Each {class}`~laueanalysis.indexing.Pattern` represents one orientation returned
 |---|---|---|---|
 | `euler_deg` | `(3,)` | deg | Euler-angle representation of the orientation |
 | `rotation` | `(3, 3)` | dimensionless | Orientation rotation matrix |
-| `recip` | `(3, 3)` | reciprocal length | Reciprocal-lattice matrix |
+| `reciprocal` | `(3, 3)` | 1/nm | Reciprocal-lattice matrix, with `a*`, `b*`, and `c*` as rows |
 | `goodness` | scalar | implementation-defined | Native pattern goodness score |
 | `rms_error_deg` | scalar | deg | Root-mean-square angular indexing error |
 | `hkl` | `(n, 3)` | Miller indices | Assigned reflection indices |
@@ -64,7 +64,11 @@ Each {class}`~laueanalysis.indexing.Pattern` represents one orientation returned
 
 `pattern.n_indexed` is `len(pattern.pk_index)`. Rows in `hkl`, `err_deg`, `energy_kev`, and `pred_intens` correspond to the same assignments.
 
-The precise Euler-angle convention and reciprocal-matrix basis require 34-ID-E domain verification. Prefer the full rotation matrix when exchanging orientations with software that uses a documented matrix convention.
+The reciprocal basis follows the native `setDirectRecip` convention. Its direct basis has `c` parallel to positive z, `b` in the yz plane, and `a` completing the right-handed basis. Reciprocal vectors include the `2*pi` factor and are stored as rows in `1/nm`, so `q = hkl @ pattern.reciprocal`.
+
+Before constructing this basis, the native crystal model forces ideal metric constraints from the space group: cubic forces equal lengths and right angles; hexagonal forces `a = b`, `alpha = beta = 90 deg`, and `gamma = 120 deg`; tetragonal forces `a = b` and right angles; orthorhombic forces right angles; and monoclinic forces `alpha = gamma = 90 deg`. Trigonal cells use hexagonal axes when the supplied angles are already `90, 90, 120 deg` within native tolerance; otherwise they use a rhombohedral cell with equal lengths and angles.
+
+This convention also defines rotations reconstructed while loading XML. Compared with releases that used the JZT reference basis, XML-derived orientations for non-orthogonal cells change by the fixed rotation between those bases, including 30 degrees about `c` for hexagonal cells. Native live results and newly loaded XML now use the same basis. Prefer the full rotation matrix when exchanging orientations with other software, and confirm that software's basis convention.
 
 ## Indexed and unindexed peaks
 
@@ -93,8 +97,15 @@ The result records:
 - `total_sum`
 - `sum_above_threshold`
 - `num_above_threshold`
+- `threshold_ratio`
+- `peak_minwidth`
+- `peak_maxwidth`
+- `peak_max_cent_to_fit`
+- `peak_boxsize`
 - `peaksearch_seconds`
 - `indexing_seconds`
+
+`total_sum` excludes masked pixels. With `PeakParams(smooth=True)`, it sums the smoothed working image. This can differ from the LaueGo subprocess result because that path records totals before optional smoothing.
 
 `indexing_seconds` measures the orientation-indexing section. It includes the negligible branch when no crystal is supplied or too few peaks are present. Pixel-to-q conversion is not included in either timing field. `elapsed_seconds` therefore does not measure complete call latency.
 
@@ -102,7 +113,7 @@ The result records:
 
 ## Retained images
 
-`index_frame()` and `Indexer.index()` retain a contiguous `uint16` image by default. Set `keep_image=False` when downstream work only needs processed data.
+`index_frame()` and `Indexer.index()` retain a contiguous `uint16` image by default. A retained image can alias a C-contiguous array supplied by the caller. Native smoothing uses a separate working copy, so `result.image` remains the unsmoothed input. Set `keep_image=False` when downstream work only needs processed data.
 
 `Indexer.index_many()` does not retain images by default. This avoids keeping one detector-sized array per result.
 

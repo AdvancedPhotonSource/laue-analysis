@@ -3,8 +3,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from laueanalysis.indexing import Geometry
-from laueanalysis.visualization import DataScope, load_visualization_xml
+from conftest import requires_liblaue
+
+from laueanalysis.indexing import Atom, Cell, Crystal, FrameResult, Geometry, Pattern
+from laueanalysis.indexing._liblaue import NativeCrystal
+from laueanalysis.visualization import (
+    DataScope,
+    ResultSet,
+    load_visualization_xml,
+    prepare_map,
+)
 
 
 GEOMETRY = Path(__file__).parent / "data/geo/geoN_2022-03-29_14-15-05.xml"
@@ -59,6 +67,53 @@ def test_load_visualization_xml_normalizes_legacy_data(legacy_xml):
     np.testing.assert_allclose(dataset.peaks["qhat"][1], [1, 1, 1])
 
 
+@pytest.mark.parametrize("space_group", ["227:2", "not-a-number"])
+def test_invalid_or_suffixed_space_group_degrades_to_no_crystal(tmp_path, space_group):
+    path = tmp_path / "space-group.xml"
+    step = _step(0, (1,)).replace(
+        "<SpaceGroup>225</SpaceGroup>", f"<SpaceGroup>{space_group}</SpaceGroup>"
+    )
+    path.write_text(f"<AllSteps>{step}</AllSteps>")
+
+    dataset = load_visualization_xml(path)
+
+    assert dataset.crystal is None
+    assert dataset.n_patterns == 1
+
+
+@requires_liblaue
+def test_atom_occupancy_round_trips_through_indexing_xml(tmp_path):
+    crystal = Crystal(
+        "mixed",
+        1,
+        Cell(0.5, 0.5, 0.5),
+        (
+            Atom("Ni", (0, 0, 0), occupancy=0.5),
+            Atom("Ni", (0.5, 0.5, 0.5), occupancy=0.9),
+        ),
+    )
+    from laueanalysis.analysis import simulate_reflections
+    from laueanalysis.indexing import Indexer
+
+    indexer = Indexer(GEOMETRY, crystal)
+    result = indexer.index(np.zeros((2, 2), dtype=np.uint16))
+    path = tmp_path / "occupancy.xml"
+    indexer.write_xml(result, path)
+
+    loaded = load_visualization_xml(path)
+
+    assert [atom.occupancy for atom in loaded.crystal.atoms] == [0.5, 0.9]
+    reciprocal = NativeCrystal.create(crystal).reciprocal()
+    expected = simulate_reflections(
+        crystal, reciprocal, indexer.detector, energy_range_kev=(6, 15)
+    )
+    actual = simulate_reflections(
+        loaded.crystal, reciprocal, indexer.detector, energy_range_kev=(6, 15)
+    )
+    np.testing.assert_array_equal(actual.hkl, expected.hkl)
+    np.testing.assert_allclose(actual.relative_intensity, expected.relative_intensity)
+
+
 def test_xml_cell_units_are_normalized_for_orientation(tmp_path):
     reciprocal = 2.0 * np.pi / 0.4
 
@@ -79,6 +134,81 @@ def test_xml_cell_units_are_normalized_for_orientation(tmp_path):
         rotations.append(dataset.pattern_rotations[0])
 
     np.testing.assert_allclose(rotations, np.tile(np.eye(3), (2, 1, 1)), atol=1e-15)
+
+
+@requires_liblaue
+@pytest.mark.parametrize(
+    ("space_group", "cell"),
+    [
+        (168, Cell(0.4, 0.4, 0.6, 90, 90, 120)),
+        (1, Cell(0.4, 0.5, 0.6, 70, 80, 75)),
+    ],
+    ids=("hexagonal", "triclinic"),
+)
+def test_live_and_xml_rotations_use_the_same_native_basis(tmp_path, space_group, cell):
+    rotation = np.array([
+        [0.93629336, -0.27509585, 0.21835066],
+        [0.28962948, 0.95642509, -0.03695701],
+        [-0.19866933, 0.09784340, 0.97517033],
+    ])
+    crystal = Crystal("test", space_group, cell)
+    reference = NativeCrystal.create(crystal).reciprocal()
+    pattern = Pattern(
+        euler_deg=np.zeros(3),
+        rotation=rotation,
+        reciprocal=reference @ rotation.T,
+        goodness=1.0,
+        rms_error_deg=0.0,
+        hkl=np.empty((0, 3), dtype=int),
+        pk_index=np.empty(0, dtype=int),
+        err_deg=np.empty(0),
+        energy_kev=np.empty(0),
+        pred_intens=np.empty(0),
+    )
+    result = FrameResult(
+        peaks=np.empty(0, dtype=[]),
+        patterns=(pattern,),
+        threshold_used=100.0,
+        total_sum=0.0,
+        sum_above_threshold=0.0,
+        num_above_threshold=0,
+        peaksearch_seconds=0.0,
+        indexing_seconds=0.0,
+        metadata={"sample_position": (0.0, 0.0, 0.0)},
+    )
+    live = ResultSet((result,), crystal=crystal)
+    step = _step(0, (0,))
+    reciprocal_text = "".join(
+        f"<{name}>{' '.join(map(str, vector))}</{name}>"
+        for name, vector in zip(("astar", "bstar", "cstar"), pattern.reciprocal, strict=True)
+    )
+    step = step.replace(
+        '<recip_lattice><astar>-10 5 -6</astar><bstar>-15 -2 -1</bstar><cstar>-2 13 8</cstar></recip_lattice>',
+        f"<recip_lattice>{reciprocal_text}</recip_lattice>",
+    ).replace(
+        '<SpaceGroup>225</SpaceGroup><latticeParameters unit="nm">0.4 0.4 0.4 90 90 90</latticeParameters>',
+        f'<SpaceGroup>{space_group}</SpaceGroup><latticeParameters unit="nm">'
+        f"{cell.a} {cell.b} {cell.c} {cell.alpha} {cell.beta} {cell.gamma}</latticeParameters>",
+    )
+    path = tmp_path / f"{space_group}.xml"
+    path.write_text(f"<AllSteps>{step}</AllSteps>")
+
+    loaded = load_visualization_xml(path)
+
+    np.testing.assert_allclose(
+        loaded.pattern_rotations, live.to_visualization().pattern_rotations, atol=1e-8, rtol=0
+    )
+    if space_group == 168:
+        for color, kwargs in (
+            ("rodrigues", {}),
+            ("misorientation", {"misorientation_reference": (0, 0)}),
+        ):
+            np.testing.assert_allclose(
+                prepare_map(loaded, color=color, **kwargs).colors,
+                prepare_map(live, color=color, **kwargs).colors,
+                atol=1e-8,
+                rtol=0,
+            )
 
 
 def test_declared_peak_count_preserves_rows_with_missing_fields(tmp_path):

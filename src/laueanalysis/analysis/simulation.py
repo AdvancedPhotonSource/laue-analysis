@@ -408,12 +408,12 @@ def _normalize_candidates(
         candidate = (hkl, q, xy, energy, intensity)
         previous = grouped.get(key)
         if previous is None or (
-            -intensity,
-            energy,
+            -_stable_order_value(intensity),
+            _stable_order_value(energy),
             *hkl.tolist(),
         ) < (
-            -previous[4],
-            previous[3],
+            -_stable_order_value(previous[4]),
+            _stable_order_value(previous[3]),
             *previous[0].tolist(),
         ):
             grouped[key] = candidate

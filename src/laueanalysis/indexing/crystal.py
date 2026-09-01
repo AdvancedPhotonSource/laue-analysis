@@ -228,11 +228,13 @@ def load_crystal(path: str | Path) -> Crystal:
         if suffix in {"H", "R"}:
             setting = suffix
 
-    cell = Cell(
-        *(float(cell_node.findtext(name)) for name in ("a", "b", "c")),
-        *(float(cell_node.findtext(name)) for name in ("alpha", "beta", "gamma")),
-        unit=a_node.get("unit", "nm"),
-    )
+    cell_values = []
+    for name in ("a", "b", "c", "alpha", "beta", "gamma"):
+        value = cell_node.findtext(name)
+        if value is None:
+            raise ValueError(f"Crystal file {path} has no cell field {name}")
+        cell_values.append(float(value))
+    cell = Cell(*cell_values, unit=a_node.get("unit", "nm"))
     atoms = []
     for site in root.findall("atom_site"):
         label = site.findtext("label", "")

@@ -160,8 +160,8 @@ int grid_smooth_median(Grid* g, int range) {
 		for (y = 0; y < g->height; y++){
 			pixels_counted = 0;
 			/* loop over the region around the centrepoint, bounded by image size*/
-			for (x2 = max(x-range, 0); x2 <= min(x+range, g->width); x2++) {
-				for (y2 = max(y-range, 0); y2 <= min(y+range, g->height); y2++) {
+			for (x2 = max(x-range, 0); x2 <= min(x+range, g->width-1); x2++) {
+				for (y2 = max(y-range, 0); y2 <= min(y+range, g->height-1); y2++) {
 					median_values[pixels_counted] = grid_get_value(g, x2, y2);
 					pixels_counted++;
 				}

@@ -18,7 +18,7 @@ from .orientation import (
     misorientation_matrix,
     orientation_to_rodrigues,
     pairwise_misorientation,
-    recip_to_orientation,
+    reciprocal_to_orientation,
     symmetry_operations,
     symmetry_reduce_orientation,
 )
@@ -50,7 +50,7 @@ __all__ = [
     "pairwise_misorientation",
     "pole_color_radius",
     "pole_figure_points",
-    "recip_to_orientation",
+    "reciprocal_to_orientation",
     "rodrigues_colors",
     "symmetry_operations",
     "symmetry_reduce_orientation",

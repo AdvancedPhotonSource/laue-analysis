@@ -53,6 +53,18 @@ Use this path at APS and for alpha testing. `environment.yml` provides the compi
    $ python -m pip install .
    ```
 
+## Using laueanalysis in Jupyter
+
+The maintained Conda environment includes JupyterLab, IPython kernel support, and the `nbformat` package that Plotly uses for notebook display. Register the environment as a named kernel:
+
+```console
+$ conda activate laue-analysis
+$ python -m ipykernel install --user --name laue-analysis --display-name "Python (laue-analysis)"
+$ jupyter lab
+```
+
+Select `Python (laue-analysis)` in JupyterLab. Plotly figures display inline when you call `figure.show()`. The custom Matplotlib example in the [visualization guide](guides/visualization.md) requires `matplotlib`, which the maintained environment also includes.
+
 ## Install with a virtual environment
 
 Use this path on a Linux system that already provides the native dependencies, for example through the distribution package manager or HPC environment modules.

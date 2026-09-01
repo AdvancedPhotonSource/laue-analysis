@@ -76,7 +76,7 @@ print(detector.nx, detector.ny)
 print(detector.size_x, detector.size_y)
 ```
 
-`nx` and `ny` are full-detector dimensions in unbinned pixels. `size_x` and `size_y` are normalized to micrometres when the geometry is loaded. The public metadata record does not expose detector rotations and translations.
+`nx` and `ny` are full-detector dimensions in unbinned pixels. `size_x`, `size_y`, and `translation` use micrometres. `rotation_vector` is an axis-angle vector in radians, and `rotation` is the corresponding `(3, 3)` matrix.
 
 `detector_count` reports the number of active detectors. It does not identify their slots.
 

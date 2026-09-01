@@ -10,7 +10,24 @@ from importlib import resources
 
 # Result type for reconstruction operations
 class ReconstructionResult(NamedTuple):
-    """Result from a reconstruction operation."""
+    """Result from a native reconstruction process.
+
+    Attributes
+    ----------
+    success
+        Whether the process returned exit status zero.
+    output_files
+        Paths that match the requested output-file prefix.
+    log
+        Standard output from the process.
+    error
+        Standard error for a failed process, or ``None`` after success.
+    command
+        Command line passed to the process, joined as one string.
+    return_code
+        Process exit status. A timeout or execution error uses ``-1``.
+    """
+
     success: bool
     output_files: List[str]
     log: str
@@ -187,7 +204,7 @@ def _execute_reconstruction(
 def reconstruct(
     input_file: Union[str, Path],
     output_file: Union[str, Path],
-    geometry_file: Union[str, Path],
+    geometry: Union[str, Path],
     depth_range: Tuple[float, float],
     resolution: float = 1.0,
     *,
@@ -211,45 +228,71 @@ def reconstruct(
     norm_exponent: Optional[float] = None,
     norm_threshold: Optional[float] = None
 ) -> ReconstructionResult:
-    """
-    Reconstruct wire scan data.
-    
-    Args:
-        input_file: Path to input HDF5 file
-        output_file: Base path for output files (without extension)
-        geometry_file: Path to geometry XML file
-        depth_range: Tuple of (start, end) depths in microns
-        resolution: Depth resolution in microns (default 1.0)
-        image_range: Optional tuple of (first, last) image indices
-        verbose: Verbosity level 0-3 (default 1)
-        percent_brightest: Process only N% brightest pixels (default 100)
-        wire_edge: Wire edge to use - 'leading', 'trailing', or 'both' (default 'leading')
-        memory_limit_mb: Memory limit in MB (default 8192)
-        executable: Optional path to executable (default: auto-detect)
-        timeout: Timeout in seconds (default 7200 = 2 hours)
-        normalization: Optional normalization tag
-        output_pixel_type: Optional output pixel type (0-7, WinView numbers)
-        distortion_map: Optional distortion map file
-        detector_number: Detector number (default 0)
-        wire_depths_file: Optional file with depth corrections
-        num_threads: Number of OpenMP threads (default: auto-detect)
-        rows_per_stripe: Rows to process per stripe (default: 256)
-        cosmic_filter: Enable cosmic ray filtering
-        norm_exponent: Exponent for image intensity scaling (e.g., 0.5)
-        norm_threshold: Threshold for image intensity scaling
-        
-    Returns:
-        ReconstructionResult containing:
-            - success: Whether reconstruction succeeded
-            - output_files: List of generated files
-            - log: Execution log
-            - error: Error message if failed
-            - command: Command that was executed
-            - return_code: Process return code
-            
-    Raises:
-        FileNotFoundError: If executable cannot be found
-        ValueError: If parameters are invalid
+    """Reconstruct wire-scan data with the native CPU executable.
+
+    Parameters
+    ----------
+    input_file
+        Path to the input HDF5 file.
+    output_file
+        Base path for output files, without an extension.
+    geometry
+        Path to the geometry XML file.
+    depth_range
+        Start and end depths in micrometres. The start must be less than the end.
+    resolution
+        Depth resolution in micrometres. The default is ``1.0``.
+    image_range
+        First and last image indices. By default, the executable processes its
+        full input range.
+    verbose
+        Native verbosity level from ``0`` through ``3``. The default is ``1``.
+    percent_brightest
+        Percentage of the brightest pixels to process. The default is ``100.0``.
+    wire_edge
+        Wire edge. Use ``"leading"``, ``"trailing"``, or ``"both"``. The
+        corresponding short forms ``"l"``, ``"t"``, and ``"b"`` are also accepted.
+    memory_limit_mb
+        Native memory limit in MB. The default is ``8192``.
+    executable
+        Path to ``reconstructN_cpu``. By default, the function searches the
+        installed package and then ``PATH``.
+    timeout
+        Process timeout in seconds. The default is ``7200``.
+    normalization
+        Native normalization tag.
+    output_pixel_type
+        Native WinView output pixel type from ``0`` through ``7``.
+    distortion_map
+        Path to a distortion-map file.
+    detector_number
+        Detector number passed to the native executable. The default is ``0``.
+    wire_depths_file
+        Path to a file that contains wire-depth corrections.
+    num_threads
+        Number of OpenMP threads. By default, the executable selects the count.
+    rows_per_stripe
+        Rows processed per stripe. By default, the executable uses its own value.
+    cosmic_filter
+        Enable native cosmic-ray filtering.
+    norm_exponent
+        Exponent for image-intensity scaling.
+    norm_threshold
+        Threshold for image-intensity scaling.
+
+    Returns
+    -------
+    ReconstructionResult
+        Process status, output paths, captured output, command, and return code.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the CPU executable is not in the installed package or on ``PATH``.
+    RuntimeError
+        If the executable does not produce the expected help output.
+    ValueError
+        If ``depth_range`` or ``wire_edge`` is invalid.
     """
     # Find executable
     if executable:
@@ -271,7 +314,7 @@ def reconstruct(
         exe_path,
         '-i', str(input_file),
         '-o', str(output_file),
-        '-g', str(geometry_file),
+        '-g', str(geometry),
         '-s', str(depth_range[0]),
         '-e', str(depth_range[1]),
         '-r', str(resolution),
@@ -316,7 +359,7 @@ def reconstruct(
 def reconstruct_gpu(
     input_file: Union[str, Path],
     output_file: Union[str, Path],
-    geometry_file: Union[str, Path],
+    geometry: Union[str, Path],
     depth_range: Tuple[float, float],
     resolution: float = 1.0,
     *,
@@ -336,45 +379,66 @@ def reconstruct_gpu(
     wire_depths_file: Optional[str] = None,
     cuda_rows: int = 8
 ) -> ReconstructionResult:
-    """
-    Reconstruct wire scan data using GPU (CUDA) implementation.
-    
-    Note: This GPU version does not support cosmic ray filtering or 
-    advanced normalization (norm_exponent/threshold). Use the CPU version
-    if these features are required.
-    
-    Args:
-        input_file: Path to input HDF5 file
-        output_file: Base path for output files (without extension)
-        geometry_file: Path to geometry XML file
-        depth_range: Tuple of (start, end) depths in microns
-        resolution: Depth resolution in microns (default 1.0)
-        image_range: Optional tuple of (first, last) image indices
-        verbose: Verbosity level 0-3 (default 1)
-        percent_brightest: Process only N% brightest pixels (default 100)
-        wire_edge: Wire edge to use - 'leading', 'trailing', or 'both' (default 'leading')
-        memory_limit_mb: Memory limit in MB (default 8192)
-        executable: Optional path to executable (default: auto-detect)
-        timeout: Timeout in seconds (default 7200 = 2 hours)
-        normalization: Optional normalization tag
-        output_pixel_type: Optional output pixel type (0-7, WinView numbers)
-        distortion_map: Optional distortion map file
-        detector_number: Detector number (default 0)
-        wire_depths_file: Optional file with depth corrections for each pixel
-        cuda_rows: Number of CUDA rows to process (default 8)
-        
-    Returns:
-        ReconstructionResult containing:
-            - success: Whether reconstruction succeeded
-            - output_files: List of generated files
-            - log: Execution log
-            - error: Error message if failed
-            - command: Command that was executed
-            - return_code: Process return code
-            
-    Raises:
-        FileNotFoundError: If GPU executable cannot be found
-        ValueError: If parameters are invalid
+    """Reconstruct wire-scan data with the native CUDA executable.
+
+    The CUDA program does not support cosmic-ray filtering, ``norm_exponent``,
+    or ``norm_threshold``. Use :func:`reconstruct` when you need those options.
+
+    Parameters
+    ----------
+    input_file
+        Path to the input HDF5 file.
+    output_file
+        Base path for output files, without an extension.
+    geometry
+        Path to the geometry XML file.
+    depth_range
+        Start and end depths in micrometres. The start must be less than the end.
+    resolution
+        Depth resolution in micrometres. The default is ``1.0``.
+    image_range
+        First and last image indices. By default, the executable processes its
+        full input range.
+    verbose
+        Native verbosity level from ``0`` through ``3``. The default is ``1``.
+    percent_brightest
+        Percentage of the brightest pixels to process. The default is ``100.0``.
+    wire_edge
+        Wire edge. Use ``"leading"``, ``"trailing"``, or ``"both"``. The
+        corresponding short forms ``"l"``, ``"t"``, and ``"b"`` are also accepted.
+    memory_limit_mb
+        Native memory limit in MB. The default is ``8192``.
+    executable
+        Path to ``reconstructN_gpu``. By default, the function searches the
+        installed package and then ``PATH``.
+    timeout
+        Process timeout in seconds. The default is ``7200``.
+    normalization
+        Native normalization tag.
+    output_pixel_type
+        Native WinView output pixel type from ``0`` through ``7``.
+    distortion_map
+        Path to a distortion-map file.
+    detector_number
+        Detector number passed to the native executable. The default is ``0``.
+    wire_depths_file
+        Path to a file that contains wire-depth corrections for each pixel.
+    cuda_rows
+        Number of CUDA rows to process. The default is ``8``.
+
+    Returns
+    -------
+    ReconstructionResult
+        Process status, output paths, captured output, command, and return code.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the CUDA executable is not in the installed package or on ``PATH``.
+    RuntimeError
+        If the executable does not produce the expected help output.
+    ValueError
+        If ``depth_range`` or ``wire_edge`` is invalid.
     """
     # Find GPU executable
     if executable:
@@ -396,7 +460,7 @@ def reconstruct_gpu(
         exe_path,
         '-i', str(input_file),
         '-o', str(output_file),
-        '-g', str(geometry_file),
+        '-g', str(geometry),
         '-s', str(depth_range[0]),
         '-e', str(depth_range[1]),
         '-r', str(resolution),
@@ -428,37 +492,44 @@ def reconstruct_gpu(
 
 # Utility functions for common use cases
 def find_executable() -> str:
-    """
-    Find the CPU reconstruction executable.
-    
-    Returns:
-        Path to the executable
-        
-    Raises:
-        FileNotFoundError: If executable cannot be found
+    """Find the native CPU reconstruction executable.
+
+    Returns
+    -------
+    str
+        Path to ``reconstructN_cpu`` in the installed package or on ``PATH``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the executable cannot be found.
     """
     return _find_executable()
 
 
 def find_gpu_executable() -> str:
-    """
-    Find the GPU reconstruction executable.
-    
-    Returns:
-        Path to the GPU executable
-        
-    Raises:
-        FileNotFoundError: If GPU executable cannot be found
+    """Find the native CUDA reconstruction executable.
+
+    Returns
+    -------
+    str
+        Path to ``reconstructN_gpu`` in the installed package or on ``PATH``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the executable cannot be found.
     """
     return _find_executable('reconstructN_gpu')
 
 
 def gpu_available() -> bool:
-    """
-    Check if GPU reconstruction is available.
-    
-    Returns:
-        True if GPU reconstruction executable is found and works, False otherwise
+    """Report whether the native CUDA reconstruction executable is usable.
+
+    Returns
+    -------
+    bool
+        ``True`` if ``reconstructN_gpu`` is available and passes validation.
     """
     try:
         exe_path = _find_executable('reconstructN_gpu')

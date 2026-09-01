@@ -66,7 +66,7 @@ class PeakParams:
         image statistics and ``threshold_ratio``.
     threshold_ratio
         Scale applied to the image standard deviation when deriving an
-        automatic threshold.
+        automatic threshold. `None` uses the native default of ``4.0``.
     peak_shape
         Peak model, either ``"Lorentzian"`` or ``"Gaussian"``.
     max_peaks
@@ -86,7 +86,7 @@ class PeakParams:
     min_size: int = 3
     min_separation: int = 10
     threshold: float | None = 100.0
-    threshold_ratio: float = 4.0
+    threshold_ratio: float | None = None
     peak_shape: str = "Lorentzian"
     max_peaks: int = 50
     smooth: bool = False
@@ -177,10 +177,10 @@ class Pattern:
         Euler angles in degrees, with shape ``(3,)``.
     rotation
         Orientation rotation matrix with shape ``(3, 3)``.
-    recip
+    reciprocal
         Reciprocal-lattice matrix with shape ``(3, 3)`` in ``1/nm``. Rows are
         ``a*``, ``b*``, and ``c*``; a Miller-index row maps to reciprocal
-        space as ``q = hkl @ recip``.
+        space as ``q = hkl @ reciprocal``.
     goodness
         Native indexer's goodness score for the pattern.
     rms_error_deg
@@ -202,16 +202,22 @@ class Pattern:
     owns Python arrays copied from the native result.
     """
 
-    euler_deg: np.ndarray
-    rotation: np.ndarray
-    recip: np.ndarray
+    euler_deg: np.ndarray = field(repr=False)
+    rotation: np.ndarray = field(repr=False)
+    reciprocal: np.ndarray = field(repr=False)
     goodness: float
     rms_error_deg: float
-    hkl: np.ndarray
-    pk_index: np.ndarray
-    err_deg: np.ndarray
-    energy_kev: np.ndarray
-    pred_intens: np.ndarray
+    hkl: np.ndarray = field(repr=False)
+    pk_index: np.ndarray = field(repr=False)
+    err_deg: np.ndarray = field(repr=False)
+    energy_kev: np.ndarray = field(repr=False)
+    pred_intens: np.ndarray = field(repr=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"Pattern(n_indexed={self.n_indexed}, goodness={self.goodness:.6g}, "
+            f"rms_error_deg={self.rms_error_deg:.6g})"
+        )
 
     @property
     def n_indexed(self) -> int:
@@ -269,9 +275,11 @@ class FrameResult:
     patterns
         Crystal orientations identified in the frame.
     threshold_used
-        Intensity threshold used by peak search.
+        Intensity threshold used by peak search. This is ``NaN`` when automatic
+        thresholding receives no unmasked nonzero pixels.
     total_sum
-        Sum of all frame pixel values.
+        Sum of unmasked frame pixel values. With ``smooth=True``, this is the
+        sum after smoothing.
     sum_above_threshold
         Sum of pixel values above ``threshold_used``.
     num_above_threshold
@@ -283,6 +291,8 @@ class FrameResult:
     indexing_seconds
         Elapsed orientation-indexing time in seconds. Pixel-to-q conversion is
         not included in either timing field.
+    threshold_ratio
+        Resolved automatic-threshold ratio supplied to native peak search.
     metadata
         Experiment metadata copied into the result.
     input_image
@@ -297,7 +307,8 @@ class FrameResult:
         Optional sample depth in micrometres passed to the geometry conversion.
     image
         Retained contiguous ``uint16`` frame, or `None` when image retention
-        was disabled.
+        was disabled. This array can alias a contiguous array supplied by the
+        caller. Native smoothing uses a separate working copy.
 
     Notes
     -----
@@ -307,14 +318,15 @@ class FrameResult:
     to `False`.
     """
 
-    peaks: np.ndarray
-    patterns: tuple[Pattern, ...]
+    peaks: np.ndarray = field(repr=False)
+    patterns: tuple[Pattern, ...] = field(repr=False)
     threshold_used: float
     total_sum: float
     sum_above_threshold: float
     num_above_threshold: int
     peaksearch_seconds: float
     indexing_seconds: float
+    threshold_ratio: float = 4.0
     peak_minwidth: float = 0.0
     peak_maxwidth: float = 0.0
     peak_max_cent_to_fit: float = 0.0
@@ -327,6 +339,12 @@ class FrameResult:
     depth: float | None = None
     image: np.ndarray | None = field(default=None, repr=False, compare=False)
     _step: Step | None = field(default=None, repr=False, compare=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"FrameResult(n_peaks={self.n_peaks}, n_patterns={self.n_patterns}, "
+            f"indexed={self.indexed}, image_shape={self.image_shape})"
+        )
 
     @property
     def indexed(self) -> bool:
@@ -428,7 +446,12 @@ def index_frame(
     detector_index: int = 0,
     detector_id: str | None = None,
     cosmic_filter: bool = False,
-    **kwargs,
+    start: tuple[int, int] = (0, 0),
+    group: tuple[int, int] = (1, 1),
+    depth: float | None = None,
+    mask: np.ndarray | None = None,
+    metadata: FrameMetadata | Mapping[str, object] | None = None,
+    keep_image: bool = True,
 ) -> FrameResult:
     """Index one frame with a temporary :class:`Indexer`.
 
@@ -454,9 +477,16 @@ def index_frame(
     cosmic_filter
         Value recorded in XML output for cosmic-ray filtering provenance.
         This option does not apply an additional Python-side filter.
-    **kwargs
-        Frame options accepted by :meth:`Indexer.index`: ``start``, ``group``,
-        ``depth``, ``mask``, ``metadata``, and ``keep_image``.
+    start, group
+        Full-detector ROI origin and pixel grouping in ``(x, y)`` order.
+    depth
+        Sample depth in micrometres, or `None` for the beamline origin.
+    mask
+        Optional mask matching the frame shape. Nonzero pixels are excluded.
+    metadata
+        Optional frame metadata object or mapping.
+    keep_image
+        Retain the contiguous input image in the returned result.
 
     Returns
     -------
@@ -485,7 +515,15 @@ def index_frame(
         detector_index=detector_index,
         detector_id=detector_id,
         cosmic_filter=cosmic_filter,
-    ).index(frame, **kwargs)
+    ).index(
+        frame,
+        start=start,
+        group=group,
+        depth=depth,
+        mask=mask,
+        metadata=metadata,
+        keep_image=keep_image,
+    )
 
 
 class Indexer:
@@ -496,9 +534,9 @@ class Indexer:
 
     Parameters
     ----------
-    geo_file
+    geometry
         Parsed detector geometry or path to a geometry XML file.
-    crystal_file
+    crystal
         Crystal description or crystal XML path. If `None`, frames are peak
         searched and converted to q space without orientation indexing.
     peak_params
@@ -526,14 +564,18 @@ class Indexer:
     Notes
     -----
     Reuse one instance for frames that share geometry, crystal, detector, and
-    processing parameters. Use :meth:`replace` to create a separately validated
-    instance with changed configuration.
+    processing parameters. Calls to :meth:`index` on one instance are safe from
+    concurrent Python threads. Each call owns its result storage, and native
+    diagnostic output uses thread-local state.
+
+    Use :meth:`replace` to create a separately validated instance with changed
+    configuration.
     """
 
     def __init__(
         self,
-        geo_file: str | Path | Geometry,
-        crystal_file: str | Path | Crystal | None = None,
+        geometry: str | Path | Geometry,
+        crystal: str | Path | Crystal | None = None,
         *,
         peak_params: PeakParams | None = None,
         index_params: IndexParams | None = None,
@@ -541,12 +583,10 @@ class Indexer:
         detector_id: str | None = None,
         cosmic_filter: bool = False,
     ):
-        self.geo_file = geo_file.path if isinstance(geo_file, Geometry) else Path(geo_file)
-        self.crystal_model = (
-            load_crystal(crystal_file) if isinstance(crystal_file, (str, Path)) else crystal_file
-        )
-        self.geometry = geo_file if isinstance(geo_file, Geometry) else Geometry(self.geo_file)
-        self.crystal = NativeCrystal.create(self.crystal_model) if self.crystal_model is not None else None
+        self.geometry_path = geometry.path if isinstance(geometry, Geometry) else Path(geometry)
+        self.geometry = geometry if isinstance(geometry, Geometry) else Geometry(self.geometry_path)
+        self.crystal = load_crystal(crystal) if isinstance(crystal, (str, Path)) else crystal
+        self._crystal = NativeCrystal.create(self.crystal) if self.crystal is not None else None
         self.peak_params = peak_params or PeakParams()
         self.index_params = index_params or IndexParams()
         self._validate_params()
@@ -565,7 +605,14 @@ class Indexer:
         self.detector_index = detector_index
         self.detector_id = self.detector.detector_id
         self.cosmic_filter = cosmic_filter
-        self._xtl = self._crystal_to_xtl(self.crystal_model) if self.crystal_model else Xtl()
+        self._xtl = self._crystal_to_xtl(self.crystal) if self.crystal else Xtl()
+
+    def __repr__(self) -> str:
+        crystal = repr(self.crystal.name) if self.crystal is not None else "None"
+        return (
+            f"Indexer(detector_id={self.detector_id!r}, detector_index={self.detector_index}, "
+            f"crystal={crystal}, smooth={self.peak_params.smooth})"
+        )
 
     def _validate_params(self) -> None:
         peak = self.peak_params
@@ -574,6 +621,8 @@ class Indexer:
             raise InputError("peak sizes, separation, and max_peaks must be positive")
         if peak.max_rfactor <= 0:
             raise InputError("max_rfactor must be positive")
+        if peak.threshold_ratio is not None and peak.threshold_ratio <= 0:
+            raise InputError("threshold_ratio must be positive or None")
         if peak.peak_shape.upper()[:1] not in {"L", "G"}:
             raise InputError("peak_shape must be Lorentzian or Gaussian")
         if min(indexing.kev_max_calc, indexing.kev_max_test, indexing.angle_tolerance_deg, indexing.cone_deg) <= 0:
@@ -638,7 +687,19 @@ class Indexer:
         Notes
         -----
         For HDF5 input, detector ``start`` and ``group`` values from the file
-        take precedence over method arguments when present.
+        take precedence over method arguments when present. A retained image
+        can alias a contiguous array supplied by the caller. Native peak search
+        uses a separate working copy, so smoothing does not modify that array.
+
+        ``total_sum`` excludes masked pixels and describes the smoothed working
+        image when smoothing is enabled. This differs from the LaueGo command
+        path: its ``smooth=True`` option affects fitting but records totals from
+        the unsmoothed image. Under automatic thresholding, a frame with no
+        unmasked nonzero pixels returns a valid empty result with
+        ``threshold_used`` set to ``NaN``.
+
+        Native code can write diagnostics to stdout or stderr before Python
+        raises an exception.
         """
         input_image = None
         file_detector_id = None
@@ -666,16 +727,18 @@ class Indexer:
             or min(group) < 1
         ):
             raise InputError("start must be two nonnegative integers and group two positive integers")
+        start = tuple(int(value) for value in start)
+        group = tuple(int(value) for value in group)
+        if file_detector_id is not None and file_detector_id != self.detector.detector_id:
+            raise InputError(
+                f"frame detector_id {file_detector_id!r} does not match selected detector "
+                f"{self.detector.detector_id!r}"
+            )
         end_x, end_y = roi_inclusive_end(image.shape, start, group)
         if end_x >= self.detector.nx or end_y >= self.detector.ny:
             raise InputError(
                 f"frame ROI start={start}, shape={image.shape}, group={group} exceeds "
                 f"detector bounds {self.detector.nx}x{self.detector.ny}"
-            )
-        if file_detector_id is not None and file_detector_id != self.detector.detector_id:
-            raise InputError(
-                f"frame detector_id {file_detector_id!r} does not match selected detector "
-                f"{self.detector.detector_id!r}"
             )
         if depth is not None and not np.isfinite(depth):
             raise InputError("depth must be finite when provided")
@@ -688,15 +751,16 @@ class Indexer:
                 raise InputError(f"mask shape {mask_buffer.shape} does not match frame shape {image.shape}")
             mask_pointer = ffi.from_buffer("unsigned char[]", mask_buffer)
 
+        threshold_ratio = (
+            4.0 if self.peak_params.threshold_ratio is None else self.peak_params.threshold_ratio
+        )
         params = ffi.new("laue_peak_params *")
         params.boxsize = self.peak_params.boxsize
         params.max_rfactor = self.peak_params.max_rfactor
         params.min_size = self.peak_params.min_size
         params.min_separation = self.peak_params.min_separation
         params.threshold = np.nan if self.peak_params.threshold is None else self.peak_params.threshold
-        params.threshold_ratio = (
-            4.0 if self.peak_params.threshold_ratio == -1 else self.peak_params.threshold_ratio
-        )
+        params.threshold_ratio = threshold_ratio
         params.peak_shape = 1 if self.peak_params.peak_shape.upper().startswith("G") else 0
         params.max_peaks = self.peak_params.max_peaks
         params.smooth = self.peak_params.smooth
@@ -726,7 +790,7 @@ class Indexer:
                 )
 
             indexing_started = perf_counter()
-            if self.crystal is not None and result.n_peaks > 1:
+            if self._crystal is not None and result.n_peaks > 1:
                 index_params = ffi.new("laue_index_params *")
                 index_params.kev_max_calc = self.index_params.kev_max_calc
                 index_params.kev_max_test = self.index_params.kev_max_test
@@ -735,7 +799,7 @@ class Indexer:
                 for index, value in enumerate(self.index_params.hkl_prefer):
                     index_params.hkl_prefer[index] = value
                 index_params.max_data = self.index_params.max_data
-                status = library.laue_index(self.crystal._handle, index_params, result)
+                status = library.laue_index(self._crystal._handle, index_params, result)
                 if status:
                     _raise_native_error(
                         status,
@@ -760,7 +824,7 @@ class Indexer:
                 patterns.append(Pattern(
                     euler_deg=np.asarray(list(pattern.euler_deg)),
                     rotation=np.asarray([list(row) for row in pattern.rotation]),
-                    recip=np.asarray([list(row) for row in pattern.recip]),
+                    reciprocal=np.asarray([list(row) for row in pattern.recip]),
                     goodness=pattern.goodness,
                     rms_error_deg=pattern.rms_error_deg,
                     hkl=np.asarray([pattern.hkl[i] for i in range(3 * count)], dtype=np.int32).reshape((-1, 3)),
@@ -773,6 +837,7 @@ class Indexer:
                 peaks=peaks,
                 patterns=tuple(patterns),
                 threshold_used=result.threshold_used,
+                threshold_ratio=threshold_ratio,
                 total_sum=result.total_sum,
                 sum_above_threshold=result.sum_above_threshold,
                 num_above_threshold=result.num_above_threshold,
@@ -836,8 +901,8 @@ class Indexer:
         Parameters
         ----------
         **changes
-            Constructor arguments to replace. Supported names are ``geo_file``,
-            ``crystal_file``, ``peak_params``, ``index_params``,
+            Constructor arguments to replace. Supported names are ``geometry``,
+            ``crystal``, ``peak_params``, ``index_params``,
             ``detector_index``, ``detector_id``, and ``cosmic_filter``.
 
         Returns
@@ -858,8 +923,8 @@ class Indexer:
         it is not shared with the original indexer.
         """
         values = {
-            "geo_file": self.geo_file,
-            "crystal_file": self.crystal_model,
+            "geometry": self.geometry,
+            "crystal": self.crystal,
             "peak_params": self.peak_params,
             "index_params": self.index_params,
             "detector_index": self.detector_index,
@@ -931,6 +996,7 @@ class Indexer:
                 symbol=atom.symbol,
                 label=atom.label or atom.symbol,
                 values=" ".join(str(value) for value in atom.position),
+                occupancy=atom.occupancy,
             ))
         return xtl
 
@@ -959,14 +1025,14 @@ class Indexer:
             step.Xsample, step.Ysample, step.Zsample = metadata["sample_position"]
         step.depth = "nan" if result.depth is None else str(result.depth)
         step.detector.inputImage = result.input_image
-        step.detector.detectorID = metadata.get("detector_id")
+        step.detector.detectorID = metadata.get("detector_id", self.detector_id)
         step.detector.exposure = metadata.get("exposure_seconds")
         step.detector.Ny, step.detector.Nx = result.image_shape
         step.detector.totalSum = result.total_sum
         step.detector.sumAboveThreshold = result.sum_above_threshold
         step.detector.numAboveThreshold = result.num_above_threshold
         step.detector.cosmicFilter = self.cosmic_filter
-        step.detector.geoFile = str(self.geo_file)
+        step.detector.geoFile = str(self.geometry_path)
         roi = step.detector.roi
         roi.startx, roi.starty = result.start
         roi.groupx, roi.groupy = result.group
@@ -978,7 +1044,7 @@ class Indexer:
         peak_data.peakProgram = "liblaue"
         peak_data.minwidth = result.peak_minwidth
         peak_data.threshold = result.threshold_used
-        peak_data.thresholdRatio = self.peak_params.threshold_ratio
+        peak_data.thresholdRatio = result.threshold_ratio
         peak_data.maxRfactor = self.peak_params.max_rfactor
         peak_data.maxwidth = result.peak_maxwidth
         peak_data.maxCentToFit = result.peak_max_cent_to_fit
@@ -1009,9 +1075,9 @@ class Indexer:
         )
         for number, source in enumerate(result.patterns):
             reciprocal = RecipLattice(
-                astar=" ".join(str(value) for value in source.recip[0]),
-                bstar=" ".join(str(value) for value in source.recip[1]),
-                cstar=" ".join(str(value) for value in source.recip[2]),
+                astar=" ".join(str(value) for value in source.reciprocal[0]),
+                bstar=" ".join(str(value) for value in source.reciprocal[1]),
+                cstar=" ".join(str(value) for value in source.reciprocal[2]),
             )
             hkls = HKLs(
                 h=[str(value) for value in source.hkl[:, 0]],

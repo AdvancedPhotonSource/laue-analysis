@@ -1,6 +1,8 @@
 from dataclasses import replace
+import inspect
 from pathlib import Path
 import re
+from xml.etree import ElementTree
 
 import h5py
 import numpy as np
@@ -39,13 +41,24 @@ def test_lauego_has_explicit_compatibility_interface():
     assert lauego is index
 
 
+def test_indexer_uses_unified_constructor_names():
+    signature = inspect.signature(Indexer)
+    assert tuple(signature.parameters)[:2] == ("geometry", "crystal")
+
+
 def test_geometry_and_crystal_can_be_preloaded():
     geometry = load_geometry(GEOMETRY)
     crystal = load_crystal(CRYSTAL)
     indexer = Indexer(geometry, crystal)
 
     assert indexer.geometry is geometry
-    assert indexer.crystal_model is crystal
+    assert indexer.geometry_path == GEOMETRY
+    assert indexer.crystal is crystal
+    assert len(repr(indexer)) < 200
+    assert len(repr(geometry)) < 200
+    assert not hasattr(indexer, "geo_file")
+    assert not hasattr(indexer, "crystal_file")
+    assert not hasattr(indexer, "crystal_model")
 
 
 def test_public_crystal_is_editable_by_replacement():
@@ -94,6 +107,60 @@ def test_indexer_matches_lauego_peak_and_q_reference():
     np.testing.assert_allclose(result.peaks["chisq"], expected_peaks[:, 7], atol=5e-6, rtol=1e-5)
     # The reference q vectors were computed from peak positions rounded to 0.001 px.
     np.testing.assert_allclose(result.peaks["qhat"], expected_q[:, :3], atol=2e-7, rtol=0)
+
+
+def test_max_peaks_is_an_exact_cap():
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(
+            boxsize=18,
+            max_rfactor=0.5,
+            min_size=3,
+            min_separation=20,
+            threshold=None,
+            max_peaks=5,
+        ),
+    )
+
+    result = indexer.index(FRAMES / "synthetic_ni_two_grains.h5")
+
+    assert result.n_peaks == 5
+    assert result.to_step().detector.peaksXY.NpeakMax == 5
+
+
+def test_blank_frame_with_auto_threshold_returns_empty_result():
+    image = np.zeros((8, 12), dtype=np.uint16)
+    result = Indexer(
+        GEOMETRY,
+        CRYSTAL,
+        peak_params=PeakParams(threshold=None),
+    ).index(image)
+
+    assert result.n_peaks == 0
+    assert result.n_patterns == 0
+    assert result.indexed is False
+    assert np.isnan(result.threshold_used)
+    assert result.total_sum == 0
+    assert result.sum_above_threshold == 0
+    assert result.num_above_threshold == 0
+    assert result.image is image
+
+
+@pytest.mark.parametrize("threshold_ratio", [None, 3.25])
+def test_xml_records_resolved_threshold_ratio(tmp_path, threshold_ratio):
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(threshold_ratio=threshold_ratio),
+    )
+
+    result = indexer.index(np.zeros((8, 12), dtype=np.uint16))
+    output = tmp_path / "result.xml"
+    result.write_xml(output)
+    peak_data = ElementTree.parse(output).find("./step/detector/peaksXY")
+    expected = 4.0 if threshold_ratio is None else threshold_ratio
+
+    assert result.threshold_ratio == expected
+    assert float(peak_data.get("thresholdRatio")) == expected
 
 
 def test_indexer_matches_lauego_index_reference():
@@ -201,7 +268,7 @@ def test_reported_hkl_and_energy_describe_the_same_reflection():
     assert (0, 2, 2) in reported_hkls
 
     for pattern in result.patterns:
-        reciprocal_per_angstrom = pattern.hkl @ pattern.recip / 10.0
+        reciprocal_per_angstrom = pattern.hkl @ pattern.reciprocal / 10.0
         sin_theta = -result.peaks["qhat"][pattern.pk_index, 2]
         expected_energy = (
             12.3984187
@@ -239,6 +306,79 @@ def test_indexer_matches_peak_positions_for_all_synthetic_frames():
         if len(expected):
             actual_xy = np.column_stack((result.peaks["fit_x"], result.peaks["fit_y"]))
             np.testing.assert_allclose(actual_xy, expected[:, :2], atol=5e-4, rtol=0)
+
+
+def _gaussian_frame(center, shape=(96, 128)):
+    y, x = np.indices(shape)
+    signal = 2000 * np.exp(-((x - center[0]) ** 2 + (y - center[1]) ** 2) / 8)
+    return np.asarray(10 + signal, dtype=np.uint16)
+
+
+@pytest.mark.parametrize("peak_shape", ["Lorentzian", "Gaussian"])
+@pytest.mark.parametrize("center", [(6, 48), (121, 48), (64, 6), (64, 89)])
+def test_edge_peak_is_recovered(peak_shape, center):
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(
+            boxsize=8,
+            max_rfactor=10.0,
+            min_size=2,
+            min_separation=5,
+            threshold=100.0,
+            peak_shape=peak_shape,
+        ),
+    )
+
+    result = indexer.index(_gaussian_frame(center))
+
+    assert result.n_peaks == 1
+    np.testing.assert_allclose(
+        [result.peaks["fit_x"][0], result.peaks["fit_y"][0]],
+        center,
+        atol=3.25,
+        rtol=0,
+    )
+    assert np.isfinite(result.peaks["integral"][0])
+
+
+def test_edge_peak_search_is_deterministic():
+    image = _gaussian_frame((6, 48))
+    indexer = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(
+            boxsize=8,
+            max_rfactor=10.0,
+            min_size=2,
+            min_separation=5,
+            threshold=100.0,
+        ),
+    )
+
+    results = [indexer.index(image) for _ in range(5)]
+
+    assert [result.n_peaks for result in results] == [results[0].n_peaks] * 5
+    for result in results[1:]:
+        np.testing.assert_array_equal(result.peaks, results[0].peaks)
+
+
+def test_index_frame_exposes_frame_options():
+    signature = inspect.signature(index_frame)
+    assert tuple(signature.parameters) == (
+        "frame",
+        "geometry",
+        "crystal",
+        "peak_params",
+        "index_params",
+        "detector_index",
+        "detector_id",
+        "cosmic_filter",
+        "start",
+        "group",
+        "depth",
+        "mask",
+        "metadata",
+        "keep_image",
+    )
 
 
 def test_index_frame_and_image_retention_defaults():
@@ -283,7 +423,7 @@ def test_indexer_requires_no_metadata_for_in_memory_frame():
     assert result.metadata == {}
     assert step.detector.Nx == 12
     assert step.detector.Ny == 8
-    assert step.detector.detectorID is None
+    assert step.detector.detectorID == indexer.detector_id
 
 
 def test_indexer_accepts_optional_manual_metadata():
@@ -395,7 +535,7 @@ def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
         rtol=0,
     )
     for pattern in result.patterns:
-        calculated = pattern.hkl @ pattern.recip
+        calculated = pattern.hkl @ pattern.reciprocal
         calculated /= np.linalg.norm(calculated, axis=1, keepdims=True)
         measured = result.peaks["qhat"][pattern.pk_index]
         cosine = np.clip(np.sum(calculated * measured, axis=1), -1, 1)
@@ -404,13 +544,13 @@ def test_reciprocal_convention_is_consistent_across_live_xml_and_visualization(
 
     pattern = result.patterns[0]
     simulated = simulate_reflections(
-        indexer.crystal_model,
-        pattern.recip,
+        indexer.crystal,
+        pattern.reciprocal,
         indexer.detector,
         energy_range_kev=(6.0, 35.0),
         depth=0.0 if result.depth is None else result.depth,
     )
-    np.testing.assert_allclose(simulated.q, simulated.hkl @ pattern.recip)
+    np.testing.assert_allclose(simulated.q, simulated.hkl @ pattern.reciprocal)
     indexed_divisors = np.gcd.reduce(np.abs(pattern.hkl), axis=1)
     simulated_divisors = np.gcd.reduce(np.abs(simulated.hkl), axis=1)
     indexed_directions = {
@@ -465,15 +605,18 @@ def test_indexer_replace_preserves_detector_identity_across_geometry_slots(tmp_p
     reordered.write_text(reordered_text)
 
     indexer = Indexer(GEOMETRY, detector_id=original_id)
-    replaced = indexer.replace(geo_file=reordered)
+    replaced = indexer.replace(geometry=reordered)
 
     assert replaced.detector_id == original_id
     assert replaced.detector.detector_id == original_id
     assert replaced.detector_index == 1
 
-    by_slot = indexer.replace(geo_file=reordered, detector_index=0)
+    by_slot = indexer.replace(geometry=reordered, detector_index=0)
     assert by_slot.detector_id == other_id
     assert by_slot.detector_index == 0
+
+    crystal = load_crystal(CRYSTAL)
+    assert indexer.replace(crystal=crystal).crystal is crystal
 
 
 def test_indexer_validates_index_parameters():

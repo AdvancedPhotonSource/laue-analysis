@@ -28,12 +28,12 @@ Record the complete parameter objects with analysis output. A result alone does 
 | `min_size` | `3` | px | Minimum accepted peak size. Must be positive. |
 | `min_separation` | `10` | px | Minimum separation between accepted peaks. Must be positive. |
 | `threshold` | `100.0` | detector counts | Absolute detection threshold. Use `None` for an automatically derived threshold. |
-| `threshold_ratio` | `4.0` | dimensionless | Scale applied to the frame standard deviation for automatic thresholding. |
+| `threshold_ratio` | `None` | dimensionless | Scale applied to the frame standard deviation for automatic thresholding. `None` resolves to the native default, `4.0`. |
 | `peak_shape` | `"Lorentzian"` | none | Fit model. Values beginning with `L` or `G`, case-insensitively, select Lorentzian or Gaussian. |
 | `max_peaks` | `50` | peaks | Maximum number of returned peaks. Must be positive. |
-| `smooth` | `False` | none | Applies native image smoothing before detection and fitting. |
+| `smooth` | `False` | none | Applies native image smoothing before detection and fitting. Statistics such as `total_sum` describe the smoothed working image. LaueGo computes these totals before its optional smoothing, so totals can differ between the two paths. |
 
-When `threshold` is not `None`, `threshold_ratio` does not determine the threshold. When `threshold` is `None`, the native stage calculates the threshold from frame statistics and `threshold_ratio`.
+When `threshold` is not `None`, `threshold_ratio` does not determine the threshold. When `threshold` is `None`, the native stage calculates the threshold from frame statistics and the resolved `threshold_ratio`. XML provenance records the resolved value (`4.0` when configured as `None`).
 
 ## Indexing parameters
 
@@ -115,4 +115,4 @@ For a reproducible comparison, record:
 
 ## Invalid configurations
 
-The `Indexer` raises {class}`~laueanalysis.indexing.InputError` for invalid parameter ranges, unsupported peak models, unsupported detection binning, malformed `hkl_prefer`, and `max_data` below two. See [Configuration](../reference/configuration.md) for exact field definitions.
+The `Indexer` raises {class}`~laueanalysis.indexing.InputError` for invalid parameter ranges, unsupported peak models, malformed `hkl_prefer`, and `max_data` below two. See [Configuration](../reference/configuration.md) for exact field definitions.

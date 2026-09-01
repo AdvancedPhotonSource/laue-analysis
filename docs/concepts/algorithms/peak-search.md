@@ -20,7 +20,7 @@ T = \bar{I} + r\sigma
 
 Here, `T` is the threshold, `\bar{I}` is the selected-pixel mean, `\sigma` is the selected-pixel population standard deviation, and `r` is `threshold_ratio`.
 
-Automatic thresholding raises `InputError` when the image has no unmasked, nonzero pixels. The selected value is returned as `FrameResult.threshold_used`.
+Automatic thresholding returns a valid empty result when the image has no unmasked, nonzero pixels. In that case, `FrameResult.threshold_used` is `NaN`. Otherwise, the selected threshold is returned in `FrameResult.threshold_used`.
 
 ## Detection and fitting
 

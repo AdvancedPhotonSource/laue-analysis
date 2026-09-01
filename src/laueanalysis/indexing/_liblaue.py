@@ -86,6 +86,7 @@ ffi.cdef(
                                        double, double, double, const laue_atom *, size_t,
                                        char *, size_t);
     void laue_crystal_free(laue_crystal *);
+    int laue_crystal_reciprocal(const laue_crystal *, double [3][3]);
     int laue_geometry_detector_count(const laue_geometry *);
     int laue_geometry_find_detector(const laue_geometry *, const char *);
     int laue_geometry_detector_info(const laue_geometry *, int, laue_detector_info *, char *, size_t);
@@ -144,6 +145,13 @@ class NativeCrystal:
             message = ffi.string(error).decode(errors="replace")
             raise ValueError(f"Failed to initialize crystal: {message}")
         return cls(handle, library)
+
+    def reciprocal(self) -> np.ndarray:
+        """Return native reciprocal basis rows in ``1/nm``."""
+        values = ffi.new("double[3][3]")
+        if self._library.laue_crystal_reciprocal(self._handle, values):
+            raise RuntimeError("Failed to read native reciprocal lattice")
+        return np.asarray([[values[row][column] for column in range(3)] for row in range(3)])
 
 
 @dataclass(frozen=True)
@@ -335,6 +343,9 @@ class Geometry:
             raise ValueError(f"Failed to load geometry {path}: {message}")
         self._library = library
         self._handle = ffi.gc(handle, library.laue_geometry_free)
+
+    def __repr__(self) -> str:
+        return f"Geometry(path={str(self.path)!r}, detector_count={self.detector_count})"
 
     @property
     def detector_count(self) -> int:
