@@ -25,7 +25,7 @@ class Step:
         <Xsample>-182.0</Xsample>
         <Ysample>3469.42</Ysample>
         <Zsample>1560.23</Zsample>
-        <depth>nan</depth>
+        <depth>12.5</depth>
         <energy unit="keV">14.5533</energy>
         <hutchTemperature>23.65</hutchTemperature>
         <sampleDistance>0.0</sampleDistance>

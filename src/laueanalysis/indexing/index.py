@@ -543,7 +543,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             xml_file=None,
             log="",
             error=f"Failed to create output directories: {e}",
-            command_history=[]
+            command_history=()
         )
     
     command_history = []
@@ -590,7 +590,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 xml_file=None,
                 log="\n".join(log_parts),
                 error="No peaks output file found - peak search completely failed",
-                command_history=command_history
+                command_history=tuple(command_history)
             )
         return IndexingResult(
             success=False,
@@ -603,7 +603,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
             xml_file=None,
             log="\n".join(log_parts),
             error=f"No specific peaks file found for this image: expected {expected_peaks.name}",
-            command_history=command_history
+            command_history=tuple(command_history)
         )
     output_files['peaks'] = peaks_file
     n_peaks_found = _parse_peaks_output(peaks_file)
@@ -642,7 +642,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 xml_file=None,
                 log="\n".join(log_parts),
                 error=None,
-                command_history=command_history
+                command_history=tuple(command_history)
             )
         
         # Determine expected p2q output file for this image
@@ -662,7 +662,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                 xml_file=None,
                 log="\n".join(log_parts),
                 error=None,
-                command_history=command_history
+                command_history=tuple(command_history)
             )
         
         output_files['p2q'] = p2q_file
@@ -697,7 +697,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
                     xml_file=None,
                     log="\n".join(log_parts),
                     error=None,
-                    command_history=command_history
+                    command_history=tuple(command_history)
                 )
             
             # Determine expected index output file for this image
@@ -786,5 +786,5 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
         xml_file=xml_file,
         log="\n".join(log_parts),
         error=None,
-        command_history=command_history
+        command_history=tuple(command_history)
     )

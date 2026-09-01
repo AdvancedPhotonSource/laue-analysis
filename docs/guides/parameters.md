@@ -29,9 +29,9 @@ Record the complete parameter objects with analysis output. A result alone does 
 | `min_separation` | `10` | px | Minimum separation between accepted peaks. Must be positive. |
 | `threshold` | `100.0` | detector counts | Absolute detection threshold. Use `None` for an automatically derived threshold. |
 | `threshold_ratio` | `None` | dimensionless | Scale applied to the frame standard deviation for automatic thresholding. `None` resolves to the native default, `4.0`. |
-| `peak_shape` | `"Lorentzian"` | none | Fit model. Values beginning with `L` or `G`, case-insensitively, select Lorentzian or Gaussian. |
+| `peak_shape` | `"Lorentzian"` | none | Fit model. Exactly `"Lorentzian"` or `"Gaussian"`. |
 | `max_peaks` | `50` | peaks | Maximum number of returned peaks. Must be positive. |
-| `smooth` | `False` | none | Applies native image smoothing before detection and fitting. Frame statistics continue to describe the raw input image. |
+| `smooth` | `False` | none | Applies native image smoothing before detection and fitting. Frame sums continue to describe the raw input image; an automatically derived threshold is computed from the smoothed image. |
 
 When `threshold` is not `None`, `threshold_ratio` does not determine the threshold. When `threshold` is `None`, the native stage calculates the threshold from frame statistics and the resolved `threshold_ratio`. XML provenance records the resolved value (`4.0` when configured as `None`).
 

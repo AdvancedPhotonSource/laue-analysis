@@ -130,8 +130,9 @@ def plot_map(
     """Render a two- or three-dimensional spatial map with Plotly.
 
     ``source`` can be a :class:`MapData`, :class:`ResultSet`, or
-    :class:`VisualizationDataset`. Semantic trace roles are ``"data"`` and
-    ``"unindexed"``.
+    :class:`VisualizationDataset`. Semantic trace roles are ``"data"`` and,
+    for orientation-color maps only, ``"unindexed"``; scalar colors render as
+    a single ``"data"`` trace.
     """
     preparation = (
         ("axes", axes),

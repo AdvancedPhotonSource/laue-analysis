@@ -245,6 +245,8 @@ def test_xml_generation_structure():
     assert '<energy unit="keV">20.0</energy>' in xml_str
     assert '<detector>' in xml_str
     assert '<indexing' in xml_str
+    # Unknown depth is omitted, matching the LaueGo writer's isNotNAN guards.
+    assert '<depth>' not in xml_str
 
     # The original_xmlns attribute on <step> preserves the original namespace
     # metadata without interfering with XML namespace parsing.

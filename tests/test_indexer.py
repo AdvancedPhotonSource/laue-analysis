@@ -148,6 +148,24 @@ def test_smoothing_preserves_raw_frame_statistics():
     assert result.num_above_threshold == np.count_nonzero(selected > threshold)
 
 
+def test_auto_threshold_with_smoothing_keeps_raw_sums():
+    image = np.full((64, 64), 20, dtype=np.uint16)
+    image[30:34, 30:34] = 500
+
+    result = Indexer(
+        GEOMETRY,
+        peak_params=PeakParams(threshold=None, smooth=True),
+    ).index(image)
+
+    # threshold_used derives from the smoothed image; the sums must still
+    # describe the raw input pixels.
+    assert np.isfinite(result.threshold_used)
+    assert result.total_sum == np.sum(image)
+    raw_above = image[image > result.threshold_used]
+    assert result.sum_above_threshold == np.sum(raw_above)
+    assert result.num_above_threshold == raw_above.size
+
+
 def test_blank_frame_with_auto_threshold_returns_empty_result():
     image = np.zeros((8, 12), dtype=np.uint16)
     result = Indexer(

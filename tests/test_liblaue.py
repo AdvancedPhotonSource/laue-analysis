@@ -226,6 +226,28 @@ def test_geometry_rejects_duplicate_detector_ids(tmp_path):
         Geometry(path)
 
 
+def test_geometry_accepts_old_style_tag_value_format(tmp_path):
+    # The native reader supports the pre-XML "$tag value" geometry format;
+    # the XML-based duplicate-ID pre-scan must not reject it.
+    from laueanalysis.indexing._liblaue import Geometry
+
+    path = tmp_path / "geo_old_style.txt"
+    path.write_text(
+        "$filetype\tgeometryFileN\n"
+        "$Ndetectors\t1\n"
+        "$d0_Nx\t2048\n"
+        "$d0_Ny\t2048\n"
+        "$d0_sizeX\t409.6\n"
+        "$d0_sizeY\t409.6\n"
+        "$d0_R\t{-1.20310066,-1.21179927,-1.21933886}\n"
+        "$d0_P\t{25.826,-0.728,510.812}\n"
+        "$d0_detectorID\tPE1621 723-3335\n"
+    )
+
+    geometry = Geometry(path)
+    assert geometry.detector_count == 1
+
+
 def test_detector_geometry_ignores_unrelated_invalid_sample_and_wire(tmp_path):
     from laueanalysis.indexing._liblaue import Geometry
 

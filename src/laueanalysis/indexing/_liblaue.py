@@ -341,8 +341,13 @@ class Geometry:
                 (node.findtext("{*}ID") or "").strip()
                 for node in ET.parse(self.path).findall(".//{*}Detectors/{*}Detector")
             ]
-        except (OSError, ET.ParseError) as error:
+        except OSError as error:
             raise ValueError(f"Failed to load geometry {path}: {error}") from error
+        except ET.ParseError:
+            # Not an XML document. The native reader also accepts the older
+            # "$tag value" geometry format, which has at most one declaration
+            # per detector slot, so the duplicate-ID scan does not apply.
+            detector_ids = []
         duplicates = sorted({value for value in detector_ids if value and detector_ids.count(value) > 1})
         if duplicates:
             raise ValueError(f"Failed to load geometry {path}: duplicate detector ID {duplicates[0]!r}")

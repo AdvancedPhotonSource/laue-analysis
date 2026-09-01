@@ -51,6 +51,8 @@ Do not assume that immediate retry will succeed. Release unneeded arrays and res
 
 Preserve the complete message. It can distinguish a geometry conversion problem from an orientation-indexing problem without exposing native status values as a public API.
 
+No peaks or no patterns is not a failure and does not raise an exception. Apply a separate scientific acceptance policy to those results.
+
 ## Batch strategy
 
 Use `index_many()` when the batch should stop on its first failure. Use an explicit loop when each frame needs an independent status:
@@ -84,8 +86,6 @@ Record enough context to reproduce the call:
 - Exception type and complete message
 
 Do not log full frame arrays. Remove user names, sample names, local paths, and other sensitive acquisition metadata before sharing a report.
-
-No peaks or no patterns is not a failure and does not raise an exception. Apply a separate scientific acceptance policy to those results.
 
 ## Reflection simulation failures
 

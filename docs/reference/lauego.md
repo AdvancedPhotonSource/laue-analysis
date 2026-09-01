@@ -12,11 +12,9 @@ New integrations should use `index_frame` or `Indexer` from the
 .. autofunction:: lauego
 ```
 
-`index` is a backward-compatible alias for `lauego`.
-
 ## LaueGo result
 
-```{py:class} laueanalysis.indexing.index.IndexingResult(success, output_files, n_peaks_found, n_indexed, n_patterns_found, indexing_data, step_data, xml_file, log, error=None, command_history=[])
+```{py:class} laueanalysis.indexing.index.IndexingResult(success, output_files, n_peaks_found, n_indexed, n_patterns_found, indexing_data, step_data, xml_file, log, error=None, command_history=())
 
 Result returned by the LaueGo subprocess indexing interface.
 

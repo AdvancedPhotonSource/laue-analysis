@@ -11,6 +11,7 @@ import numpy as np
 import h5py
 import shutil
 
+from laueanalysis.reconstruct.reconstruct import _validate_executable
 from laueanalysis.reconstruct import (
     reconstruct,
     find_executable,
@@ -116,11 +117,16 @@ class TestReconstruct:
         stale = tmp_path / "recon_1.h5"
         stale.write_text("stale")
 
-        def run(*args, **kwargs):
+        def run(args, **kwargs):
+            if "--help" in args:
+                return MagicMock(
+                    returncode=1, stdout="Usage: WireScan -i <file>", stderr=""
+                )
             (tmp_path / "recon_10.h5").write_text("new")
             (tmp_path / "recon_2.h5").write_text("new")
             return MagicMock(returncode=0, stdout="complete", stderr="")
 
+        _validate_executable.cache_clear()
         with patch("subprocess.run", side_effect=run):
             result = reconstruct(
                 "input.h5", str(output_base), "geo.xml", (0.0, 10.0)
@@ -390,6 +396,11 @@ class TestReconstructGPU:
         assert '-E' not in call_args
         assert '-T' not in call_args
         assert '-N' not in call_args
+
+    def test_gpu_cuda_rows_defaults_to_eight(self, mock_subprocess, mock_executable):
+        reconstruct_gpu('input.h5', 'output_', 'geo.xml', (0.0, 10.0))
+        call_args = mock_subprocess.call_args[0][0]
+        assert call_args[call_args.index('-R') + 1] == '8'
 
     def test_find_gpu_executable_function(self):
         """Test the public find_gpu_executable function."""

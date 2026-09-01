@@ -930,8 +930,6 @@ class Indexer:
             "detector_index": self.detector_index,
             "cosmic_filter": self.cosmic_filter,
         }
-        if "detector_id" in changes:
-            values["detector_id"] = changes.pop("detector_id")
         values.update(changes)
         return type(self)(**values)
 

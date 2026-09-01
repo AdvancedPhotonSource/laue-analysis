@@ -165,9 +165,10 @@ def test_functional_index_batch_processing_real_data(test_config):
     peak_counts = [result.n_peaks_found for result in results]
     indexed_counts = [result.n_indexed for result in results]
     
-    # All files should produce the same results
-    assert len(set(peak_counts)) <= 1, f"Inconsistent peak counts: {peak_counts}"
-    assert len(set(indexed_counts)) <= 1, f"Inconsistent index counts: {indexed_counts}"
+    # All files should produce the same, nonzero results
+    assert len(set(peak_counts)) == 1, f"Inconsistent peak counts: {peak_counts}"
+    assert len(set(indexed_counts)) == 1, f"Inconsistent index counts: {indexed_counts}"
+    assert peak_counts[0] > 0, "batch run found no peaks"
     
     # Check output structure
     _check_output_structure(temp_dir.name)
@@ -297,13 +298,11 @@ def test_functional_index_equivalence():
         assert isinstance(result.n_indexed, int)      # Equivalent to step.indexing.Nindexed  
         assert 'peaks' in result.output_files         # Equivalent to peakSearchOut
         
-        # If processing succeeded, should have p2q output for peaks > 0
-        if result.n_peaks_found > 0:
-            assert 'p2q' in result.output_files       # Equivalent to p2qOut
-            
-        # If enough peaks, should have indexing output 
-        if result.n_peaks_found > 1:
-            assert 'index' in result.output_files     # Equivalent to indexOut
+        # The synthetic fixture always yields peaks, so the downstream
+        # pipeline outputs must exist unconditionally.
+        assert result.n_peaks_found > 0
+        assert 'p2q' in result.output_files           # Equivalent to p2qOut
+        assert 'index' in result.output_files         # Equivalent to indexOut
         
         # Benefits of the functional interface
         assert len(result.command_history) > 0        # Command history for debugging

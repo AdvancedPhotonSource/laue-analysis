@@ -61,7 +61,7 @@ assert cell_angstrom.unit == "angstrom"
 
 Atom positions are three fractional coordinates in the unit cell. Occupancy is a value from `0` through `1`, inclusive. The current public model validates the tuple length and occupancy range. It does not normalize fractional values to the interval from zero to one.
 
-The space group is an International Tables number from 1 through 230. Before reciprocal-lattice calculations, the native model coerces the supplied cell to the constraints of that space group's crystal system. For example, cubic groups use `a` for all three lengths and 90 deg for all angles; tetragonal groups use `a` for `b`; hexagonal groups use `a` for `b` and 120 deg for gamma. Monoclinic, orthorhombic, and trigonal cells are adjusted by the corresponding symmetry constraints. This coercion is silent, so validate generated lattice parameters before indexing.
+The space group is an International Tables number from 1 through 230. Before reciprocal-lattice calculations, the native model coerces the supplied cell to the constraints of that space group's crystal system. For example, cubic groups use `a` for all three lengths and 90 deg for all angles; tetragonal groups use `a` for `b`; hexagonal groups use `a` for `b` and 120 deg for gamma. Monoclinic, orthorhombic, and trigonal cells are adjusted by the corresponding symmetry constraints. This coercion is silent and also forces the ideal angles of each system, so validate generated lattice parameters before indexing. The per-system rules are listed in the [results guide](results.md).
 
 `Crystal.setting` is retained as provenance and is written to indexing XML. It is not passed to the native model; the native rhombohedral-versus-hexagonal axis choice is inferred from the cell angles.
 

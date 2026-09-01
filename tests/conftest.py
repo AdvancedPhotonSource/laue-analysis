@@ -16,11 +16,10 @@ from importlib import resources
 import pytest
 
 GPU_SKIP_REASON = "GPU reconstruction executable not available"
-ALLOWED_SKIP_REASONS = (
-    GPU_SKIP_REASON,
-    "Valgrind is required for the native memory regression test",
-    "a C compiler is required for the native memory regression test",
-)
+# Valgrind and the C compiler ship in environment.yml, so their absence is a
+# broken environment, not an expected skip: only the GPU executable may skip
+# under --require-native.
+ALLOWED_SKIP_REASONS = (GPU_SKIP_REASON,)
 
 
 def native_file_available(package: str, name: str) -> bool:

@@ -55,7 +55,7 @@ The in-process path:
 | `timeout` | No replacement in the in-process API |
 | `mask_file` | Load or construct an array and pass it as `mask` |
 
-The LaueGo `peak_shape` argument commonly uses `"L"` or `"G"`. `PeakParams.peak_shape` defaults to the clearer `"Lorentzian"` spelling but accepts either initial.
+The LaueGo `peak_shape` argument commonly uses `"L"` or `"G"`. `PeakParams.peak_shape` requires the full spelling: `"Lorentzian"` or `"Gaussian"`.
 
 In both APIs, `threshold_ratio=None` uses the native default of `4.0`; the LaueGo path does this by omitting the `-T` command option. In the in-process API, `threshold=None` selects automatic thresholding, and `threshold_ratio` controls its scale.
 
