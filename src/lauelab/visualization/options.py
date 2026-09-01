@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from laueanalysis.analysis import SurfaceFrame
+from lauelab.analysis import SurfaceFrame
 
 
 @dataclass(frozen=True)

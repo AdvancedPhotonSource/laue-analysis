@@ -15,11 +15,11 @@ Preparation returns immutable NumPy arrays. Plot functions accept either normali
 
 ## Prepare modern results
 
-Use {class}`~laueanalysis.visualization.ResultSet` to attach stable frame IDs and the shared crystal and geometry to a sequence of {class}`~laueanalysis.indexing.FrameResult` objects.
+Use {class}`~lauelab.visualization.ResultSet` to attach stable frame IDs and the shared crystal and geometry to a sequence of {class}`~lauelab.indexing.FrameResult` objects.
 
 ```python
-from laueanalysis.indexing import Indexer
-from laueanalysis.visualization import ResultSet, prepare_map
+from lauelab.indexing import Indexer
+from lauelab.visualization import ResultSet, prepare_map
 
 indexer = Indexer("geometry.xml", "crystal.xml")
 results = indexer.index_many(frames)
@@ -47,10 +47,10 @@ Call `result_set.to_visualization()` when you need the normalized arrays. This c
 
 ## Load LaueGo XML
 
-{func}`~laueanalysis.visualization.load_visualization_xml` reads an `AllSteps` indexing XML document into the same normalized model:
+{func}`~lauelab.visualization.load_visualization_xml` reads an `AllSteps` indexing XML document into the same normalized model:
 
 ```python
-from laueanalysis.visualization import load_visualization_xml, prepare_map
+from lauelab.visualization import load_visualization_xml, prepare_map
 
 dataset = load_visualization_xml("indexed-scan.xml")
 map_data = prepare_map(dataset, axes=("X", "H"), color="n_indexed")
@@ -72,7 +72,7 @@ The loader preserves declared peak rows when optional XML columns are absent. Mi
 
 ## Select patterns
 
-{class}`~laueanalysis.visualization.DataScope` applies the same pattern selection to maps, pole figures, and tables. The default is:
+{class}`~lauelab.visualization.DataScope` applies the same pattern selection to maps, pole figures, and tables. The default is:
 
 ```python
 DataScope(patterns="best", min_indexed=3)
@@ -81,7 +81,7 @@ DataScope(patterns="best", min_indexed=3)
 This selects the lowest pattern rank in each frame and requires at least three assignments. Select all patterns or explicit ranks when needed:
 
 ```python
-from laueanalysis.visualization import DataScope
+from lauelab.visualization import DataScope
 
 all_patterns = DataScope(patterns="all", min_indexed=3)
 all_frames = DataScope(patterns="all_frames")
@@ -95,7 +95,7 @@ Stable IDs do not depend on row order. A pattern uses `(frame_id, pattern_index)
 
 ## Prepare a map
 
-{func}`~laueanalysis.visualization.prepare_map` accepts two or three axes. Built-in axes include motor positions, the 34-ID-E `H` and `F` transforms, depth, and laboratory-coordinate variants. Inspect {data}`~laueanalysis.visualization.AXIS_OPTIONS` for the implemented names.
+{func}`~lauelab.visualization.prepare_map` accepts two or three axes. Built-in axes include motor positions, the 34-ID-E `H` and `F` transforms, depth, and laboratory-coordinate variants. Inspect {data}`~lauelab.visualization.AXIS_OPTIONS` for the implemented names.
 
 ```python
 map_data = prepare_map(
@@ -108,12 +108,12 @@ map_data = prepare_map(
 
 `map_data.coordinates` has shape `(n, 2)` or `(n, 3)`. Scalar colors have shape `(n,)`. IPF and Rodrigues colors have shape `(n, 3)` with RGB values between 0 and 1.
 
-Use {class}`~laueanalysis.visualization.Axis` and {class}`~laueanalysis.visualization.ScalarColor` for aligned custom values:
+Use {class}`~lauelab.visualization.Axis` and {class}`~lauelab.visualization.ScalarColor` for aligned custom values:
 
 ```python
 import numpy as np
 
-from laueanalysis.visualization import Axis, ScalarColor
+from lauelab.visualization import Axis, ScalarColor
 
 map_data = prepare_map(
     dataset,
@@ -135,9 +135,9 @@ map_data = prepare_map(
 )
 ```
 
-An alignment of `"frame"` requires one value per frame. `"pattern"` requires one value per normalized pattern. `"selected"` requires one value per pattern left by `scope`. A callable receives the complete {class}`~laueanalysis.visualization.VisualizationDataset`.
+An alignment of `"frame"` requires one value per frame. `"pattern"` requires one value per normalized pattern. `"selected"` requires one value per pattern left by `scope`. A callable receives the complete {class}`~lauelab.visualization.VisualizationDataset`.
 
-Named scalar colors are `"n_indexed"`, `"goodness"`, `"rms_error"`, and `"n_patterns"`. Orientation-map colors use the same names as Laue Portal: `"cubic_ipf"`, `"rodrigues"`, `"misorientation"`, and `"pole_hsv"`. Inspect {data}`~laueanalysis.visualization.COLOR_MODES` for the complete map-color list.
+Named scalar colors are `"n_indexed"`, `"goodness"`, `"rms_error"`, and `"n_patterns"`. Orientation-map colors use the same names as Laue Portal: `"cubic_ipf"`, `"rodrigues"`, `"misorientation"`, and `"pole_hsv"`. Inspect {data}`~lauelab.visualization.COLOR_MODES` for the complete map-color list.
 
 Cubic IPF and pole HSV coloring require a cubic crystal. Misorientation coloring also requires `misorientation_reference=(frame_id, pattern_index)`. Use `pole_hkl`, `pole_center`, and `pole_color_radius_deg` to configure pole HSV coloring.
 
@@ -146,7 +146,7 @@ Cubic IPF and pole HSV coloring require a cubic crystal. Misorientation coloring
 The three Plotly functions accept normalized input and call the matching preparation function:
 
 ```python
-from laueanalysis.visualization import (
+from lauelab.visualization import (
     plot_detector_view,
     plot_map,
     plot_pole_figure,
@@ -210,7 +210,7 @@ Map, pole, and detector traces store stable identities in the first three `custo
 [frame_id, pattern_index, peak_index]
 ```
 
-A value is `None` when the trace does not represent that identity type. Use {func}`~laueanalysis.visualization.selection_from_plotly` with Plotly `clickData` or `selectedData`:
+A value is `None` when the trace does not represent that identity type. Use {func}`~lauelab.visualization.selection_from_plotly` with Plotly `clickData` or `selectedData`:
 
 ```python
 selection = selection_from_plotly(event_data)
@@ -229,7 +229,7 @@ The package does not provide a Matplotlib renderer. The prepared arrays are suff
 ```python
 import matplotlib.pyplot as plt
 
-from laueanalysis.visualization import prepare_map
+from lauelab.visualization import prepare_map
 
 map_data = prepare_map(result_set, axes=("X", "H"), color="goodness")
 figure, axes = plt.subplots()
@@ -248,10 +248,10 @@ For `color_kind == "rgb"`, pass `c=map_data.colors` and omit `cmap` and the scal
 
 ## Prepare a pole figure
 
-{func}`~laueanalysis.visualization.prepare_pole_figure` generates the cubic symmetry family for `hkl` and projects upper-hemisphere poles stereographically:
+{func}`~lauelab.visualization.prepare_pole_figure` generates the cubic symmetry family for `hkl` and projects upper-hemisphere poles stereographically:
 
 ```python
-from laueanalysis.visualization import prepare_pole_figure
+from lauelab.visualization import prepare_pole_figure
 
 pole_data = prepare_pole_figure(
     result_set,
@@ -263,16 +263,16 @@ pole_data = prepare_pole_figure(
 )
 ```
 
-`pole_data.points` has shape `(n, 2)`. One pattern can produce several rows, so its stable identity can occur more than once. `pole_center` and `pole_color_radius_deg` use the same names as pole HSV coloring in `prepare_map()`. Inspect {data}`~laueanalysis.visualization.POLE_COLOR_MODES` for the available colors: `"hsv_position"`, `"ipf"`, and `"uniform"`.
+`pole_data.points` has shape `(n, 2)`. One pattern can produce several rows, so its stable identity can occur more than once. `pole_center` and `pole_color_radius_deg` use the same names as pole HSV coloring in `prepare_map()`. Inspect {data}`~lauelab.visualization.POLE_COLOR_MODES` for the available colors: `"hsv_position"`, `"ipf"`, and `"uniform"`.
 
 HKL-family generation and IPF colors currently support cubic crystals only. The function rejects other crystal systems instead of applying cubic symmetry to them.
 
 ## Prepare a detector view
 
-{func}`~laueanalysis.visualization.prepare_detector_view` returns measured peaks and one indexed-reflection layer per selected pattern:
+{func}`~lauelab.visualization.prepare_detector_view` returns measured peaks and one indexed-reflection layer per selected pattern:
 
 ```python
-from laueanalysis.visualization import prepare_detector_view
+from lauelab.visualization import prepare_detector_view
 
 detector_data = prepare_detector_view(
     result_set,
@@ -294,13 +294,13 @@ The table functions return immutable, named NumPy columns. In Jupyter, the last 
 
 | Function | One row per record | Stable identity columns |
 |---|---|---|
-| {func}`~laueanalysis.visualization.peak_table` | Detected peak | `frame_id`, `peak_index` |
-| {func}`~laueanalysis.visualization.pattern_table` | Indexed pattern | `frame_id`, `pattern_index` |
-| {func}`~laueanalysis.visualization.assignment_table` | Pattern-to-peak assignment | `frame_id`, `pattern_index`, `peak_index` |
-| {func}`~laueanalysis.visualization.indexed_peak_table` | Assignment joined to peak and pattern values | `frame_id`, `pattern_index`, `peak_index` |
+| {func}`~lauelab.visualization.peak_table` | Detected peak | `frame_id`, `peak_index` |
+| {func}`~lauelab.visualization.pattern_table` | Indexed pattern | `frame_id`, `pattern_index` |
+| {func}`~lauelab.visualization.assignment_table` | Pattern-to-peak assignment | `frame_id`, `pattern_index`, `peak_index` |
+| {func}`~lauelab.visualization.indexed_peak_table` | Assignment joined to peak and pattern values | `frame_id`, `pattern_index`, `peak_index` |
 
 ```python
-from laueanalysis.visualization import indexed_peak_table
+from lauelab.visualization import indexed_peak_table
 
 table = indexed_peak_table(dataset, scope=all_patterns)
 dataframe = table.to_dataframe()
@@ -333,10 +333,10 @@ The physical names, positive directions, and handedness of the laboratory axes s
 
 Map IPF colors and pole figures accept `"normal"`, `"X"`, `"H"`, `"Y"`, `"Z"`, and `"F"`. These names are APS 34-ID-E acquisition conventions, not general crystallographic names.
 
-Use {class}`~laueanalysis.analysis.SurfaceFrame` when a named preset does not match the sample:
+Use {class}`~lauelab.analysis.SurfaceFrame` when a named preset does not match the sample:
 
 ```python
-from laueanalysis.analysis import SurfaceFrame
+from lauelab.analysis import SurfaceFrame
 
 surface = SurfaceFrame.from_vectors(
     tilt=(1, 0, 0),

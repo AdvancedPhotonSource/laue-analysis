@@ -5,7 +5,7 @@ The CUDA source and this directory's `Makefile` are kept for the planned
 GPU migration (see `BUILD_DEPLOYMENT_PLAN.md`, "GPU reconstruction"), which
 needs an NVIDIA test environment and a separate design pass.
 
-`laueanalysis.reconstruct.reconstruct_gpu()` still looks for a
+`lauelab.reconstruct.reconstruct_gpu()` still looks for a
 `reconstructN_gpu` executable in the package `bin/` directory or on `PATH`
 and raises `FileNotFoundError` when it is absent. To experiment locally,
 build with this Makefile (`nvcc`, HDF5, GSL required) and put the resulting

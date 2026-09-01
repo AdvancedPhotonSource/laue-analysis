@@ -6,7 +6,7 @@ from unit-cell and atom-site values.
 ## Load a Crystal
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autofunction:: load_crystal
 ```
@@ -14,7 +14,7 @@ from unit-cell and atom-site values.
 ## Crystal Model
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoclass:: Cell
    :members: in_angstrom

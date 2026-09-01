@@ -3,7 +3,7 @@ requires = ["scikit-build-core>=0.10", "patchelf>=0.17; platform_system == 'Linu
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "laueanalysis"
+name = "lauelab"
 version = "0.1.0"
 description = "A package for Laue diffraction analysis including indexing and reconstruction"
 readme = "README.md"
@@ -50,14 +50,14 @@ cmake.version = ">=3.24"
 cmake.build-type = "Release"
 build-dir = "build-skbuild/{wheel_tag}"
 # Python sources live under src/; CMake installs the native files into the
-# same package directories (laueanalysis/indexing/bin, laueanalysis/reconstruct/bin).
-wheel.packages = ["src/laueanalysis"]
+# same package directories (lauelab/indexing/bin, lauelab/reconstruct/bin).
+wheel.packages = ["src/lauelab"]
 # Native files are plain executables and a cffi ABI-mode library: no Python ABI dependence.
 wheel.py-api = "py3"
 wheel.exclude = [
     # Native source trees stay in the sdist but must not ship in the wheel.
-    "laueanalysis/indexing/src/**",
-    "laueanalysis/reconstruct/source/**",
+    "lauelab/indexing/src/**",
+    "lauelab/reconstruct/source/**",
     "**/*.o",
 ]
 # The install step (patchelf, RPATH rewrite) must fail the build if it fails.

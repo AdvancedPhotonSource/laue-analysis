@@ -11,7 +11,7 @@ import warnings
 
 import numpy as np
 
-from laueanalysis.indexing import Crystal, DetectorGeometry
+from lauelab.indexing import Crystal, DetectorGeometry
 
 
 _CANDIDATE_LIMIT = 100_000
@@ -204,16 +204,16 @@ def _vendor_warning_boundary() -> Iterator[None]:
             "ignore",
             message=r"Conversion of an array with ndim > 0 to a scalar is deprecated.*",
             category=DeprecationWarning,
-            module=r"laueanalysis\.analysis\._vendor\.jzt(?:\.|$)",
+            module=r"lauelab\.analysis\._vendor\.jzt(?:\.|$)",
         )
         yield
 
 
 def _load_jzt_modules():
     return (
-        import_module("laueanalysis.analysis._vendor.jzt.LatticeBase"),
-        import_module("laueanalysis.analysis._vendor.jzt.Lattice"),
-        import_module("laueanalysis.analysis._vendor.jzt.LauePattern"),
+        import_module("lauelab.analysis._vendor.jzt.LatticeBase"),
+        import_module("lauelab.analysis._vendor.jzt.Lattice"),
+        import_module("lauelab.analysis._vendor.jzt.LauePattern"),
     )
 
 
@@ -556,9 +556,9 @@ def simulate_reflections(
         numerical output, or complete within its private candidate limit.
     """
     if not isinstance(crystal, Crystal):
-        raise TypeError("crystal must be a laueanalysis.indexing.Crystal")
+        raise TypeError("crystal must be a lauelab.indexing.Crystal")
     if not isinstance(detector, DetectorGeometry):
-        raise TypeError("detector must be a laueanalysis.indexing.DetectorGeometry")
+        raise TypeError("detector must be a lauelab.indexing.DetectorGeometry")
     _validate_crystal(crystal)
     _validate_detector(detector)
 

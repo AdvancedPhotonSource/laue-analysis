@@ -71,10 +71,10 @@ The API converts the mask to contiguous `uint8`. Zero pixels remain available to
 
 ## Metadata
 
-Pass {class}`~laueanalysis.indexing.FrameMetadata` or a mapping when the result needs experiment provenance:
+Pass {class}`~lauelab.indexing.FrameMetadata` or a mapping when the result needs experiment provenance:
 
 ```python
-from laueanalysis.indexing import FrameMetadata
+from lauelab.indexing import FrameMetadata
 
 metadata = FrameMetadata(
     sample_name="synthetic nickel",
@@ -90,7 +90,7 @@ For HDF5 input, the loader reads recognized metadata fields when their datasets 
 
 The HDF5 detector identifier is also checked against the selected geometry detector. A mismatch raises `InputError`. For an in-memory frame, `metadata.detector_id` is provenance only and is not used for this validation.
 
-See the {class}`~laueanalysis.indexing.FrameMetadata` reference for the complete field list.
+See the {class}`~lauelab.indexing.FrameMetadata` reference for the complete field list.
 
 ## Image ownership
 

@@ -58,7 +58,7 @@ def _cpu_model() -> str:
 def _load_case(case: str):
     import numpy as np
 
-    from laueanalysis.indexing import (
+    from lauelab.indexing import (
         Atom,
         Cell,
         Crystal,
@@ -96,7 +96,7 @@ def _measure_worker(case: str) -> dict:
     started = time.perf_counter()
     import numpy as np
 
-    from laueanalysis.analysis import simulate_reflections
+    from lauelab.analysis import simulate_reflections
 
     imported = time.perf_counter()
     crystal, reciprocal, detector, metadata = _load_case(case)
@@ -138,8 +138,8 @@ def _benchmark(case: str, warm_runs: int) -> dict:
 
     import numpy as np
 
-    from laueanalysis.analysis import simulate_reflections
-    from laueanalysis.analysis import simulation as simulation_module
+    from lauelab.analysis import simulate_reflections
+    from lauelab.analysis import simulation as simulation_module
 
     crystal, reciprocal, detector, metadata = _load_case(case)
     energy_range = tuple(metadata["energy_range_kev"])
@@ -159,7 +159,7 @@ def _benchmark(case: str, warm_runs: int) -> dict:
         spot_counts.append(len(result.hkl))
 
     return {
-        "schema": "laueanalysis-simulation-performance-v1",
+        "schema": "lauelab-simulation-performance-v1",
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "git_revision": _git_revision(),
         "git_dirty": _git_dirty(),

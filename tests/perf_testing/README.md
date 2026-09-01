@@ -20,7 +20,7 @@ Key features:
   - CPU: Cartesian product of parallel reconstructions vs. number of threads per process.
   - GPU: Number of concurrent GPU reconstructions.
 - Saves runtimes and test parameters to a JSONL file for later analysis.
-- Uses the installed `laueanalysis` python API directly; no build steps required.
+- Uses the installed `lauelab` python API directly; no build steps required.
 
 ## Script
 
@@ -115,6 +115,6 @@ Example JSONL entries:
 
 ## Notes
 
-- The script uses the installed `laueanalysis.reconstruct` Python API (`reconstruct` and `reconstruct_gpu`). Ensure the environment can resolve these.
+- The script uses the installed `lauelab.reconstruct` Python API (`reconstruct` and `reconstruct_gpu`). Ensure the environment can resolve these.
 - GPU tests will simply launch multiple concurrent GPU reconstructions; if you need per-GPU pinning on multi-GPU systems, this script can be extended to set `CUDA_VISIBLE_DEVICES` per process.
 - Long runs are expected; use `--dry-run` first to verify the plan.

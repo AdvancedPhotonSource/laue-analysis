@@ -32,7 +32,7 @@ $totalSum		1.31072e+06		// sum of all pixels in image
 $sumAboveThreshold	0	// sum of all pixels in image above threshold
 $numAboveThreshold	0	// number of pixels above threshold
 $NpeakMax		200			// limit on number of peaks to search for
-$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$programName	<env>/lib/python3.12/site-packages/lauelab/indexing/bin/peaksearch
 $executionTime	2.46		// execution time (sec)
 //
 // fitted peak positions relative to the start of the ROI (not detector origin)

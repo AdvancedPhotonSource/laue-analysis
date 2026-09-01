@@ -9,10 +9,10 @@ import functools
 import re
 from importlib import resources
 
-from laueanalysis.indexing.lau_dataclasses.step import Step
-from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
-from laueanalysis.indexing.parsers import parse_full_step_data
-from laueanalysis.indexing.xml_utils import write_step_xml, get_default_xml_filename
+from lauelab.indexing.lau_dataclasses.step import Step
+from lauelab.indexing.lau_dataclasses.indexing import Indexing
+from lauelab.indexing.parsers import parse_full_step_data
+from lauelab.indexing.xml_utils import write_step_xml, get_default_xml_filename
 
 
 class IndexingResult(NamedTuple):
@@ -77,7 +77,7 @@ def _find_executables() -> Dict[str, str]:
     execs = {}
     for name in ['peaksearch', 'pix2qs', 'euler']:
         try:
-            bin_files = resources.files('laueanalysis.indexing.bin')
+            bin_files = resources.files('lauelab.indexing.bin')
             exe_path = bin_files / name
             if exe_path.is_file():
                 execs[name] = str(exe_path)
@@ -512,7 +512,7 @@ def lauego(input_image: str, output_dir: str, geo_file: str, crystal_file: str,
 
     Returns
     -------
-    laueanalysis.indexing.IndexingResult
+    lauelab.indexing.IndexingResult
         Status, output paths, counts, parsed LaueGo data, logs, and any error.
 
     Notes

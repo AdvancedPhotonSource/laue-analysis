@@ -9,15 +9,15 @@ from pathlib import Path
 from xml.etree import ElementTree
 from xml.dom import minidom
 
-from laueanalysis.indexing.parsers import (
+from lauelab.indexing.parsers import (
     parse_peaks_file,
     parse_p2q_file,
     parse_indexing_file,
     parse_full_step_data
 )
-from laueanalysis.indexing.xml_utils import write_step_xml, write_combined_xml
-from laueanalysis.indexing.lau_dataclasses.step import Step
-from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
+from lauelab.indexing.xml_utils import write_step_xml, write_combined_xml
+from lauelab.indexing.lau_dataclasses.step import Step
+from lauelab.indexing.lau_dataclasses.indexing import Indexing
 
 # The original_xmlns value required by the downstream processing program.
 # Originally this was emitted as "xmlns", but that interfered with XML
@@ -139,7 +139,7 @@ def test_parse_peaks_file(sample_peaks_file):
 
 def test_parse_p2q_file(sample_p2q_file):
     """Test parsing of p2q file."""
-    from laueanalysis.indexing.lau_dataclasses.peaksXY import PeaksXY
+    from lauelab.indexing.lau_dataclasses.peaksXY import PeaksXY
     
     peaks_xy = PeaksXY()
     parse_p2q_file(sample_p2q_file, peaks_xy)

@@ -4,10 +4,10 @@ The in-process API separates invalid input from native processing failures. Catc
 
 ## Exception hierarchy
 
-{class}`~laueanalysis.indexing.LaueError` is the package base class.
+{class}`~lauelab.indexing.LaueError` is the package base class.
 
-- {class}`~laueanalysis.indexing.InputError` inherits from both `LaueError` and `ValueError`.
-- {class}`~laueanalysis.indexing.IndexingError` inherits from both `LaueError` and `RuntimeError`.
+- {class}`~lauelab.indexing.InputError` inherits from both `LaueError` and `ValueError`.
+- {class}`~lauelab.indexing.IndexingError` inherits from both `LaueError` and `RuntimeError`.
 - Native allocation failures use Python's built-in {class}`MemoryError`.
 
 `ValueError`, XML parse errors, `OSError`, and `KeyError` can also occur while loading geometry, crystal, or HDF5 input. See the relevant API reference for each loader.
@@ -29,7 +29,7 @@ Fix the input before retrying. The exception message names the failed check and 
 ```python
 import numpy as np
 
-from laueanalysis.indexing import InputError
+from lauelab.indexing import InputError
 
 bad_frame = np.zeros((128, 128), dtype=np.float32)
 
@@ -58,7 +58,7 @@ No peaks or no patterns is not a failure and does not raise an exception. Apply 
 Use `index_many()` when the batch should stop on its first failure. Use an explicit loop when each frame needs an independent status:
 
 ```python
-from laueanalysis.indexing import IndexingError, InputError
+from lauelab.indexing import IndexingError, InputError
 
 results = {}
 failures = {}
@@ -89,12 +89,12 @@ Do not log full frame arrays. Remove user names, sample names, local paths, and 
 
 ## Reflection simulation failures
 
-{func}`~laueanalysis.analysis.simulate_reflections` uses built-in exception types because its public result does not expose backend status:
+{func}`~lauelab.analysis.simulate_reflections` uses built-in exception types because its public result does not expose backend status:
 
 - `TypeError` reports unsupported package objects or numeric types.
 - `ValueError` reports invalid scientific inputs, including array shapes, non-finite values, atomless crystals, and invalid energy intervals.
 - `RuntimeError` reports private simulator loading, resource, execution, numerical, projection, or candidate-limit failures.
 
-A valid simulation with no on-detector reflections returns an empty {class}`~laueanalysis.analysis.SimulationResult`. It does not raise. The simulator has no fallback, so a `RuntimeError` never means that a simpler calculation replaced the requested one.
+A valid simulation with no on-detector reflections returns an empty {class}`~lauelab.analysis.SimulationResult`. It does not raise. The simulator has no fallback, so a `RuntimeError` never means that a simpler calculation replaced the requested one.
 
 Detector-view preparation and rendering propagate these exceptions. Missing crystal context raises only when `simulation_energy_range_kev` is not `None`.

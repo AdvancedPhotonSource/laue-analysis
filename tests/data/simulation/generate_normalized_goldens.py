@@ -16,7 +16,7 @@ import numpy as np
 
 
 def _load_case(case: str, repository: Path, fixture_dir: Path):
-    from laueanalysis.indexing import Atom, Cell, Crystal, DetectorGeometry, load_crystal
+    from lauelab.indexing import Atom, Cell, Crystal, DetectorGeometry, load_crystal
 
     with np.load(fixture_dir / f"portal_jzt_{case}.npz") as raw:
         metadata = json.loads(raw["metadata_json"].item())
@@ -48,7 +48,7 @@ def main() -> None:
     fixture_dir = Path(__file__).resolve().parent
     repository = fixture_dir.parents[2]
     sys.path.insert(0, str(repository / "src"))
-    from laueanalysis.analysis import simulate_reflections
+    from lauelab.analysis import simulate_reflections
 
     for case in ("ni", "cdte", "si"):
         crystal, reciprocal, detector, source_metadata = _load_case(

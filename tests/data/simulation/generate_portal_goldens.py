@@ -83,7 +83,7 @@ def _metadata(case: str, crystal, reciprocal_rows: np.ndarray) -> dict:
         "occupancy_behavior": "portal adapter did not pass occupancy",
         "python": sys.version.split()[0],
         "numpy": np.__version__,
-        "laueanalysis": importlib.metadata.version("laueanalysis"),
+        "lauelab": importlib.metadata.version("lauelab"),
     }
 
 
@@ -179,7 +179,7 @@ def main() -> None:
     repository = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(portal))
     sys.path.insert(0, str(repository / "src"))
-    from laueanalysis.indexing import Atom, Cell, Crystal, load_crystal
+    from lauelab.indexing import Atom, Cell, Crystal, load_crystal
     from laue_portal.analysis.geometry import DetectorGeometry
     from laue_portal.analysis.jzt_simulation import (
         _PortalDetectorAdapter,

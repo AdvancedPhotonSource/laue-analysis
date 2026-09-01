@@ -1,6 +1,6 @@
 # Indexing pipeline
 
-Indexing converts intensity measurements on a detector into one or more candidate crystal orientations. `laueanalysis` performs this work in three stages and returns their outputs together in a {class}`~laueanalysis.indexing.FrameResult`.
+Indexing converts intensity measurements on a detector into one or more candidate crystal orientations. `lauelab` performs this work in three stages and returns their outputs together in a {class}`~lauelab.indexing.FrameResult`.
 
 ## Inputs and outputs
 
@@ -37,7 +37,7 @@ The returned `qhat` values use the 34-ID-E laboratory convention implemented by 
 
 When you supply a crystal and the frame contains at least two peaks, the orientation indexer compares the measured scattering-vector directions with reflections calculated from the crystal description. It can return zero, one, or multiple candidate patterns.
 
-Each {class}`~laueanalysis.indexing.Pattern` contains an orientation, reciprocal-lattice information, assigned Miller indices, and zero-based indices back into the frame's peak array. No returned pattern is a valid outcome, not an exception.
+Each {class}`~lauelab.indexing.Pattern` contains an orientation, reciprocal-lattice information, assigned Miller indices, and zero-based indices back into the frame's peak array. No returned pattern is a valid outcome, not an exception.
 
 See [Crystal indexing](algorithms/crystal-indexing.md) for supported algorithm details.
 
@@ -65,16 +65,16 @@ Native memory is released before `FrameResult` is returned. Peak and pattern dat
 
 ## One frame or many
 
-Use {func}`~laueanalysis.indexing.index_frame` for a one-off call. It creates a temporary `Indexer` and retains the image by default.
+Use {func}`~lauelab.indexing.index_frame` for a one-off call. It creates a temporary `Indexer` and retains the image by default.
 
-Use {class}`~laueanalysis.indexing.Indexer` when frames share configuration. `Indexer.index()` processes one frame. `Indexer.index_many()` processes an iterable sequentially, preserves order, and does not retain images by default.
+Use {class}`~lauelab.indexing.Indexer` when frames share configuration. `Indexer.index()` processes one frame. `Indexer.index_many()` processes an iterable sequentially, preserves order, and does not retain images by default.
 
 ## Failure model
 
 The in-process API distinguishes three failure classes:
 
-- {class}`~laueanalysis.indexing.InputError` reports invalid configuration, detector selection, frame data, or metadata.
+- {class}`~lauelab.indexing.InputError` reports invalid configuration, detector selection, frame data, or metadata.
 - {class}`MemoryError` reports a native allocation failure.
-- {class}`~laueanalysis.indexing.IndexingError` reports a native numerical or internal failure.
+- {class}`~lauelab.indexing.IndexingError` reports a native numerical or internal failure.
 
 A frame with no peaks or no indexed patterns is a successful result. Check `n_peaks`, `n_patterns`, and `indexed` instead of treating an empty result as an exception.

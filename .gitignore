@@ -8,7 +8,7 @@ __pycache__
 
 
 calibration/*.yml
-laueanalysis.egg-info
+lauelab.egg-info
 /build
 /build-skbuild/
 /build-cmake/
@@ -27,13 +27,13 @@ build
 tests/data/output
 
 # Native outputs never belong under src/ (CMake installs them into the wheel / site-packages)
-src/laueanalysis/indexing/bin/*
-!src/laueanalysis/indexing/bin/__init__.py
+src/lauelab/indexing/bin/*
+!src/lauelab/indexing/bin/__init__.py
 
-src/laueanalysis/reconstruct/bin/reconstructN_cpu
-src/laueanalysis/reconstruct/bin/reconstructN_gpu
-src/laueanalysis/reconstruct/source/recon_gpu/bin/reconstructN_gpu
-src/laueanalysis/reconstruct/source/recon_gpu/bin/*
+src/lauelab/reconstruct/bin/reconstructN_cpu
+src/lauelab/reconstruct/bin/reconstructN_gpu
+src/lauelab/reconstruct/source/recon_gpu/bin/reconstructN_gpu
+src/lauelab/reconstruct/source/recon_gpu/bin/*
 
 .svn
 

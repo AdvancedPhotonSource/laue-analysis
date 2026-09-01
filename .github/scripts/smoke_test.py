@@ -1,4 +1,4 @@
-"""Smoke test for an installed laueanalysis wheel.
+"""Smoke test for an installed lauelab wheel.
 
 Run with ``python -I`` from a directory outside the repository so that only
 the installed package is importable.  Checks that the native library loads,
@@ -16,21 +16,21 @@ from importlib import resources
 def main() -> int:
     from cffi import FFI
 
-    import laueanalysis
-    import laueanalysis.analysis  # noqa: F401
-    import laueanalysis.visualization  # noqa: F401
-    from laueanalysis.indexing._liblaue import get_library
-    from laueanalysis.reconstruct import find_executable
+    import lauelab
+    import lauelab.analysis  # noqa: F401
+    import lauelab.visualization  # noqa: F401
+    from lauelab.indexing._liblaue import get_library
+    from lauelab.reconstruct import find_executable
 
-    print("package:", laueanalysis.__file__)
-    if "site-packages" not in laueanalysis.__file__:
-        print("ERROR: laueanalysis was not imported from an installed location")
+    print("package:", lauelab.__file__)
+    if "site-packages" not in lauelab.__file__:
+        print("ERROR: lauelab was not imported from an installed location")
         return 1
 
     lib = get_library()
     print("liblaue version:", FFI().string(lib.laue_version()).decode())
 
-    bin_dir = resources.files("laueanalysis.indexing.bin")
+    bin_dir = resources.files("lauelab.indexing.bin")
     executables = [str(bin_dir / n) for n in ("peaksearch", "pix2qs", "euler")] + [find_executable()]
     failures = 0
     for exe in executables:

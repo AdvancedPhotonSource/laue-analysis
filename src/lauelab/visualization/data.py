@@ -8,8 +8,8 @@ from typing import Iterable, Literal, Sequence
 
 import numpy as np
 
-from laueanalysis.indexing import Crystal, FrameResult, Geometry
-from laueanalysis.indexing.indexer import PEAK_DTYPE
+from lauelab.indexing import Crystal, FrameResult, Geometry
+from lauelab.indexing.indexer import PEAK_DTYPE
 
 FrameId = str | int
 PatternSelection = Literal["best", "all", "all_frames"] | tuple[int, ...]

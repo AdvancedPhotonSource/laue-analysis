@@ -10,12 +10,12 @@ import pytest
 
 from conftest import requires_liblaue
 
-from laueanalysis.analysis import simulate_reflections
-from laueanalysis.indexing import (
+from lauelab.analysis import simulate_reflections
+from lauelab.indexing import (
     FrameMetadata, Indexer, IndexParams, PeakParams, index_frame, load_crystal,
     load_geometry,
 )
-from laueanalysis.visualization import (
+from lauelab.visualization import (
     DataScope, ResultSet, load_visualization_xml, prepare_detector_view,
     prepare_pole_figure,
 )

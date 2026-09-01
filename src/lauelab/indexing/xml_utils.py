@@ -4,7 +4,7 @@ from typing import List
 from xml.etree import ElementTree
 from pathlib import Path
 
-from laueanalysis.indexing.lau_dataclasses.step import Step
+from lauelab.indexing.lau_dataclasses.step import Step
 
 
 def write_step_xml(step: Step, xml_file: str) -> None:

@@ -1,7 +1,7 @@
 # Simulation baseline fixtures
 
 These compressed NumPy fixtures capture raw portal/JZT output before the
-backend was moved into `laueanalysis`. They deliberately preserve the portal
+backend was moved into `lauelab`. They deliberately preserve the portal
 adapter's strict energy bounds, omitted occupancy, legacy harmonic hash, and
 legacy ordering so later normalization differences can be reviewed.
 

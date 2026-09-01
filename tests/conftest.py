@@ -1,6 +1,6 @@
 """Shared pytest configuration.
 
-Native availability is decided from the *imported* ``laueanalysis`` package
+Native availability is decided from the *imported* ``lauelab`` package
 (installed or editable), never from a path inside the repository, so a build
 that fails to ship a native file shows up as a skip rather than a silent pass.
 
@@ -29,11 +29,11 @@ def native_file_available(package: str, name: str) -> bool:
         return False
 
 
-LIBLAUE_AVAILABLE = native_file_available("laueanalysis.indexing.bin", "liblaue.so")
+LIBLAUE_AVAILABLE = native_file_available("lauelab.indexing.bin", "liblaue.so")
 
 requires_liblaue = pytest.mark.skipif(
     not LIBLAUE_AVAILABLE,
-    reason="liblaue.so is not present in the installed laueanalysis package",
+    reason="liblaue.so is not present in the installed lauelab package",
 )
 
 
@@ -49,7 +49,7 @@ def pytest_addoption(parser):
 def pytest_sessionstart(session):
     if session.config.getoption("--require-native") and not LIBLAUE_AVAILABLE:
         raise pytest.UsageError(
-            "--require-native: liblaue.so is not present in the installed laueanalysis package"
+            "--require-native: liblaue.so is not present in the installed lauelab package"
         )
 
 

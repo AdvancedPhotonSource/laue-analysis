@@ -5,7 +5,7 @@ native indexing failures. Native allocation failures use Python's built-in
 {class}`MemoryError`.
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoexception:: LaueError
 

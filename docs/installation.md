@@ -1,6 +1,6 @@
 # Installation
 
-During alpha development, install `laueanalysis` from source in the Conda environment supplied by this repository. `python -m pip install .` compiles the native indexing library and command-line programs with CMake, then installs the Python package. The project does not publish prebuilt wheels or Conda packages.
+During alpha development, install `lauelab` from source in the Conda environment supplied by this repository. `python -m pip install .` compiles the native indexing library and command-line programs with CMake, then installs the Python package. The project does not publish prebuilt wheels or Conda packages.
 
 Pip can create a temporary wheel while it installs the source tree. This is part of the build process and does not avoid native compilation. Wheels created with `python -m build` are development artifacts. They require compatible native libraries and are not supported outside the environment used to build them.
 
@@ -33,7 +33,7 @@ CUDA is not required. See [GPU reconstruction](#gpu-reconstruction).
 
 ## Install with conda (recommended)
 
-Use this path at APS and for alpha testing. `environment.yml` provides the compiler and native libraries from conda-forge. Build, install, and run `laueanalysis` in this environment so the native programs can load the same GSL and HDF5 libraries.
+Use this path at APS and for alpha testing. `environment.yml` provides the compiler and native libraries from conda-forge. Build, install, and run `lauelab` in this environment so the native programs can load the same GSL and HDF5 libraries.
 
 1. Clone the repository:
 
@@ -55,7 +55,7 @@ Use this path at APS and for alpha testing. `environment.yml` provides the compi
    $ python -m pip install .
    ```
 
-## Using laueanalysis in Jupyter
+## Using lauelab in Jupyter
 
 The maintained Conda environment includes JupyterLab, IPython kernel support, and the `nbformat` package that Plotly uses for notebook display. Register the environment as a named kernel:
 
@@ -101,21 +101,21 @@ Run these commands after installation.
 1. Check the Python package:
 
    ```console
-   $ python -c "from laueanalysis.indexing import Indexer, index_frame; print('import ok')"
+   $ python -c "from lauelab.indexing import Indexer, index_frame; print('import ok')"
    import ok
    ```
 
 2. Check that the native indexing library loads:
 
    ```console
-   $ python -c "from laueanalysis.indexing._liblaue import get_library; get_library(); print('native indexing ok')"
+   $ python -c "from lauelab.indexing._liblaue import get_library; get_library(); print('native indexing ok')"
    native indexing ok
    ```
 
 3. Check that the CPU reconstruction program runs:
 
    ```console
-   $ python -c "from laueanalysis.reconstruct import find_executable; print(find_executable())"
+   $ python -c "from lauelab.reconstruct import find_executable; print(find_executable())"
    ```
 
 The second command loads a private module only as an installation check. Do not use `_liblaue` as an application API.
@@ -126,9 +126,9 @@ A default installation builds all of these:
 
 | Component | Location in the installed package | Required |
 | --- | --- | --- |
-| `liblaue.so` | `laueanalysis/indexing/bin/` | Yes. The in-process indexing API needs it. |
-| `peaksearch`, `pix2qs`, `euler` | `laueanalysis/indexing/bin/` | Yes. Used by the LaueGo compatibility functions. |
-| `reconstructN_cpu` | `laueanalysis/reconstruct/bin/` | Yes. Used by `reconstruct()`. |
+| `liblaue.so` | `lauelab/indexing/bin/` | Yes. The in-process indexing API needs it. |
+| `peaksearch`, `pix2qs`, `euler` | `lauelab/indexing/bin/` | Yes. Used by the LaueGo compatibility functions. |
+| `reconstructN_cpu` | `lauelab/reconstruct/bin/` | Yes. Used by `reconstruct()`. |
 
 The in-process indexing API is the main path for new code. The LaueGo compatibility functions and their command-line programs remain supported for existing workflows. The build stops with an error when a required dependency is missing or a component fails to compile. It does not install a partial package.
 
@@ -140,7 +140,7 @@ Native code is compiled for the generic x86-64 baseline with SSE2. The same inst
 
 CPU reconstruction is the supported path. The package does not build or distribute the CUDA reconstruction program, and it does not detect CUDA during installation. `reconstruct_gpu()` can run an externally installed `reconstructN_gpu` executable from `PATH`. It raises `FileNotFoundError` when the executable is unavailable.
 
-The source distribution and repository include the CUDA source and a stand-alone Makefile in `src/laueanalysis/reconstruct/source/recon_gpu/`. This build is not part of the maintained package installation.
+The source distribution and repository include the CUDA source and a stand-alone Makefile in `src/lauelab/reconstruct/source/recon_gpu/`. This build is not part of the maintained package installation.
 
 ## Troubleshooting
 
@@ -156,7 +156,7 @@ The source distribution and repository include the CUDA source and a stand-alone
 
 Open an issue in the [laue-analysis repository](https://github.com/AdvancedPhotonSource/laue-analysis/issues). Include:
 
-- The `laueanalysis` version or Git commit
+- The `lauelab` version or Git commit
 - Operating system, Python version, and whether you used conda or a virtual environment
 - The installation command
 - The complete compiler, CMake, or linker error

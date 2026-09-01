@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from laueanalysis.indexing import Atom, Cell, Crystal, load_crystal
+from lauelab.indexing import Atom, Cell, Crystal, load_crystal
 
 
 @pytest.mark.parametrize(

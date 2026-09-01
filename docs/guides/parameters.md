@@ -1,13 +1,13 @@
 # Parameters
 
-{class}`~laueanalysis.indexing.PeakParams` controls peak detection and fitting. {class}`~laueanalysis.indexing.IndexParams` controls orientation indexing. Both are immutable dataclasses that the `Indexer` validates during construction.
+{class}`~lauelab.indexing.PeakParams` controls peak detection and fitting. {class}`~lauelab.indexing.IndexParams` controls orientation indexing. Both are immutable dataclasses that the `Indexer` validates during construction.
 
 ## Start with the defaults
 
 Use default values for an initial API check, but do not assume that they are appropriate for every detector, exposure, or material.
 
 ```python
-from laueanalysis.indexing import Indexer, IndexParams, PeakParams
+from lauelab.indexing import Indexer, IndexParams, PeakParams
 
 indexer = Indexer(
     "geometry.xml",
@@ -115,4 +115,4 @@ For a reproducible comparison, record:
 
 ## Invalid configurations
 
-The `Indexer` raises {class}`~laueanalysis.indexing.InputError` for invalid parameter ranges, unsupported peak models, malformed `hkl_prefer`, and `max_data` below two. See [Configuration](../reference/configuration.md) for exact field definitions.
+The `Indexer` raises {class}`~lauelab.indexing.InputError` for invalid parameter ranges, unsupported peak models, malformed `hkl_prefer`, and `max_data` below two. See [Configuration](../reference/configuration.md) for exact field definitions.

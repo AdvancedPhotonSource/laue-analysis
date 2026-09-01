@@ -3,9 +3,9 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from laueanalysis.indexing import FrameResult, Pattern
-from laueanalysis.indexing.indexer import PEAK_DTYPE
-from laueanalysis.visualization import DataScope, ResultSet, VisualizationDataset
+from lauelab.indexing import FrameResult, Pattern
+from lauelab.indexing.indexer import PEAK_DTYPE
+from lauelab.visualization import DataScope, ResultSet, VisualizationDataset
 
 
 def _pattern(count, goodness=10.0):

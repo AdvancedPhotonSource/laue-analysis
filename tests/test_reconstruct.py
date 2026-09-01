@@ -11,8 +11,8 @@ import numpy as np
 import h5py
 import shutil
 
-from laueanalysis.reconstruct.reconstruct import _validate_executable
-from laueanalysis.reconstruct import (
+from lauelab.reconstruct.reconstruct import _validate_executable
+from lauelab.reconstruct import (
     reconstruct,
     find_executable,
     ReconstructionResult,
@@ -51,7 +51,7 @@ def mock_subprocess():
 
 @pytest.fixture
 def mock_executable():
-    with patch("laueanalysis.reconstruct.reconstruct._find_executable") as mock:
+    with patch("lauelab.reconstruct.reconstruct._find_executable") as mock:
         mock.side_effect = lambda name="reconstructN_cpu": f"/path/to/{name}"
         yield mock
 
@@ -217,7 +217,7 @@ class TestReconstruct:
     @pytest.mark.parametrize("reconstruct_function", [reconstruct, reconstruct_gpu])
     def test_invalid_wire_edge(self, mock_executable, reconstruct_function):
         """Test that invalid wire edge raises ValueError."""
-        with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
+        with patch('lauelab.reconstruct.reconstruct._validate_executable'):
             with pytest.raises(ValueError, match="Invalid wire_edge"):
                 reconstruct_function(
                     'input.h5', 'output_', 'geo.xml', (0, 10),
@@ -227,7 +227,7 @@ class TestReconstruct:
     @pytest.mark.parametrize("reconstruct_function", [reconstruct, reconstruct_gpu])
     def test_invalid_depth_range(self, mock_executable, reconstruct_function):
         """Test that invalid depth range raises ValueError."""
-        with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
+        with patch('lauelab.reconstruct.reconstruct._validate_executable'):
             with pytest.raises(ValueError, match="Invalid depth range"):
                 reconstruct_function(
                     'input.h5', 'output_', 'geo.xml', (10, 5)  # Start > end
@@ -236,7 +236,7 @@ class TestReconstruct:
     
     def test_find_executable_function(self):
         """Test the public find_executable function."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:
+        with patch('lauelab.reconstruct.reconstruct._find_executable') as mock:
             mock.return_value = '/path/to/exe'
             
             path = find_executable()
@@ -245,14 +245,14 @@ class TestReconstruct:
     
     def test_executable_not_found(self):
         """Test behavior when executable is not found."""
-        with patch('laueanalysis.reconstruct.reconstruct.shutil.which', return_value=None):
-            with patch('laueanalysis.reconstruct.reconstruct.resources.files', side_effect=ModuleNotFoundError):
+        with patch('lauelab.reconstruct.reconstruct.shutil.which', return_value=None):
+            with patch('lauelab.reconstruct.reconstruct.resources.files', side_effect=ModuleNotFoundError):
                 with pytest.raises(FileNotFoundError, match="not found"):
                     reconstruct('in.h5', 'out_', 'geo.xml', (0, 10))
     
     def test_subprocess_timeout(self, mock_executable):
         """Test handling of subprocess timeout."""
-        with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
+        with patch('lauelab.reconstruct.reconstruct._validate_executable'):
             with patch('subprocess.run', side_effect=subprocess.TimeoutExpired('cmd', 30)):
                 result = reconstruct(
                     'input.h5', 'output_', 'geo.xml', (0, 10),
@@ -264,7 +264,7 @@ class TestReconstruct:
                 assert result.return_code == -1
     
     def test_executable_validation_wraps_oserror(self):
-        from laueanalysis.reconstruct.reconstruct import _validate_executable
+        from lauelab.reconstruct.reconstruct import _validate_executable
 
         with patch('subprocess.run', side_effect=OSError("Exec format error")):
             with pytest.raises(RuntimeError, match="Exec format error"):
@@ -272,7 +272,7 @@ class TestReconstruct:
 
     def test_subprocess_exception(self, mock_executable):
         """Test handling of subprocess exceptions."""
-        with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
+        with patch('lauelab.reconstruct.reconstruct._validate_executable'):
             with patch('subprocess.run', side_effect=Exception("Test error")):
                 result = reconstruct(
                     'input.h5', 'output_', 'geo.xml', (0, 10)
@@ -290,7 +290,7 @@ class TestReconstruct:
             # If we get here, executable was found
             
             # Test that validation doesn't raise
-            from laueanalysis.reconstruct.reconstruct import _validate_executable
+            from lauelab.reconstruct.reconstruct import _validate_executable
             _validate_executable(exe_path)
             
         except FileNotFoundError:
@@ -404,7 +404,7 @@ class TestReconstructGPU:
 
     def test_find_gpu_executable_function(self):
         """Test the public find_gpu_executable function."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock:
+        with patch('lauelab.reconstruct.reconstruct._find_executable') as mock:
             mock.return_value = '/path/to/gpu/exe'
             
             path = find_gpu_executable()
@@ -413,29 +413,29 @@ class TestReconstructGPU:
     
     def test_gpu_available_true(self):
         """Test gpu_available when GPU is available."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock_find:
+        with patch('lauelab.reconstruct.reconstruct._find_executable') as mock_find:
             mock_find.return_value = '/path/to/reconstructN_gpu'
-            with patch('laueanalysis.reconstruct.reconstruct._validate_executable'):
+            with patch('lauelab.reconstruct.reconstruct._validate_executable'):
                 assert gpu_available() is True
     
     def test_gpu_available_false_not_found(self):
         """Test gpu_available when GPU executable not found."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock_find:
+        with patch('lauelab.reconstruct.reconstruct._find_executable') as mock_find:
             mock_find.side_effect = FileNotFoundError("Not found")
             assert gpu_available() is False
     
     def test_gpu_available_false_validation_fails(self):
         """Test gpu_available when GPU executable validation fails."""
-        with patch('laueanalysis.reconstruct.reconstruct._find_executable') as mock_find:
+        with patch('lauelab.reconstruct.reconstruct._find_executable') as mock_find:
             mock_find.return_value = '/path/to/reconstructN_gpu'
-            with patch('laueanalysis.reconstruct.reconstruct._validate_executable') as mock_validate:
+            with patch('lauelab.reconstruct.reconstruct._validate_executable') as mock_validate:
                 mock_validate.side_effect = RuntimeError("Validation failed")
                 assert gpu_available() is False
     
     def test_gpu_executable_not_found(self):
         """Test behavior when GPU executable is not found."""
-        with patch('laueanalysis.reconstruct.reconstruct.shutil.which', return_value=None):
-            with patch('laueanalysis.reconstruct.reconstruct.resources.files', side_effect=ModuleNotFoundError):
+        with patch('lauelab.reconstruct.reconstruct.shutil.which', return_value=None):
+            with patch('lauelab.reconstruct.reconstruct.resources.files', side_effect=ModuleNotFoundError):
                 with pytest.raises(FileNotFoundError, match="reconstructN_gpu"):
                     reconstruct_gpu('in.h5', 'out_', 'geo.xml', (0, 10))
     
@@ -450,7 +450,7 @@ class TestReconstructGPU:
             # If we get here, GPU executable was found
             
             # Test that validation doesn't raise
-            from laueanalysis.reconstruct.reconstruct import _validate_executable
+            from lauelab.reconstruct.reconstruct import _validate_executable
             _validate_executable(exe_path)
             
         except FileNotFoundError:

@@ -1,4 +1,4 @@
-# Maintained user/development environment for laueanalysis.
+# Maintained user/development environment for lauelab.
 #
 # Create it, activate it, then install the package from source:
 #     conda env create -f environment.yml

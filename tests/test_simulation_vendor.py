@@ -55,7 +55,7 @@ class _BaselineDetector:
 
 
 def _simulate_raw(golden):
-    from laueanalysis.analysis._vendor.jzt import Lattice, LatticeBase, LauePattern
+    from lauelab.analysis._vendor.jzt import Lattice, LatticeBase, LauePattern
 
     metadata = json.loads(golden["metadata_json"].item())
     crystal = metadata["crystal"]
@@ -134,14 +134,14 @@ def test_normal_imports_do_not_load_vendor_or_emit_warnings():
         import warnings
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            import laueanalysis
-            import laueanalysis.analysis
+            import lauelab
+            import lauelab.analysis
         print(json.dumps({
             'vendor_loaded': any(
-                name.startswith('laueanalysis.analysis._vendor') for name in sys.modules
+                name.startswith('lauelab.analysis._vendor') for name in sys.modules
             ),
             'visualization_loaded': any(
-                name.startswith('laueanalysis.visualization') for name in sys.modules
+                name.startswith('lauelab.visualization') for name in sys.modules
             ),
             'plotly_loaded': any(name.startswith('plotly') for name in sys.modules),
             'warnings': [str(item.message) for item in caught],
@@ -166,7 +166,7 @@ def test_normal_imports_do_not_load_vendor_or_emit_warnings():
 def test_atomic_data_is_a_package_resource():
     from importlib import resources
 
-    resource = resources.files("laueanalysis.analysis._vendor.jzt").joinpath("elementData.xml")
+    resource = resources.files("lauelab.analysis._vendor.jzt").joinpath("elementData.xml")
     assert resource.is_file()
     assert resource.stat().st_size > 100_000
 

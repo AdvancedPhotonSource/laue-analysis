@@ -61,7 +61,7 @@ Use `Geometry.pixels_to_q()` to convert known peak coordinates without running p
 ```python
 import numpy as np
 
-from laueanalysis.indexing import load_geometry
+from lauelab.indexing import load_geometry
 
 geometry = load_geometry("geometry.xml")
 peaks_xy = np.array([[720.25, 512.75], [1311.50, 984.00]])

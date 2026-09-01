@@ -6,7 +6,7 @@ ordinal positions among active detectors, and slots may be sparse.
 ## Load Geometry
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autofunction:: load_geometry
 ```
@@ -14,7 +14,7 @@ ordinal positions among active detectors, and slots may be sparse.
 ## Parsed Geometry
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoclass:: Geometry
    :members: detector_count, find_detector, detector, pixels_to_q

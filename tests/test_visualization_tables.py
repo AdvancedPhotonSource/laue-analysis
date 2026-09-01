@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from laueanalysis.indexing import FrameResult, Pattern
-from laueanalysis.indexing.indexer import PEAK_DTYPE
-from laueanalysis.visualization import (
+from lauelab.indexing import FrameResult, Pattern
+from lauelab.indexing.indexer import PEAK_DTYPE
+from lauelab.visualization import (
     AXIS_OPTIONS,
     COLOR_MODES,
     PALETTE_OPTIONS,

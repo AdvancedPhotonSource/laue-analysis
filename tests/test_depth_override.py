@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from laueanalysis.indexing import IndexingResult, lauego
+from lauelab.indexing import IndexingResult, lauego
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,8 +119,8 @@ def test_depth_override_applied_in_peaks_header(template_has_depth: bool):
     template = PEAKS_TEMPLATE_WITH_DEPTH if template_has_depth else PEAKS_TEMPLATE_NO_DEPTH
 
     with tempfile.TemporaryDirectory() as temp_dir, \
-         patch("laueanalysis.indexing.index._run_peaksearch", _make_fake_run_peaksearch(template)), \
-         patch("laueanalysis.indexing.index._run_p2q", _fake_run_p2q):
+         patch("lauelab.indexing.index._run_peaksearch", _make_fake_run_peaksearch(template)), \
+         patch("lauelab.indexing.index._run_p2q", _fake_run_p2q):
         # Run indexing with depth_override; executables are mocked
         result = lauego(
             input_image=test_file,

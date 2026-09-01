@@ -4,8 +4,8 @@ import math
 
 import h5py
 
-from laueanalysis.indexing.lau_dataclasses.detector import Detector
-from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
+from lauelab.indexing.lau_dataclasses.detector import Detector
+from lauelab.indexing.lau_dataclasses.indexing import Indexing
 
 @dataclass
 class Step:

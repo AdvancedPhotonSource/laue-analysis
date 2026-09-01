@@ -1,4 +1,4 @@
-# Native build for laueanalysis.
+# Native build for lauelab.
 #
 # This is the single maintained build definition for the CPU native
 # components. It is consumed both directly
@@ -8,7 +8,7 @@
 
 cmake_minimum_required(VERSION 3.24)
 
-project(laueanalysis
+project(lauelab
   VERSION 0.1.0
   DESCRIPTION "Native components for Laue diffraction analysis"
   LANGUAGES C)
@@ -31,10 +31,10 @@ set(LAUE_INSTALL_RPATH "$ORIGIN/../../../../.."
 # Global compile settings (numerical contract: -O2, SSE2 baseline, no fast-math)
 # ---------------------------------------------------------------------------
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-  message(FATAL_ERROR "laueanalysis currently supports Linux x86-64 only (got ${CMAKE_SYSTEM_PROCESSOR})")
+  message(FATAL_ERROR "lauelab currently supports Linux x86-64 only (got ${CMAKE_SYSTEM_PROCESSOR})")
 endif()
 if(NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
-  message(WARNING "laueanalysis is validated with GCC; ${CMAKE_C_COMPILER_ID} is unsupported")
+  message(WARNING "lauelab is validated with GCC; ${CMAKE_C_COMPILER_ID} is unsupported")
 endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -131,15 +131,15 @@ check_ipo_supported(RESULT LAUE_IPO_SUPPORTED OUTPUT LAUE_IPO_MESSAGE LANGUAGES 
 # ---------------------------------------------------------------------------
 # Source locations
 # ---------------------------------------------------------------------------
-set(LAUE_PKG src/laueanalysis)
+set(LAUE_PKG src/lauelab)
 set(PEAKSEARCH_SRC ${LAUE_PKG}/indexing/src/peaksearch/src)
 set(PIXELS2QS_SRC  ${LAUE_PKG}/indexing/src/pixels2qs/src)
 set(EULER_SRC      ${LAUE_PKG}/indexing/src/euler/src)
 set(LIBLAUE_SRC    ${LAUE_PKG}/indexing/src/liblaue)
 set(RECON_CPU_SRC  ${LAUE_PKG}/reconstruct/source/recon_cpu/source)
 
-set(LAUE_INDEXING_BIN_DIR   laueanalysis/indexing/bin)
-set(LAUE_RECONSTRUCT_BIN_DIR laueanalysis/reconstruct/bin)
+set(LAUE_INDEXING_BIN_DIR   lauelab/indexing/bin)
+set(LAUE_RECONSTRUCT_BIN_DIR lauelab/reconstruct/bin)
 
 # ---------------------------------------------------------------------------
 # liblaue.so — in-process indexing library (required)
@@ -292,7 +292,7 @@ install(CODE "
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
-message(STATUS "laueanalysis native build:")
+message(STATUS "lauelab native build:")
 message(STATUS "  build type            ${CMAKE_BUILD_TYPE}")
 message(STATUS "  LAUE_BUILD_LAUEGO     ${LAUE_BUILD_LAUEGO}")
 message(STATUS "  LAUE_BUILD_RECONSTRUCTION ${LAUE_BUILD_RECONSTRUCTION}")

@@ -6,7 +6,7 @@ geometry file, each reflection becomes a Gaussian spot on a constant background
 (``BACKGROUND_NOISE_LAMBDA`` adds Poisson noise if a noisy variant is ever
 needed; it is zero so the frames stay small). The reference outputs come from the LaueGo
 command-line programs (``peaksearch``, ``pix2qs``, ``euler``) run through
-``laueanalysis.indexing.lauego`` on those frames, so the tests compare the
+``lauelab.indexing.lauego`` on those frames, so the tests compare the
 in-process indexer against an independent implementation.
 
 Everything is deterministic (fixed seed, fixed orientations). Regenerate only
@@ -72,8 +72,8 @@ def rotation_matrix(axis, angle_deg: float) -> np.ndarray:
 
 
 def reflections_for(grains):
-    from laueanalysis.analysis import lattice_params_to_reciprocal, simulate_reflections
-    from laueanalysis.indexing import load_crystal, load_geometry
+    from lauelab.analysis import lattice_params_to_reciprocal, simulate_reflections
+    from lauelab.indexing import load_crystal, load_geometry
 
     crystal = load_crystal(CRYSTAL_FILE)
     geometry = load_geometry(GEOMETRY_FILE)
@@ -133,7 +133,7 @@ def write_frame(path: Path, image: np.ndarray, scan_number: int, detector, roi=N
 
 
 def run_lauego_baseline(frame: Path, out_dir: Path) -> dict:
-    from laueanalysis.indexing import lauego
+    from lauelab.indexing import lauego
 
     work = Path(tempfile.mkdtemp(prefix="lauego_"))
     result = lauego(str(frame), str(work), str(GEOMETRY_FILE), str(CRYSTAL_FILE),
@@ -168,8 +168,8 @@ def sha256(path: Path) -> str:
 
 
 def main() -> int:
-    import laueanalysis
-    from laueanalysis.indexing._liblaue import version as liblaue_version
+    import lauelab
+    from lauelab.indexing._liblaue import version as liblaue_version
 
     rng = np.random.default_rng(SEED)
     shutil.rmtree(FRAMES_DIR, ignore_errors=True)
@@ -192,7 +192,7 @@ def main() -> int:
     git = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=REPO).stdout.strip()
     provenance = {
         "generated_at_commit": git,
-        "laueanalysis_version": laueanalysis.__version__ if hasattr(laueanalysis, "__version__") else "0.1.0",
+        "lauelab_version": lauelab.__version__ if hasattr(lauelab, "__version__") else "0.1.0",
         "liblaue_version": liblaue_version(),
         "numpy": np.__version__, "h5py": h5py.__version__,
         "seed": SEED, "geometry_file": str(GEOMETRY_FILE.relative_to(REPO)),

@@ -2,8 +2,8 @@ from xml.etree.ElementTree import Element, SubElement
 from dataclasses import dataclass, field
 import math
 
-from laueanalysis.indexing.lau_dataclasses.roi import ROI
-from laueanalysis.indexing.lau_dataclasses.peaksXY import PeaksXY
+from lauelab.indexing.lau_dataclasses.roi import ROI
+from lauelab.indexing.lau_dataclasses.peaksXY import PeaksXY
 
 
 @dataclass

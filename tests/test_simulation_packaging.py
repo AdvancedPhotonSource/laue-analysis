@@ -2,7 +2,7 @@
 
 from importlib import resources
 
-import laueanalysis.analysis._vendor.jzt as jzt
+import lauelab.analysis._vendor.jzt as jzt
 
 
 def test_private_jzt_resources_are_available():

@@ -1,4 +1,4 @@
-"""Sphinx configuration for the laueanalysis documentation."""
+"""Sphinx configuration for the lauelab documentation."""
 
 from pathlib import Path
 import sys
@@ -36,7 +36,7 @@ nitpicky = True
 nitpick_ignore = [
     ("py:class", "Path"),
     ("py:class", "np.ndarray"),
-    ("py:class", "laueanalysis.indexing._liblaue.DetectorGeometry"),
+    ("py:class", "lauelab.indexing._liblaue.DetectorGeometry"),
 ]
 
 autodoc_member_order = "bysource"
@@ -60,9 +60,9 @@ intersphinx_disabled_reftypes = ["std:doc"]
 
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
-html_title = "laueanalysis documentation"
-html_logo = "_static/laueanalysis-logo.svg"
-html_favicon = "_static/laueanalysis-logo.svg"
+html_title = "lauelab documentation"
+html_logo = "_static/lauelab-logo.svg"
+html_favicon = "_static/lauelab-logo.svg"
 html_baseurl = "https://advancedphotonsource.github.io/laue-analysis/"
 html_theme_options = {
     "github_url": "https://github.com/AdvancedPhotonSource/laue-analysis",

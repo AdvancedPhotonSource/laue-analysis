@@ -12,13 +12,13 @@ import warnings
 import numpy as np
 import pytest
 
-import laueanalysis.analysis.simulation as simulation
-from laueanalysis.analysis import (
+import lauelab.analysis.simulation as simulation
+from lauelab.analysis import (
     SimulationResult,
     lattice_params_to_reciprocal,
     simulate_reflections,
 )
-from laueanalysis.indexing import (
+from lauelab.indexing import (
     Atom,
     Cell,
     Crystal,
@@ -572,7 +572,7 @@ def test_public_surface_has_no_backend_or_fallback_controls():
         "energy_range_kev",
         "depth",
     ]
-    import laueanalysis.analysis as analysis
+    import lauelab.analysis as analysis
 
     assert len(analysis.__all__) == 24
     assert "SimulationResult" in analysis.__all__

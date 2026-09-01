@@ -101,12 +101,12 @@ ffi.cdef(
 
 
 def _load_library():
-    library = resources.files("laueanalysis.indexing.bin") / "liblaue.so"
+    library = resources.files("lauelab.indexing.bin") / "liblaue.so"
     try:
         return ffi.dlopen(fspath(library))
     except OSError as error:
         raise ImportError(
-            "liblaue.so is unavailable; rebuild laueanalysis to use the in-process indexer"
+            "liblaue.so is unavailable; rebuild lauelab to use the in-process indexer"
         ) from error
 
 

@@ -6,9 +6,9 @@ import plotly.graph_objects as go
 import pytest
 
 
-from laueanalysis.indexing import FrameResult, Pattern, load_crystal, load_geometry
-from laueanalysis.indexing.indexer import PEAK_DTYPE
-from laueanalysis.visualization import (
+from lauelab.indexing import FrameResult, Pattern, load_crystal, load_geometry
+from lauelab.indexing.indexer import PEAK_DTYPE
+from lauelab.visualization import (
     DataScope,
     DetectorSimulationData,
     PlotlySelection,
@@ -227,7 +227,7 @@ def test_plot_detector_view_renders_simulated_reflections_and_updates_by_role():
 
 
 def test_plot_detector_view_raw_simulation_argument_is_prepared_once(monkeypatch):
-    import laueanalysis.visualization.rendering as rendering
+    import lauelab.visualization.rendering as rendering
 
     prepared = prepare_detector_view(_result_set(), frame_id="a")
     calls = []
@@ -265,7 +265,7 @@ def test_plot_detector_view_raw_simulation_argument_is_prepared_once(monkeypatch
 
 
 def test_plot_detector_view_propagates_preparation_errors(monkeypatch):
-    import laueanalysis.visualization.rendering as rendering
+    import lauelab.visualization.rendering as rendering
 
     monkeypatch.setattr(
         rendering,

@@ -7,9 +7,9 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from laueanalysis.analysis import lattice_params_to_reciprocal, reciprocal_to_orientation
-from laueanalysis.indexing import Atom, Cell, Crystal, Geometry
-from laueanalysis.indexing.indexer import PEAK_DTYPE
+from lauelab.analysis import lattice_params_to_reciprocal, reciprocal_to_orientation
+from lauelab.indexing import Atom, Cell, Crystal, Geometry
+from lauelab.indexing.indexer import PEAK_DTYPE
 
 from .data import VisualizationDataset, _validate_frame_ids
 

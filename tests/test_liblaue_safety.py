@@ -14,7 +14,7 @@ pytestmark = requires_liblaue
 
 
 def _run_python(script, *arguments):
-    environment = dict(os.environ)  # child imports the same installed laueanalysis as the test runner
+    environment = dict(os.environ)  # child imports the same installed lauelab as the test runner
     return subprocess.run(
         [sys.executable, "-c", script, *map(str, arguments)],
         cwd=ROOT,
@@ -27,7 +27,7 @@ def _run_python(script, *arguments):
 
 def test_invalid_native_calls_return_errors_without_terminating_python():
     script = r'''
-from laueanalysis.indexing._liblaue import ffi, get_library
+from lauelab.indexing._liblaue import ffi, get_library
 
 lib = get_library()
 error = ffi.new("char[256]")
@@ -77,7 +77,7 @@ def test_out_of_range_detector_slot_is_rejected_without_crashing(tmp_path):
     path.write_text(source.read_text().replace('<Detector N="2">', '<Detector N="3">'))
     script = r'''
 import sys
-from laueanalysis.indexing._liblaue import Geometry
+from lauelab.indexing._liblaue import Geometry
 
 try:
     Geometry(sys.argv[1])
@@ -95,7 +95,7 @@ else:
 def test_saturated_frame_does_not_overflow_native_stack():
     script = r'''
 import numpy as np
-from laueanalysis.indexing import Indexer, PeakParams
+from lauelab.indexing import Indexer, PeakParams
 
 indexer = Indexer(
     "tests/data/geo/geoN_2022-03-29_14-15-05.xml",
@@ -119,7 +119,7 @@ def test_repeated_peak_search_releases_native_allocations(tmp_path):
 
     from importlib import resources
 
-    library = Path(str(resources.files("laueanalysis.indexing.bin") / "liblaue.so"))
+    library = Path(str(resources.files("lauelab.indexing.bin") / "liblaue.so"))
     source = ROOT / "tests/native/peaksearch_memory.c"
     executable = tmp_path / "peaksearch-memory"
     compiled = subprocess.run(
@@ -128,7 +128,7 @@ def test_repeated_peak_search_releases_native_allocations(tmp_path):
             "-std=c99",
             "-O0",
             "-g",
-            f"-I{ROOT / 'src/laueanalysis/indexing/src/liblaue'}",
+            f"-I{ROOT / 'src/lauelab/indexing/src/liblaue'}",
             str(source),
             str(library),
             "-lm",

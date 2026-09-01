@@ -5,7 +5,7 @@ The public reflection-simulation API has two symbols. It accepts package crystal
 See [Simulate detector reflections](../guides/simulation.md) for input selection, numerical behavior, and examples.
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.analysis
+.. currentmodule:: lauelab.analysis
 
 .. autoclass:: SimulationResult
    :members: missing_from

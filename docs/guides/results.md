@@ -1,6 +1,6 @@
 # Results
 
-{class}`~laueanalysis.indexing.FrameResult` contains the output and provenance for one processed frame. Native allocations are released before the object is returned. Peak and pattern data are copied into NumPy arrays.
+{class}`~lauelab.indexing.FrameResult` contains the output and provenance for one processed frame. Native allocations are released before the object is returned. Peak and pattern data are copied into NumPy arrays.
 
 ## Frame-level status
 
@@ -47,7 +47,7 @@ A frame coordinate `(x, y)` corresponds to NumPy access `image[y, x]`. Fitted co
 
 ## Patterns
 
-Each {class}`~laueanalysis.indexing.Pattern` represents one orientation returned by the native indexer.
+Each {class}`~lauelab.indexing.Pattern` represents one orientation returned by the native indexer.
 
 | Field | Shape | Units | Meaning |
 |---|---|---|---|

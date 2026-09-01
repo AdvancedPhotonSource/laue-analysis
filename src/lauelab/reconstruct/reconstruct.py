@@ -56,7 +56,7 @@ def _find_executable(name: str = 'reconstructN_cpu') -> str:
     """
     # First try the package bin directory
     try:
-        bin_files = resources.files('laueanalysis.reconstruct.bin')
+        bin_files = resources.files('lauelab.reconstruct.bin')
         exe_path = bin_files / name
         if exe_path.is_file():
             return str(exe_path)
@@ -71,14 +71,14 @@ def _find_executable(name: str = 'reconstructN_cpu') -> str:
     if name == 'reconstructN_gpu':
         raise FileNotFoundError(
             "Reconstruction executable 'reconstructN_gpu' not found. "
-            "GPU reconstruction is not part of the laueanalysis package build. "
+            "GPU reconstruction is not part of the lauelab package build. "
             "Build it separately with CUDA from "
-            "src/laueanalysis/reconstruct/source/recon_gpu (see its README.md) "
+            "src/lauelab/reconstruct/source/recon_gpu (see its README.md) "
             "and put the executable on PATH, or use reconstruct() for the CPU program."
         )
     raise FileNotFoundError(
-        f"Reconstruction executable '{name}' not found in the installed laueanalysis "
-        "package or on PATH. Reinstall laueanalysis so the native build runs, "
+        f"Reconstruction executable '{name}' not found in the installed lauelab "
+        "package or on PATH. Reinstall lauelab so the native build runs, "
         "or put the executable on PATH."
     )
 

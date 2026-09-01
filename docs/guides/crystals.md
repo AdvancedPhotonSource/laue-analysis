@@ -4,10 +4,10 @@ Orientation indexing needs a crystal description containing a unit cell and an I
 
 ## Load a crystal
 
-{func}`~laueanalysis.indexing.load_crystal` reads the supported crystal XML structure:
+{func}`~lauelab.indexing.load_crystal` reads the supported crystal XML structure:
 
 ```python
-from laueanalysis.indexing import load_crystal
+from lauelab.indexing import load_crystal
 
 crystal = load_crystal("Ni.xml")
 print(crystal.name)
@@ -24,10 +24,10 @@ It reads atom sites from `atom_site` elements. Sites without `fract` or `fract_x
 
 ## Construct a crystal
 
-Use {class}`~laueanalysis.indexing.Cell`, {class}`~laueanalysis.indexing.Atom`, and {class}`~laueanalysis.indexing.Crystal` for generated or application-owned descriptions:
+Use {class}`~lauelab.indexing.Cell`, {class}`~lauelab.indexing.Atom`, and {class}`~lauelab.indexing.Crystal` for generated or application-owned descriptions:
 
 ```python
-from laueanalysis.indexing import Atom, Cell, Crystal
+from lauelab.indexing import Atom, Cell, Crystal
 
 nickel = Crystal(
     name="Ni",
@@ -105,7 +105,7 @@ Loading can also raise `OSError` for an unreadable file or `xml.etree.ElementTre
 Pass either a `Crystal` or its XML path to `Indexer`:
 
 ```python
-from laueanalysis.indexing import Indexer
+from lauelab.indexing import Indexer
 
 from_model = Indexer("geometry.xml", nickel)
 from_xml = Indexer("geometry.xml", "Ni.xml")

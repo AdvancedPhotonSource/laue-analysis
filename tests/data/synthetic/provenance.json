@@ -1,6 +1,6 @@
 {
-  "generated_at_commit": "44b5c441c065f5e7331dbf1e3a9024246534e4a6",
-  "laueanalysis_version": "0.1.0",
+  "generated_at_commit": "153cbc6bac38a0661d5610b5ff3eae4482d696cf",
+  "lauelab_version": "0.1.0",
   "liblaue_version": "0.2.0",
   "numpy": "2.5.2",
   "h5py": "3.16.0",

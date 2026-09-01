@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from laueanalysis.indexing import IndexingResult, lauego
+from lauelab.indexing import IndexingResult, lauego
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

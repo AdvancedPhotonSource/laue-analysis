@@ -7,7 +7,7 @@ new values and construct or replace an `Indexer` to validate them. See
 ## Peak Search
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoclass:: PeakParams
    :members:
@@ -16,7 +16,7 @@ new values and construct or replace an `Indexer` to validate them. See
 ## Orientation Indexing
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoclass:: IndexParams
    :members:
@@ -25,7 +25,7 @@ new values and construct or replace an `Indexer` to validate them. See
 ## Frame Metadata
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoclass:: FrameMetadata
    :members: as_dict

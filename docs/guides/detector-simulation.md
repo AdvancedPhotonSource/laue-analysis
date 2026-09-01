@@ -4,10 +4,10 @@ Detector-view simulation predicts missing reflection directions for selected ind
 
 ## Prepare the detector data
 
-Pass an energy interval to {func}`~laueanalysis.visualization.prepare_detector_view`:
+Pass an energy interval to {func}`~lauelab.visualization.prepare_detector_view`:
 
 ```python
-from laueanalysis.visualization import prepare_detector_view
+from lauelab.visualization import prepare_detector_view
 
 detector_data = prepare_detector_view(
     result_set,
@@ -20,7 +20,7 @@ detector_data = prepare_detector_view(
 
 The default value of `simulation_energy_range_kev` is `None`. The default performs no simulation and preserves the ordinary detector-view workflow.
 
-Simulation requires the shared `Crystal` and geometry in the source data. {meth}`~laueanalysis.visualization.ResultSet.from_indexer` copies both references from an `Indexer`. LaueGo XML input may need explicit geometry and crystal context before it can simulate reflections.
+Simulation requires the shared `Crystal` and geometry in the source data. {meth}`~lauelab.visualization.ResultSet.from_indexer` copies both references from an `Indexer`. LaueGo XML input may need explicit geometry and crystal context before it can simulate reflections.
 
 The `patterns` argument controls both indexed and simulated layers:
 
@@ -34,7 +34,7 @@ Preparation calls `missing_from()` with each selected pattern's indexed HKLs. Po
 
 ## Understand frame coordinates
 
-{func}`~laueanalysis.analysis.simulate_reflections` returns zero-based, unbinned full-detector `(x, y)` pixels. Detector-view preparation converts each point to the selected frame coordinates:
+{func}`~lauelab.analysis.simulate_reflections` returns zero-based, unbinned full-detector `(x, y)` pixels. Detector-view preparation converts each point to the selected frame coordinates:
 
 ```text
 frame_xy = (detector_xy - start - (group - 1) / 2) / group
@@ -46,12 +46,12 @@ The prepared `predicted_xy` values are zero-based frame `(x, y)` pixels. A NumPy
 
 ## Reuse prepared simulation data
 
-Each item in `detector_data.simulations` is a {class}`~laueanalysis.visualization.DetectorSimulationData` for one pattern. Its `hkl`, `predicted_xy`, `energy_kev`, and `relative_intensity` arrays are aligned, copied, and read-only.
+Each item in `detector_data.simulations` is a {class}`~lauelab.visualization.DetectorSimulationData` for one pattern. Its `hkl`, `predicted_xy`, `energy_kev`, and `relative_intensity` arrays are aligned, copied, and read-only.
 
 Prepare once when several render operations use the same scientific result:
 
 ```python
-from laueanalysis.visualization import plot_detector_view
+from lauelab.visualization import plot_detector_view
 
 figure_with_simulation = plot_detector_view(detector_data)
 figure_without_simulation = plot_detector_view(
@@ -94,10 +94,10 @@ A simulated Plotly point stores these `customdata` fields:
 
 The first three positions retain the existing frame, pattern, and peak identity layout. A simulated point has no measured peak index.
 
-Use {func}`~laueanalysis.visualization.selection_from_plotly` with Plotly click or selection data:
+Use {func}`~lauelab.visualization.selection_from_plotly` with Plotly click or selection data:
 
 ```python
-from laueanalysis.visualization import selection_from_plotly
+from lauelab.visualization import selection_from_plotly
 
 selection = selection_from_plotly(event_data)
 for reflection_id in selection.reflection_ids:

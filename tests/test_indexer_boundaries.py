@@ -6,20 +6,20 @@ import pytest
 
 from conftest import requires_liblaue
 
-from laueanalysis.indexing import (
+from lauelab.indexing import (
     Indexer,
     IndexingError,
     IndexParams,
     InputError,
     PeakParams,
 )
-from laueanalysis.indexing import indexer as indexer_module
-from laueanalysis.indexing._frame import (
+from lauelab.indexing import indexer as indexer_module
+from lauelab.indexing._frame import (
     detector_to_roi_pixels,
     roi_inclusive_end,
     roi_to_detector_pixels,
 )
-from laueanalysis.indexing._liblaue import get_library
+from lauelab.indexing._liblaue import get_library
 
 
 ROOT = Path(__file__).resolve().parents[1]

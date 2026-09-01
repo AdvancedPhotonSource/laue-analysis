@@ -3,9 +3,9 @@
 from typing import Optional
 from pathlib import Path
 
-from laueanalysis.indexing.lau_dataclasses.step import Step
-from laueanalysis.indexing.lau_dataclasses.indexing import Indexing
-from laueanalysis.indexing.lau_dataclasses.peaksXY import PeaksXY
+from lauelab.indexing.lau_dataclasses.step import Step
+from lauelab.indexing.lau_dataclasses.indexing import Indexing
+from lauelab.indexing.lau_dataclasses.peaksXY import PeaksXY
 
 
 def parse_peaks_file(peaks_file: str, step: Step) -> None:

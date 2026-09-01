@@ -41,7 +41,7 @@ jobs:
           if git ls-files | grep -E '\.(so|o|a|whl|pyc)$|/bin/(peaksearch|pix2qs|euler|reconstructN_[a-z]+)$|egg-info|_build/|^dist/|^build/'; then
             echo "generated artifacts are tracked in Git"; exit 1
           fi
-          test ! -e src/laueanalysis/indexing/bin/liblaue.so
+          test ! -e src/lauelab/indexing/bin/liblaue.so
 
       - name: Install the package from source
         shell: bash -el {0}
@@ -69,7 +69,7 @@ jobs:
         shell: bash -el {0}
         run: |
           set -euo pipefail
-          python -m pip uninstall --yes laueanalysis
+          python -m pip uninstall --yes lauelab
           python -m pip install --no-deps --force-reinstall dist/*.whl
           cd "$RUNNER_TEMP"
           python -I "$GITHUB_WORKSPACE/.github/scripts/smoke_test.py"
@@ -78,7 +78,7 @@ jobs:
         shell: bash -el {0}
         run: |
           set -euo pipefail
-          lib=$(python -c "from importlib import resources; print(resources.files('laueanalysis.indexing.bin') / 'liblaue.so')")
+          lib=$(python -c "from importlib import resources; print(resources.files('lauelab.indexing.bin') / 'liblaue.so')")
           mv "$lib" "$lib.bak"
           if python -m pytest -q --require-native tests/test_reconstruct.py; then
             echo "expected --require-native to fail without liblaue.so"; mv "$lib.bak" "$lib"; exit 1

@@ -1,13 +1,13 @@
 # Batch indexing
 
-Use one {class}`~laueanalysis.indexing.Indexer` for frames that share geometry, crystal, detector selection, and processing parameters. This retains parsed configuration and avoids rebuilding native state for every frame.
+Use one {class}`~lauelab.indexing.Indexer` for frames that share geometry, crystal, detector selection, and processing parameters. This retains parsed configuration and avoids rebuilding native state for every frame.
 
 ## Reuse an indexer
 
 ```python
 from pathlib import Path
 
-from laueanalysis.indexing import Indexer
+from lauelab.indexing import Indexer
 
 indexer = Indexer("geometry.xml", "crystal.xml")
 frames = sorted(Path("frames").glob("*.h5"))
@@ -45,7 +45,7 @@ Peak and pattern arrays remain available regardless of image retention.
 `index_many()` stops at the first exception and does not return its partially built result list. Process frames individually when the application must record a failure and continue:
 
 ```python
-from laueanalysis.indexing import IndexingError, InputError
+from lauelab.indexing import IndexingError, InputError
 
 results = []
 failures = []

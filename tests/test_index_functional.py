@@ -10,7 +10,7 @@ from argparse import Namespace
 import yaml
 from pathlib import Path
 
-from laueanalysis.indexing import IndexingResult, lauego
+from lauelab.indexing import IndexingResult, lauego
 
 
 @pytest.fixture
@@ -73,10 +73,10 @@ def test_index_function_with_mocked_executables(test_config_data, temp_image_fil
     """Test the index function with mocked executable calls."""
     
     # Mock the executable finding and running
-    with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
-         patch('laueanalysis.indexing.index._run_command') as mock_run_cmd, \
-         patch('laueanalysis.indexing.index._parse_peaks_output') as mock_parse_peaks, \
-         patch('laueanalysis.indexing.index._parse_indexing_output') as mock_parse_index:
+    with patch('lauelab.indexing.index._find_executables') as mock_find_exes, \
+         patch('lauelab.indexing.index._run_command') as mock_run_cmd, \
+         patch('lauelab.indexing.index._parse_peaks_output') as mock_parse_peaks, \
+         patch('lauelab.indexing.index._parse_indexing_output') as mock_parse_index:
         
         # Setup mocks
         mock_find_exes.return_value = {
@@ -162,9 +162,9 @@ def test_index_function_with_mocked_executables(test_config_data, temp_image_fil
 def test_lauego_omits_inactive_threshold_ratio_from_xml(
     temp_image_file, temp_output_dir
 ):
-    with patch("laueanalysis.indexing.index._run_peaksearch") as run_peaksearch, \
-         patch("laueanalysis.indexing.index.parse_full_step_data") as parse_step, \
-         patch("laueanalysis.indexing.index.write_step_xml"):
+    with patch("lauelab.indexing.index._run_peaksearch") as run_peaksearch, \
+         patch("lauelab.indexing.index.parse_full_step_data") as parse_step, \
+         patch("lauelab.indexing.index.write_step_xml"):
         run_peaksearch.return_value = (True, "", "", 0, "peaksearch")
         peaks = Path(temp_output_dir) / "peaks" / f"peaks_{Path(temp_image_file).stem}.txt"
         peaks.parent.mkdir(parents=True)
@@ -186,9 +186,9 @@ def test_lauego_omits_inactive_threshold_ratio_from_xml(
 def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
     """Test the index function when no peaks are found."""
     
-    with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
-         patch('laueanalysis.indexing.index._run_command') as mock_run_cmd, \
-         patch('laueanalysis.indexing.index._parse_peaks_output') as mock_parse_peaks:
+    with patch('lauelab.indexing.index._find_executables') as mock_find_exes, \
+         patch('lauelab.indexing.index._run_command') as mock_run_cmd, \
+         patch('lauelab.indexing.index._parse_peaks_output') as mock_parse_peaks:
         
         # Setup mocks
         mock_find_exes.return_value = {
@@ -227,9 +227,9 @@ def test_index_function_no_peaks_found(temp_image_file, temp_output_dir):
 def test_index_function_insufficient_peaks_for_indexing(temp_image_file, temp_output_dir):
     """Test the index function when only 1 peak is found (insufficient for indexing)."""
     
-    with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
-         patch('laueanalysis.indexing.index._run_command') as mock_run_cmd, \
-         patch('laueanalysis.indexing.index._parse_peaks_output') as mock_parse_peaks:
+    with patch('lauelab.indexing.index._find_executables') as mock_find_exes, \
+         patch('lauelab.indexing.index._run_command') as mock_run_cmd, \
+         patch('lauelab.indexing.index._parse_peaks_output') as mock_parse_peaks:
         
         # Setup mocks
         mock_find_exes.return_value = {
@@ -271,9 +271,9 @@ def test_index_function_insufficient_peaks_for_indexing(temp_image_file, temp_ou
 def test_index_function_with_errors_continues_processing(temp_image_file, temp_output_dir):
     """Test that the index function continues processing even when subprocess have errors."""
     
-    with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
-         patch('laueanalysis.indexing.index._run_command') as mock_run_cmd, \
-         patch('laueanalysis.indexing.index._parse_peaks_output') as mock_parse_peaks:
+    with patch('lauelab.indexing.index._find_executables') as mock_find_exes, \
+         patch('lauelab.indexing.index._run_command') as mock_run_cmd, \
+         patch('lauelab.indexing.index._parse_peaks_output') as mock_parse_peaks:
         
         # Setup mocks
         mock_find_exes.return_value = {
@@ -315,9 +315,9 @@ def test_index_function_with_errors_continues_processing(temp_image_file, temp_o
 def test_index_function_default_config():
     """Test the index function with default config when none provided."""
     
-    with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
-         patch('laueanalysis.indexing.index._run_command') as mock_run_cmd, \
-         patch('laueanalysis.indexing.index._parse_peaks_output') as mock_parse_peaks:
+    with patch('lauelab.indexing.index._find_executables') as mock_find_exes, \
+         patch('lauelab.indexing.index._run_command') as mock_run_cmd, \
+         patch('lauelab.indexing.index._parse_peaks_output') as mock_parse_peaks:
         
         # Setup mocks
         mock_find_exes.return_value = {
@@ -354,8 +354,8 @@ def test_index_function_default_config():
 def test_index_function_complete_failure():
     """Test the index function when peaksearch completely fails."""
     
-    with patch('laueanalysis.indexing.index._find_executables') as mock_find_exes, \
-         patch('laueanalysis.indexing.index._run_command') as mock_run_cmd:
+    with patch('lauelab.indexing.index._find_executables') as mock_find_exes, \
+         patch('lauelab.indexing.index._run_command') as mock_run_cmd:
         
         # Setup mocks
         mock_find_exes.return_value = {

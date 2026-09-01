@@ -3,7 +3,7 @@ import pytest
 
 from conftest import requires_liblaue
 
-from laueanalysis.analysis import (
+from lauelab.analysis import (
     CUBIC_SYMMETRY,
     HEXAGONAL_SYMMETRY,
     SurfaceFrame,
@@ -24,8 +24,8 @@ from laueanalysis.analysis import (
     symmetry_operations,
     symmetry_reduce_orientation,
 )
-from laueanalysis.indexing import Cell, Crystal
-from laueanalysis.indexing._liblaue import NativeCrystal
+from lauelab.indexing import Cell, Crystal
+from lauelab.indexing._liblaue import NativeCrystal
 
 
 def _rotation_about_z(angle_deg):
@@ -61,7 +61,7 @@ def test_reciprocal_lattice_matches_native_crystal(space_group, cell):
 
 
 def test_jzt_basis_has_equivalent_reciprocal_metric():
-    from laueanalysis.analysis._vendor.jzt.Lattice import Lattice3D
+    from lauelab.analysis._vendor.jzt.Lattice import Lattice3D
 
     cell = (0.4, 0.5, 0.6, 70, 80, 75)
     native_basis = lattice_params_to_reciprocal(*cell, space_group=1)
@@ -125,7 +125,7 @@ def test_symmetry_and_misorientation_primitives():
 
 
 def test_rodrigues_round_trips_generic_rotations():
-    from laueanalysis.analysis.orientation import _rotation_matrix
+    from lauelab.analysis.orientation import _rotation_matrix
 
     rng = np.random.default_rng(3851)
     for angle in rng.uniform(0.01, 179.0, 50):
@@ -140,7 +140,7 @@ def test_rodrigues_round_trips_generic_rotations():
 
 
 def test_rodrigues_and_misorientation_handle_random_180_degree_rotations():
-    from laueanalysis.analysis.orientation import _rotation_matrix
+    from lauelab.analysis.orientation import _rotation_matrix
 
     rng = np.random.default_rng(180)
     for _ in range(50):
@@ -165,7 +165,7 @@ def test_rodrigues_and_misorientation_handle_random_180_degree_rotations():
 
 
 def test_rotation_matrix_does_not_mutate_input_axis():
-    from laueanalysis.analysis.orientation import _rotation_matrix
+    from lauelab.analysis.orientation import _rotation_matrix
 
     axis = np.array([2.0, 0.0, 0.0])
     _rotation_matrix(axis, 30)

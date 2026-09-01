@@ -7,7 +7,7 @@ New code should use the in-process API. The LaueGo function remains documented s
 ## Current interfaces
 
 ```python
-from laueanalysis.indexing import lauego
+from lauelab.indexing import lauego
 ```
 
 The function returns an `IndexingResult`, documented in the [LaueGo API reference](../reference/lauego.md). It reports success through fields such as `success` and `error` and stores output paths, logs, command history, counts, parsed LaueGo structures, and an optional XML path.
@@ -16,10 +16,10 @@ The LaueGo pipeline can report overall success after a later stage fails or prod
 
 ## Recommended replacement
 
-Use {func}`~laueanalysis.indexing.index_frame` for one frame:
+Use {func}`~lauelab.indexing.index_frame` for one frame:
 
 ```python
-from laueanalysis.indexing import index_frame
+from lauelab.indexing import index_frame
 
 result = index_frame(
     "frame.h5",
@@ -28,7 +28,7 @@ result = index_frame(
 )
 ```
 
-Use {class}`~laueanalysis.indexing.Indexer` when processing several frames with shared configuration.
+Use {class}`~lauelab.indexing.Indexer` when processing several frames with shared configuration.
 
 The in-process path:
 

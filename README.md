@@ -3,7 +3,7 @@
 Python and native tools for Laue diffraction analysis at APS beamline 34-ID-E. The package supports indexing, wire-scan reconstruction, simulation, orientation analysis, and interactive visualization.
 
 > [!NOTE]
-> `laueanalysis` is alpha software under active development. Public behavior can change before a stable release.
+> `lauelab` is alpha software under active development. Public behavior can change before a stable release.
 
 Read the [documentation](https://advancedphotonsource.github.io/laue-analysis/) for installation requirements, indexing workflows, concepts, and API details.
 
@@ -24,7 +24,7 @@ See the [installation guide](https://advancedphotonsource.github.io/laue-analysi
 ## Index a frame
 
 ```python
-from laueanalysis.indexing import index_frame
+from lauelab.indexing import index_frame
 
 result = index_frame(
     "frame.h5",

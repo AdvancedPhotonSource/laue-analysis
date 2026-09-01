@@ -9,7 +9,7 @@ Use the included HDF5 frame, 34-ID-E detector geometry, and nickel crystal descr
 ```python
 from pathlib import Path
 
-from laueanalysis.indexing import load_crystal, load_geometry
+from lauelab.indexing import load_crystal, load_geometry
 
 root = Path.cwd()
 frame = root / "tests/data/synthetic/frames/synthetic_ni_two_grains.h5"
@@ -23,10 +23,10 @@ The frame is a two-dimensional `numpy.uint16` image with shape `(ny, nx)`. Peak 
 
 ## Index one frame
 
-Use {func}`~laueanalysis.indexing.index_frame` for a single frame:
+Use {func}`~lauelab.indexing.index_frame` for a single frame:
 
 ```python
-from laueanalysis.indexing import index_frame
+from lauelab.indexing import index_frame
 
 result = index_frame(frame, geometry=geometry, crystal=crystal)
 print(result)
@@ -37,10 +37,10 @@ The result contains detected peaks, two synthetic crystal orientations, frame st
 
 ## Reuse an indexer
 
-Construct {class}`~laueanalysis.indexing.Indexer` once when frames share geometry, crystal, detector selection, and processing parameters:
+Construct {class}`~lauelab.indexing.Indexer` once when frames share geometry, crystal, detector selection, and processing parameters:
 
 ```python
-from laueanalysis.indexing import Indexer
+from lauelab.indexing import Indexer
 
 indexer = Indexer(geometry, crystal)
 frames = sorted((root / "tests/data/synthetic/frames").glob("*.h5"))
@@ -81,7 +81,7 @@ See [Results](guides/results.md) before interpreting the complete peak and patte
 Attach the indexer's crystal and geometry to the result, then plot the detector image and indexed reflections:
 
 ```python
-from laueanalysis.visualization import ResultSet, plot_detector_view
+from lauelab.visualization import ResultSet, plot_detector_view
 
 result_set = ResultSet(
     results,
@@ -116,7 +116,7 @@ This format exists for compatibility with the established 34-ID-E XML workflow. 
 Catch invalid user or data input separately from native numerical failures:
 
 ```python
-from laueanalysis.indexing import IndexingError, InputError
+from lauelab.indexing import IndexingError, InputError
 
 try:
     checked_result = indexer.index(frames[0])

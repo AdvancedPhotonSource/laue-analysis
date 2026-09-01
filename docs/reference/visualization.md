@@ -7,7 +7,7 @@ See [Visualization data](../guides/visualization.md) for workflows, coordinate c
 ## Data and selection
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.visualization
+.. currentmodule:: lauelab.visualization
 
 .. autoclass:: DataScope
    :members: pattern_mask
@@ -24,7 +24,7 @@ See [Visualization data](../guides/visualization.md) for workflows, coordinate c
 ## Prepared views
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.visualization
+.. currentmodule:: lauelab.visualization
 
 .. autoclass:: Axis
 
@@ -52,7 +52,7 @@ Prepared models copy their arrays and mark them read-only. Their frame and patte
 ## Plotly rendering
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.visualization
+.. currentmodule:: lauelab.visualization
 
 .. autofunction:: plot_map
 
@@ -66,7 +66,7 @@ Each renderer accepts a prepared model or normalized input. `trace_update` chang
 ## Plotly selection
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.visualization
+.. currentmodule:: lauelab.visualization
 
 .. autoclass:: PlotlySelection
 
@@ -76,7 +76,7 @@ Each renderer accepts a prepared model or normalized input. `trace_update` chang
 ## Tables
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.visualization
+.. currentmodule:: lauelab.visualization
 
 .. autoclass:: Table
    :members: to_dataframe
@@ -92,10 +92,10 @@ Each renderer accepts a prepared model or normalized input. `trace_update` chang
 
 ## Built-in choices
 
-`AXIS_OPTIONS`, `COLOR_MODES`, `POLE_COLOR_MODES`, `SURFACE_PRESETS`, and `PALETTE_OPTIONS` are immutable tuples of {class}`~laueanalysis.visualization.Choice` objects. Their values match the corresponding Laue Portal controls.
+`AXIS_OPTIONS`, `COLOR_MODES`, `POLE_COLOR_MODES`, `SURFACE_PRESETS`, and `PALETTE_OPTIONS` are immutable tuples of {class}`~lauelab.visualization.Choice` objects. Their values match the corresponding Laue Portal controls.
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.visualization
+.. currentmodule:: lauelab.visualization
 
 .. autoclass:: Choice
 
@@ -113,7 +113,7 @@ Each renderer accepts a prepared model or normalized input. `trace_update` chang
 ## Surface frames
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.analysis
+.. currentmodule:: lauelab.analysis
 
 .. autoclass:: SurfaceFrame
    :members: from_vectors, aps_34ide

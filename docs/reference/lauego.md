@@ -7,14 +7,14 @@ New integrations should use `index_frame` or `Indexer` from the
 ## Subprocess pipeline
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autofunction:: lauego
 ```
 
 ## LaueGo result
 
-```{py:class} laueanalysis.indexing.index.IndexingResult(success, output_files, n_peaks_found, n_indexed, n_patterns_found, indexing_data, step_data, xml_file, log, error=None, command_history=())
+```{py:class} lauelab.indexing.index.IndexingResult(success, output_files, n_peaks_found, n_indexed, n_patterns_found, indexing_data, step_data, xml_file, log, error=None, command_history=())
 
 Result returned by the LaueGo subprocess indexing interface.
 

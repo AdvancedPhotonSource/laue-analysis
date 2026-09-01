@@ -11,7 +11,7 @@ from importlib import resources
 
 ROOT = Path(__file__).resolve().parents[1]
 pytestmark = requires_liblaue
-LIBRARY = Path(str(resources.files("laueanalysis.indexing.bin") / "liblaue.so"))  # installed copy
+LIBRARY = Path(str(resources.files("lauelab.indexing.bin") / "liblaue.so"))  # installed copy
 
 
 def _table_after(path: Path, marker: str, delimiter=None) -> np.ndarray:
@@ -36,7 +36,7 @@ def test_shared_library_does_not_import_process_termination():
     ids=lambda path: path.stem.removeprefix("p2q_"),
 )
 def test_pixels_to_q_matches_lauego_reference(p2q_file):
-    from laueanalysis.indexing._liblaue import Geometry, version
+    from lauelab.indexing._liblaue import Geometry, version
 
     geometry_file = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     stem = p2q_file.stem.removeprefix("p2q_")
@@ -59,7 +59,7 @@ def test_pixels_to_q_matches_lauego_reference(p2q_file):
 
 
 def test_pixels_to_q_validates_input_shape():
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     geometry = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
     with pytest.raises(ValueError, match="shape"):
@@ -67,7 +67,7 @@ def test_pixels_to_q_validates_input_shape():
 
 
 def test_pixels_to_q_accepts_empty_input():
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     geometry = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
     result = geometry.pixels_to_q(np.empty((0, 2)))
@@ -75,7 +75,7 @@ def test_pixels_to_q_accepts_empty_input():
 
 
 def test_geometry_exposes_detector_metadata():
-    from laueanalysis.indexing import DetectorGeometry, Geometry
+    from lauelab.indexing import DetectorGeometry, Geometry
 
     geometry = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
     detector = geometry.detector(0)
@@ -93,7 +93,7 @@ def test_geometry_exposes_detector_metadata():
 
 
 def test_detector_projection_round_trip():
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     geometry = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
     detector = geometry.detector(0)
@@ -108,7 +108,7 @@ def test_detector_projection_round_trip():
 
 
 def test_detector_projection_handles_invalid_and_off_detector_rays():
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     detector = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml").detector(0)
 
@@ -122,7 +122,7 @@ def test_detector_projection_handles_invalid_and_off_detector_rays():
 
 
 def test_geometry_rejects_invalid_detector_parameters(tmp_path):
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     path = tmp_path / "invalid-geometry.xml"
@@ -133,7 +133,7 @@ def test_geometry_rejects_invalid_detector_parameters(tmp_path):
 
 
 def test_pixels_to_q_validates_detector_bounds_and_coordinates():
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     geometry = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
 
@@ -160,8 +160,8 @@ def _geometry_with(source, *, count="3", detector_1=None, detector_2=None, extra
 
 
 def test_sparse_detector_slots_are_addressable(tmp_path):
-    from laueanalysis.indexing import Indexer
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing import Indexer
+    from lauelab.indexing._liblaue import Geometry
 
     source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     path = tmp_path / "sparse.xml"
@@ -205,7 +205,7 @@ def test_sparse_detector_slots_are_addressable(tmp_path):
     ],
 )
 def test_geometry_rejects_malformed_detector_declarations(tmp_path, transform):
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     path = tmp_path / "malformed.xml"
@@ -216,7 +216,7 @@ def test_geometry_rejects_malformed_detector_declarations(tmp_path, transform):
 
 
 def test_geometry_rejects_duplicate_detector_ids(tmp_path):
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     path = tmp_path / "duplicate-id.xml"
@@ -229,7 +229,7 @@ def test_geometry_rejects_duplicate_detector_ids(tmp_path):
 def test_geometry_accepts_old_style_tag_value_format(tmp_path):
     # The native reader supports the pre-XML "$tag value" geometry format;
     # the XML-based duplicate-ID pre-scan must not reject it.
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     path = tmp_path / "geo_old_style.txt"
     path.write_text(
@@ -249,7 +249,7 @@ def test_geometry_accepts_old_style_tag_value_format(tmp_path):
 
 
 def test_detector_geometry_ignores_unrelated_invalid_sample_and_wire(tmp_path):
-    from laueanalysis.indexing._liblaue import Geometry
+    from lauelab.indexing._liblaue import Geometry
 
     source = ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml"
     path = tmp_path / "detector-only.xml"

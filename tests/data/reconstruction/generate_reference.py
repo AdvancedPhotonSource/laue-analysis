@@ -224,7 +224,7 @@ def write_input_file(path: Path) -> np.ndarray:
 
 def run_reconstruction(executable: str, input_file: Path, output_base: Path, num_threads: int = NUM_THREADS):
     """Run the CPU program through the package API with the fixed reference parameters."""
-    from laueanalysis.reconstruct import reconstruct
+    from lauelab.reconstruct import reconstruct
 
     return reconstruct(
         str(input_file),
@@ -281,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     import tempfile
-    from laueanalysis.reconstruct import find_executable
+    from lauelab.reconstruct import find_executable
 
     executable = args.executable or find_executable()
     workdir = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="recon_ref_"))

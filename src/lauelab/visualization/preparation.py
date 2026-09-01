@@ -9,7 +9,7 @@ from typing import Callable, Literal
 
 import numpy as np
 
-from laueanalysis.analysis import (
+from lauelab.analysis import (
     SurfaceFrame,
     closest_pole_colors,
     cubic_hkl_family,
@@ -24,7 +24,7 @@ from laueanalysis.analysis import (
     symmetry_operations,
     symmetry_reduce_orientation,
 )
-from laueanalysis.indexing._frame import detector_to_roi_pixels, read_h5_frame
+from lauelab.indexing._frame import detector_to_roi_pixels, read_h5_frame
 
 from .data import DataScope, FrameId, ResultSet, VisualizationDataset, _readonly
 from .options import AXIS_OPTIONS, COLOR_MODES, POLE_COLOR_MODES

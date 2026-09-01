@@ -1,16 +1,16 @@
 # Simulate detector reflections
 
-Use {func}`~laueanalysis.analysis.simulate_reflections` when you need a complete predicted pattern for one crystal orientation and one detector. The function returns one strongest representative for each signed harmonic direction that reaches the detector.
+Use {func}`~lauelab.analysis.simulate_reflections` when you need a complete predicted pattern for one crystal orientation and one detector. The function returns one strongest representative for each signed harmonic direction that reaches the detector.
 
-Use {meth}`~laueanalysis.analysis.SimulationResult.missing_from` when you need only directions that an indexed pattern does not represent. Detector-view preparation applies this operation for you. See [Add simulation to a detector view](detector-simulation.md) for that workflow.
+Use {meth}`~lauelab.analysis.SimulationResult.missing_from` when you need only directions that an indexed pattern does not represent. Detector-view preparation applies this operation for you. See [Add simulation to a detector view](detector-simulation.md) for that workflow.
 
 ## Supply the scientific inputs
 
-Simulation uses package-owned crystal and detector models. The reciprocal matrix normally comes from an indexed {class}`~laueanalysis.indexing.Pattern`:
+Simulation uses package-owned crystal and detector models. The reciprocal matrix normally comes from an indexed {class}`~lauelab.indexing.Pattern`:
 
 ```python
-from laueanalysis.analysis import simulate_reflections
-from laueanalysis.indexing import load_crystal, load_geometry
+from lauelab.analysis import simulate_reflections
+from lauelab.indexing import load_crystal, load_geometry
 
 crystal = load_crystal("crystal.xml")
 geometry = load_geometry("geometry.xml")
@@ -40,9 +40,9 @@ The inputs use these conventions:
 
 | Input | Shape or type | Units and convention |
 |---|---|---|
-| `crystal` | {class}`~laueanalysis.indexing.Crystal` | Space group, unit cell, atom identity, fractional positions, and occupancy |
+| `crystal` | {class}`~lauelab.indexing.Crystal` | Space group, unit cell, atom identity, fractional positions, and occupancy |
 | `reciprocal` | `(3, 3)` | Basis vectors in rows, in `1/nm` |
-| `detector` | {class}`~laueanalysis.indexing.DetectorGeometry` | One physical detector slot |
+| `detector` | {class}`~lauelab.indexing.DetectorGeometry` | One physical detector slot |
 | `energy_range_kev` | two values | Inclusive lower and upper bounds in keV |
 | `depth` | scalar | Sample depth in µm |
 
@@ -50,7 +50,7 @@ The reciprocal matrix must be finite and nonsingular. See the [results guide](re
 
 ## Read the result
 
-{class}`~laueanalysis.analysis.SimulationResult` contains aligned NumPy arrays:
+{class}`~lauelab.analysis.SimulationResult` contains aligned NumPy arrays:
 
 | Field | Shape | Dtype | Meaning |
 |---|---|---|---|
@@ -110,7 +110,7 @@ The function does not select a backend and does not fall back to a simpler refle
 
 The public crystal model accepts International Tables space-group numbers 1 through 230. Tests exercise the code paths for all seven crystal systems. The reviewed numerical fixtures cover Ni, CdTe, and synthetic Si. This coverage does not establish experimental validation for every space group or material.
 
-The private simulator uses atom identity, fractional position, and occupancy. The public {class}`~laueanalysis.indexing.Atom` model does not represent thermal displacement, valence, Wyckoff metadata, or other extended structure fields.
+The private simulator uses atom identity, fractional position, and occupancy. The public {class}`~lauelab.indexing.Atom` model does not represent thermal displacement, valence, Wyckoff metadata, or other extended structure fields.
 
 The current implementation contains a private snapshot of the JZT simulation code. Normal package imports do not load it. Its types are not public, and a later implementation can replace it without changing `SimulationResult` or `simulate_reflections()`.
 

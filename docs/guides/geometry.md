@@ -4,19 +4,19 @@ A geometry file describes the physical detectors used to convert fitted pixel po
 
 ## Load geometry
 
-{func}`~laueanalysis.indexing.load_geometry` parses and validates detector geometry:
+{func}`~lauelab.indexing.load_geometry` parses and validates detector geometry:
 
 ```python
-from laueanalysis.indexing import load_geometry
+from lauelab.indexing import load_geometry
 
 geometry = load_geometry("geometry.xml")
 print(geometry.detector_count)
 ```
 
-You can pass the returned {class}`~laueanalysis.indexing.Geometry` directly to `Indexer`. This avoids parsing the file again when you construct related indexers.
+You can pass the returned {class}`~lauelab.indexing.Geometry` directly to `Indexer`. This avoids parsing the file again when you construct related indexers.
 
 ```python
-from laueanalysis.indexing import Indexer
+from lauelab.indexing import Indexer
 
 indexer = Indexer(geometry, "crystal.xml")
 ```
@@ -33,7 +33,7 @@ if slot < 0:
 indexer = Indexer(geometry, "crystal.xml", detector_index=slot)
 ```
 
-`Indexer(..., detector_id="PE1621 723-3335")` performs the lookup and reports an {class}`~laueanalysis.indexing.InputError` if the identifier is absent. If both selection arguments are supplied, `detector_id` determines the selected slot.
+`Indexer(..., detector_id="PE1621 723-3335")` performs the lookup and reports an {class}`~lauelab.indexing.InputError` if the identifier is absent. If both selection arguments are supplied, `detector_id` determines the selected slot.
 
 ```{warning}
 A detector index is a physical slot from the geometry file. It is not a zero-based position in the list of active detectors. If slots 0 and 2 are active, `detector_index=1` is invalid rather than a reference to slot 2.

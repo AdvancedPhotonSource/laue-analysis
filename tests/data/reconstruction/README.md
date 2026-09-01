@@ -38,6 +38,6 @@ decision that must be reviewed and recorded. When it is warranted:
 python tests/data/reconstruction/generate_reference.py
 ```
 
-Run it from an environment where `laueanalysis` and its CPU executable are
+Run it from an environment where `lauelab` and its CPU executable are
 installed, then commit the updated `.npz` and `.json` together with a note in
 the commit message explaining why the reference changed.

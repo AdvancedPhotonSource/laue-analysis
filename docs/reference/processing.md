@@ -6,7 +6,7 @@ The preferred API either indexes one frame with `index_frame` or reuses an
 ## One-Off Indexing
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autofunction:: index_frame
 ```
@@ -14,7 +14,7 @@ The preferred API either indexes one frame with `index_frame` or reuses an
 ## Reusable Indexer
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.indexing
+.. currentmodule:: lauelab.indexing
 
 .. autoclass:: Indexer
    :members: index, index_many, replace, write_many_xml

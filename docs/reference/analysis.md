@@ -1,19 +1,19 @@
 # Analysis
 
-`laueanalysis.analysis` contains orientation, projection, coloring, and reflection-simulation functions. The functions accept NumPy-compatible arrays and return NumPy arrays or package data classes.
+`lauelab.analysis` contains orientation, projection, coloring, and reflection-simulation functions. The functions accept NumPy-compatible arrays and return NumPy arrays or package data classes.
 
 ## Reciprocal and orientation conventions
 
-See the [results guide](../guides/results.md) for the reciprocal-basis convention. {func}`~laueanalysis.analysis.lattice_params_to_reciprocal` takes cell lengths in nm and angles in degrees.
+See the [results guide](../guides/results.md) for the reciprocal-basis convention. {func}`~lauelab.analysis.lattice_params_to_reciprocal` takes cell lengths in nm and angles in degrees.
 
-An orientation matrix maps vectors from the reference crystal basis to the measured basis. {func}`~laueanalysis.analysis.reciprocal_to_orientation` calculates that matrix as `measured.T @ inv(reference.T)`. {func}`~laueanalysis.analysis.crystal_direction` applies the inverse orientation to a laboratory-frame direction.
+An orientation matrix maps vectors from the reference crystal basis to the measured basis. {func}`~lauelab.analysis.reciprocal_to_orientation` calculates that matrix as `measured.T @ inv(reference.T)`. {func}`~lauelab.analysis.crystal_direction` applies the inverse orientation to a laboratory-frame direction.
 
-Rotation matrices have shape `(3, 3)` and are dimensionless. Rodrigues vectors use the dimensionless $\hat{a}\tan(\theta/2)$ convention. At the 180-degree singularity, {func}`~laueanalysis.analysis.orientation_to_rodrigues` clamps the effective angle to $\pi - 10^{-7}$ radians while retaining a deterministic rotation axis. Misorientation angles use degrees.
+Rotation matrices have shape `(3, 3)` and are dimensionless. Rodrigues vectors use the dimensionless $\hat{a}\tan(\theta/2)$ convention. At the 180-degree singularity, {func}`~lauelab.analysis.orientation_to_rodrigues` clamps the effective angle to $\pi - 10^{-7}$ radians while retaining a deterministic rotation axis. Misorientation angles use degrees.
 
 ## Lattice and orientation
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.analysis
+.. currentmodule:: lauelab.analysis
 
 .. py:data:: CUBIC_SYMMETRY
    :type: numpy.ndarray
@@ -46,12 +46,12 @@ Rotation matrices have shape `(3, 3)` and are dimensionless. Rodrigues vectors u
 .. autofunction:: pairwise_misorientation
 ```
 
-The symmetry constants and arrays returned by {func}`~laueanalysis.analysis.symmetry_operations` contain proper rotation matrices. Cubic space groups are 195 through 230. Hexagonal space groups are 168 through 194.
+The symmetry constants and arrays returned by {func}`~lauelab.analysis.symmetry_operations` contain proper rotation matrices. Cubic space groups are 195 through 230. Hexagonal space groups are 168 through 194.
 
 ## Pole projection
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.analysis
+.. currentmodule:: lauelab.analysis
 
 .. autoclass:: SurfaceFrame
    :members: from_vectors, aps_34ide
@@ -69,7 +69,7 @@ Pole-figure points have shape `(n, 2)` and use dimensionless stereographic coord
 ## Coloring
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.analysis
+.. currentmodule:: lauelab.analysis
 
 .. autofunction:: cubic_ipf_colors
 
@@ -89,7 +89,7 @@ Color functions return RGB values in `[0, 1]` unless the function returns a refe
 ## Reflection simulation
 
 ```{eval-rst}
-.. currentmodule:: laueanalysis.analysis
+.. currentmodule:: lauelab.analysis
 
 .. autoclass:: SimulationResult
    :members: missing_from

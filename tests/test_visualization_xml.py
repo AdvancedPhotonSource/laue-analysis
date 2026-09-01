@@ -5,9 +5,9 @@ import pytest
 
 from conftest import requires_liblaue
 
-from laueanalysis.indexing import Atom, Cell, Crystal, FrameResult, Geometry, Pattern
-from laueanalysis.indexing._liblaue import NativeCrystal
-from laueanalysis.visualization import (
+from lauelab.indexing import Atom, Cell, Crystal, FrameResult, Geometry, Pattern
+from lauelab.indexing._liblaue import NativeCrystal
+from lauelab.visualization import (
     DataScope,
     ResultSet,
     load_visualization_xml,
@@ -92,8 +92,8 @@ def test_atom_occupancy_round_trips_through_indexing_xml(tmp_path):
             Atom("Ni", (0.5, 0.5, 0.5), occupancy=0.9),
         ),
     )
-    from laueanalysis.analysis import simulate_reflections
-    from laueanalysis.indexing import Indexer
+    from lauelab.analysis import simulate_reflections
+    from lauelab.indexing import Indexer
 
     indexer = Indexer(GEOMETRY, crystal)
     result = indexer.index(np.zeros((2, 2), dtype=np.uint16))

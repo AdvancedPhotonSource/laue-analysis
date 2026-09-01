@@ -33,7 +33,7 @@ $ cmake -S . -B build-cmake -G Ninja
 $ cmake --build build-cmake
 ```
 
-CUDA is not part of the package build. See `src/laueanalysis/reconstruct/source/recon_gpu/README.md`.
+CUDA is not part of the package build. See `src/lauelab/reconstruct/source/recon_gpu/README.md`.
 
 ## Run tests
 
@@ -49,7 +49,7 @@ Run a focused module while developing a change:
 $ python -m pytest tests/test_indexer.py
 ```
 
-Tests run against the installed package, never against `src/` directly. Native tests skip when the installed `laueanalysis` package does not contain `liblaue.so`. A passing run with skipped native tests does not validate the native code. Review the skip summary (`-rs`). Expected skips cover an unavailable GPU reconstruction executable and, outside CI, a missing Valgrind executable or C compiler for the native memory harness.
+Tests run against the installed package, never against `src/` directly. Native tests skip when the installed `lauelab` package does not contain `liblaue.so`. A passing run with skipped native tests does not validate the native code. Review the skip summary (`-rs`). Expected skips cover an unavailable GPU reconstruction executable and, outside CI, a missing Valgrind executable or C compiler for the native memory harness.
 
 CI runs with `--require-native`. That option fails the session when `liblaue.so` is missing from the installed package or when any test skips for another reason.
 

@@ -2,20 +2,20 @@ from importlib import resources
 import os
 from typing import Any, Dict
 
-from laueanalysis.reconstruct.reconstruct import find_executable, find_gpu_executable
+from lauelab.reconstruct.reconstruct import find_executable, find_gpu_executable
 
 
 def get_packaged_executable_path(program_name: str) -> str:
     """Return the path to a packaged indexing executable."""
     try:
-        executable = resources.files("laueanalysis.indexing.bin") / program_name
+        executable = resources.files("lauelab.indexing.bin") / program_name
         if executable.is_file():
             return str(executable)
     except (ModuleNotFoundError, FileNotFoundError):
         pass
     raise FileNotFoundError(
         f"Could not locate executable {program_name!r} in "
-        "laueanalysis.indexing.bin package"
+        "lauelab.indexing.bin package"
     )
 
 

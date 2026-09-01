@@ -5,15 +5,15 @@ import numpy as np
 import pytest
 
 
-from laueanalysis.analysis import (
+from lauelab.analysis import (
     SimulationResult,
     SurfaceFrame,
     orientation_to_rodrigues,
     rodrigues_colors,
 )
-from laueanalysis.indexing import Cell, Crystal, FrameResult, Pattern, load_crystal, load_geometry
-from laueanalysis.indexing.indexer import PEAK_DTYPE
-from laueanalysis.visualization import (
+from lauelab.indexing import Cell, Crystal, FrameResult, Pattern, load_crystal, load_geometry
+from lauelab.indexing.indexer import PEAK_DTYPE
+from lauelab.visualization import (
     Axis,
     DataScope,
     DetectorSimulationData,
@@ -339,7 +339,7 @@ def test_detector_simulation_data_normalizes_validates_and_owns_arrays():
 
 
 def test_prepare_detector_view_simulates_selected_patterns_in_roi_coordinates(monkeypatch):
-    import laueanalysis.visualization.preparation as preparation
+    import lauelab.visualization.preparation as preparation
 
     context = _result_set(with_context=True)
     frame = replace(
@@ -389,7 +389,7 @@ def test_prepare_detector_view_simulates_selected_patterns_in_roi_coordinates(mo
 def test_prepare_detector_view_loads_hdf5_image_with_shared_reader(
     monkeypatch, tmp_path
 ):
-    import laueanalysis.visualization.preparation as preparation
+    import lauelab.visualization.preparation as preparation
 
     path = tmp_path / "frame.h5"
     expected = np.arange(12, dtype=np.uint16).reshape(3, 4)
@@ -410,7 +410,7 @@ def test_prepare_detector_view_loads_hdf5_image_with_shared_reader(
 
 
 def test_prepare_detector_view_simulation_is_opt_in_and_errors_propagate(monkeypatch):
-    import laueanalysis.visualization.preparation as preparation
+    import lauelab.visualization.preparation as preparation
 
     source = _result_set(with_context=True)
 
@@ -453,7 +453,7 @@ def test_prepare_detector_view_simulation_is_opt_in_and_errors_propagate(monkeyp
 def test_prepare_detector_view_simulates_only_selected_patterns(
     monkeypatch, patterns, expected
 ):
-    import laueanalysis.visualization.preparation as preparation
+    import lauelab.visualization.preparation as preparation
 
     empty = SimulationResult(
         hkl=np.empty((0, 3), dtype=int),

@@ -51,9 +51,9 @@ $totalSum		8.64018e+07		// sum of all pixels in image
 $sumAboveThreshold	2.46105e+06	// sum of all pixels in image above threshold
 $numAboveThreshold	2949	// number of pixels above threshold
 $NpeakMax		200			// limit on number of peaks to search for
-$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/peaksearch
+$programName	<env>/lib/python3.12/site-packages/lauelab/indexing/bin/peaksearch
 $geoFileName	<repo>/tests/data/geo/geoN_2022-03-29_14-15-05.xml
-$programName	<env>/lib/python3.12/site-packages/laueanalysis/indexing/bin/pix2qs
+$programName	<env>/lib/python3.12/site-packages/lauelab/indexing/bin/pix2qs
 // ------------------------------------------------------------
 
 $pattern0 
