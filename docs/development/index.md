@@ -12,7 +12,7 @@ $ python -m pip install -e '.[test,docs]'
 
 The editable install builds the native files once with CMake and places them in `site-packages`. Python changes under `src/` take effect immediately. After a change to C source or `CMakeLists.txt`, run the install command again.
 
-`CMakeLists.txt` at the repository root is the only native build definition. It has these options, set with `--config-settings=cmake.define.<OPTION>=<value>` on the pip command line:
+`CMakeLists.txt` at the repository root is the only native build definition. `liblaue.so` embeds the GPL-licensed GSL using static `libgsl.a` and `libgslcblas.a` from the build environment, with their symbols hidden by `--exclude-libs`; importing the wheel therefore does not load the environment's `libgsl.so` or OpenBLAS. It has these options, set with `--config-settings=cmake.define.<OPTION>=<value>` on the pip command line:
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -59,7 +59,21 @@ The `integration` marker identifies tests that run compiled command-line program
 
 ### CPU reconstruction reference
 
-`tests/data/reconstruction/` holds a synthetic numerical reference for `reconstructN_cpu` and the script that generated it. `tests/test_reconstruct.py` compares the current build against it. Do not regenerate the reference to make a build change pass.
+`tests/data/reconstruction/` holds synthetic numerical references for `reconstructN_cpu`. `tests/test_reconstruct.py` checks the executable, and `tests/test_reconstructor.py` cross-checks the in-process driver against the same files. Do not regenerate a reference to make a build change pass.
+
+The local full-size fixture is under `sandbox/data/twin2_wire/`. Tests skip with `Twin2 wire-scan fixture not available` when it is absent. Run the real-data checks explicitly with:
+
+```console
+$ python -m pytest -m "integration and slow" tests/test_reconstruct_realdata.py
+```
+
+Compare executable and in-process performance on Twin2 point 1 with:
+
+```console
+$ python tests/perf_testing/run_reconstruct_perf.py
+```
+
+The script runs both implementations at 1, 8, 16, and 32 threads. It fails if the 16-thread native kernel time exceeds half of the Phase 0 executable kernel time. Wall time is reported but is not gated.
 
 ## Build the documentation
 

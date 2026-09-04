@@ -61,6 +61,18 @@ print(detector.size_x, detector.size_y)
 
 `detector_count` reports the number of active detectors. It does not identify their slots.
 
+## Inspect wire metadata
+
+`Geometry.wire` returns immutable {class}`~lauelab.indexing.WireGeometry` metadata when the geometry file has a complete wire section. It returns `None` for a detector-only geometry. The diameter, focal distance, and origin use µm; the rotation magnitude uses degrees.
+
+```python
+wire = geometry.wire
+if wire is not None:
+    print(wire.diameter_um, wire.origin_um)
+```
+
+Reconstruction requires complete wire geometry and raises {class}`~lauelab.indexing.InputError` when it is absent. Indexing continues to accept detector-only geometry files.
+
 ## Validation errors
 
 Geometry loading raises `ValueError` for malformed, incomplete, duplicated, or physically invalid detector declarations. Detector lookup returns `-1` for an unknown identifier. `Geometry.detector()` raises `ValueError` for an inactive or out-of-range slot. `Indexer` converts detector-selection failures to `InputError`.

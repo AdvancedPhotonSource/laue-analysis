@@ -12,6 +12,24 @@ $ python tests/perf_testing/run_simulation_perf.py --case ni --warm-runs 5
 
 Use `--output report.json` to retain the machine-readable report. The benchmark has no pass or fail threshold because host load and cold filesystem state affect its measurements.
 
+`run_reconstruct_perf.py` is a hand-run performance measurement, not an
+automated test gate, for the production reconstruction executable and the
+in-process driver. It runs Twin2 point 1 at 1, 8, 16, and 32 threads and reports
+wall time and mean compute and I/O time per stripe. The 16-thread native kernel
+ratio must be at most 0.5 of the recorded Phase 0 executable result. That 2.1 s
+per-stripe constant was measured on one node with two Xeon Gold 6348 processors
+at commit `ba9c946`, before the Phase 1a kernel changes. The executable columns
+measure the current executable; those comparisons and wall time are
+observational. With the local fixture in its standard location, run:
+
+```console
+$ python tests/perf_testing/run_reconstruct_perf.py
+```
+
+Use `--fixture` if the Twin2 fixture is elsewhere. The script exits successfully
+with a skip message when the fixture is unavailable. Outputs use temporary
+storage by default; pass `--output-dir` to retain them.
+
 Key features:
 - Requires two inputs: an HDF5 file and a staging directory (to test different filesystems).
 - Pre-copies the input HDF5 into N replicas (one per parallel runner) once before all tests.

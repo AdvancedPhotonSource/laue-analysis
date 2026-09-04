@@ -5,121 +5,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import resources
 from os import fspath
 from pathlib import Path
 from typing import Optional
 import xml.etree.ElementTree as ET
 
 import numpy as np
-from cffi import FFI
+
+from lauelab._native import _load_library, ffi, get_library
 
 from ._frame import roi_to_detector_pixels
-
-ffi = FFI()
-ffi.cdef(
-    """
-    typedef struct laue_geometry laue_geometry;
-    typedef struct laue_crystal laue_crystal;
-    enum {
-        LAUE_OK = 0,
-        LAUE_INVALID_ARGUMENT = 1,
-        LAUE_OUT_OF_MEMORY = 2,
-        LAUE_NUMERICAL_ERROR = 3,
-        LAUE_INTERNAL_ERROR = 4
-    };
-    typedef struct {
-        char name[60];
-        double x, y, z, occupancy;
-    } laue_atom;
-    typedef struct {
-        int nx, ny;
-        double size_x, size_y;
-        double translation[3];
-        double rotation_vector[3];
-        double rotation[3][3];
-        char detector_id[256];
-    } laue_detector_info;
-    typedef struct {
-        int boxsize;
-        double max_rfactor;
-        int min_size;
-        int min_separation;
-        double threshold;
-        double threshold_ratio;
-        int peak_shape;
-        int max_peaks;
-        int smooth;
-        const unsigned char *mask;
-    } laue_peak_params;
-    typedef struct {
-        double kev_max_calc, kev_max_test, angle_tolerance_deg, cone_deg;
-        int hkl_prefer[3];
-        int max_data;
-    } laue_index_params;
-    typedef struct {
-        double fit_x, fit_y, intens, integral, hwhm_x, hwhm_y, tilt, chisq, background;
-        double qhat[3];
-    } laue_peak;
-    typedef struct {
-        double euler_deg[3], rotation[3][3], recip[3][3];
-        double goodness, rms_error_deg;
-        int n_indexed;
-        int *hkl, *pk_index;
-        double *err_deg, *energy_kev, *pred_intens;
-    } laue_pattern;
-    typedef struct {
-        int nx, ny, startx, starty, groupx, groupy;
-        double depth;
-        double threshold_used;
-        double peak_minwidth, peak_maxwidth, peak_max_cent_to_fit;
-        int peak_boxsize;
-        double total_sum, sum_above_threshold;
-        long num_above_threshold;
-        int n_peaks;
-        laue_peak *peaks;
-        int n_patterns, n_indexed;
-        laue_pattern *patterns;
-        int status;
-        char message[256];
-    } laue_frame_result;
-    laue_geometry *laue_geometry_from_file(const char *, char *, size_t);
-    void laue_geometry_free(laue_geometry *);
-    laue_crystal *laue_crystal_create(const char *, int, double, double, double,
-                                       double, double, double, const laue_atom *, size_t,
-                                       char *, size_t);
-    void laue_crystal_free(laue_crystal *);
-    int laue_crystal_reciprocal(const laue_crystal *, double [3][3]);
-    int laue_geometry_detector_count(const laue_geometry *);
-    int laue_geometry_find_detector(const laue_geometry *, const char *);
-    int laue_geometry_detector_info(const laue_geometry *, int, laue_detector_info *, char *, size_t);
-    int laue_find_peaks(const unsigned short *, int, int, const laue_peak_params *, laue_frame_result *);
-    int laue_pixels_to_q(const laue_geometry *, int, laue_frame_result *);
-    int laue_index(const laue_crystal *, const laue_index_params *, laue_frame_result *);
-    void laue_frame_result_free(laue_frame_result *);
-    const char *laue_version(void);
-    """
-)
-
-
-def _load_library():
-    library = resources.files("lauelab.indexing.bin") / "liblaue.so"
-    try:
-        return ffi.dlopen(fspath(library))
-    except OSError as error:
-        raise ImportError(
-            "liblaue.so is unavailable; rebuild lauelab to use the in-process indexer"
-        ) from error
-
-
-_lib = None
-
-
-def get_library():
-    global _lib
-    if _lib is None:
-        _lib = _load_library()
-    return _lib
 
 
 class NativeCrystal:
@@ -155,6 +50,28 @@ class NativeCrystal:
         if self._library.laue_crystal_reciprocal(self._handle, values):
             raise RuntimeError("Failed to read native reciprocal lattice")
         return np.asarray([[values[row][column] for column in range(3)] for row in range(3)])
+
+
+@dataclass(frozen=True)
+class WireGeometry:
+    """Wire geometry in micrometres and beamline rotation conventions."""
+
+    diameter_um: float
+    F_um: float
+    origin_um: np.ndarray
+    axis: np.ndarray
+    axis_rotated: np.ndarray
+    rotation: np.ndarray
+    rotation_magnitude_deg: float
+
+    def __post_init__(self) -> None:
+        for name, shape in (("origin_um", (3,)), ("axis", (3,)),
+                            ("axis_rotated", (3,)), ("rotation", (3, 3))):
+            value = np.array(getattr(self, name), dtype=np.float64, copy=True)
+            if value.shape != shape or not np.isfinite(value).all():
+                raise ValueError(f"{name} must be a finite array with shape {shape}")
+            value.setflags(write=False)
+            object.__setattr__(self, name, value)
 
 
 @dataclass(frozen=True)
@@ -369,6 +286,26 @@ class Geometry:
     def detector_count(self) -> int:
         """Number of active detectors in the geometry."""
         return self._library.laue_geometry_detector_count(self._handle)
+
+    @property
+    def wire(self) -> WireGeometry | None:
+        """Wire geometry, or `None` when the file has no wire section."""
+        info = ffi.new("laue_wire_info *")
+        error = ffi.new("char[256]")
+        status = self._library.laue_geometry_wire_info(self._handle, info, error, 256)
+        if status:
+            raise RuntimeError(ffi.string(error).decode(errors="replace"))
+        if not info.has_wire:
+            return None
+        return WireGeometry(
+            info.dia,
+            info.F,
+            np.asarray(list(info.origin)),
+            np.asarray(list(info.axis)),
+            np.asarray(list(info.axisR)),
+            np.asarray([list(row) for row in info.R]),
+            info.Rmag,
+        )
 
     def find_detector(self, detector_id: str) -> int:
         """Find the physical slot for a detector identifier.

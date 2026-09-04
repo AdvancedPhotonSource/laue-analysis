@@ -1,0 +1,47 @@
+{
+  "variant": "norm_vector",
+  "flags": [
+    "-n",
+    "mA"
+  ],
+  "generated_at_commit": "ba9c94644c099a28a4ca8550f760a8d364b302b4",
+  "python": "3.12.14",
+  "numpy": "2.5.2",
+  "h5py": "3.16.0",
+  "toolchain": {
+    "compiler": [
+      "GCC: (GNU) 11.5.0 20240719 (Red Hat 11.5.0-14)"
+    ],
+    "needed": [
+      "libhdf5_hl.so.310",
+      "libhdf5.so.310",
+      "libgsl.so.28",
+      "libopenblas.so.0",
+      "libz.so.1",
+      "libm.so.6",
+      "libgomp.so.1",
+      "libc.so.6"
+    ]
+  },
+  "seed": 20260828,
+  "input_sha256": "0c40e1c4386b1f9da1ff6f046037e384ba8f448876243dcccfad38106835b343",
+  "output_sha256": "8dd02e15eb843b68e1a088864b0da4dff22c8c79993d07b3f2ab0ae897b1d84c",
+  "output_dtype": "float64",
+  "output_shape": [
+    51,
+    128,
+    128
+  ],
+  "depth_range_um": [
+    -25.0,
+    25.0
+  ],
+  "depth_resolution_um": 1.0,
+  "num_threads": 1,
+  "comparison": {
+    "rtol": 1e-12,
+    "atol": 1e-09,
+    "note": "floating-point output; expected to match bit-for-bit on the same toolchain"
+  },
+  "note": "Generated from a synthetic input with the corrected executable; earlier builds ignore -n. No measured data or machine paths are recorded."
+}

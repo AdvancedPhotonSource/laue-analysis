@@ -31,6 +31,7 @@ char *xmlTagsIn)	/* comma separated list of acceptable xml tags */
 	i = fread(line, sizeof(char), 2046, f);
 	fclose(f);
 	if (i<1) return 0;
+	line[i] = '\0';
 
 	if (checkFileTypeLine(line,typeLIstIn))		return 1;	/* is old style, return 1 */
 	else if (checkForXMLtags(line,xmlTagsIn))	return 2;	/* assume that listIn is a list of xml tags */

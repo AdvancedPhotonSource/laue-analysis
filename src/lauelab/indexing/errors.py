@@ -27,3 +27,7 @@ class IndexingError(LaueError, RuntimeError):
     This exception is both a :class:`LaueError` and a :class:`RuntimeError`.
     Its message identifies the failed stage and includes the native diagnostic.
     """
+
+
+class ReconstructionError(LaueError, RuntimeError):
+    """Runtime failure in the in-process reconstruction pipeline."""

@@ -80,4 +80,5 @@ sdist.exclude = [
 testpaths = ["tests"]
 markers = [
     "integration: marks tests as integration tests that require compiled executables (deselect with '-m \"not integration\"')",
+    "slow: marks tests that process large local fixtures (deselect with '-m \"not slow\"')",
 ]

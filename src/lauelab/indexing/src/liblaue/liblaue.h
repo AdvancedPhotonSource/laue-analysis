@@ -17,6 +17,7 @@ extern "C" {
 
 typedef struct laue_geometry laue_geometry;
 typedef struct laue_crystal laue_crystal;
+typedef struct laue_recon laue_recon;
 
 typedef enum {
     LAUE_OK = 0,
@@ -39,6 +40,50 @@ typedef struct {
     double rotation[3][3];
     char detector_id[256];
 } laue_detector_info;
+
+typedef struct {
+    double dia;
+    double F;
+    double origin[3];
+    double axis[3];
+    double axisR[3];
+    double R[3][3];
+    double Rmag;
+    int has_wire;
+} laue_wire_info;
+
+typedef enum {
+    LAUE_RECON_EDGE_LEADING = 1,
+    LAUE_RECON_EDGE_TRAILING = 0,
+    LAUE_RECON_EDGE_BOTH = -1
+} laue_recon_edge;
+
+typedef enum {
+    LAUE_POSITIONER_NONE = 0,
+    LAUE_POSITIONER_PM500 = 1,
+    LAUE_POSITIONER_ALIO = 2
+} laue_positioner;
+
+typedef enum {
+    LAUE_PIXEL_U16 = 0,
+    LAUE_PIXEL_F64 = 1
+} laue_pixel_type;
+
+typedef struct {
+    double depth_start_um;
+    double depth_end_um;
+    double resolution_um;
+    int wire_edge;
+    int cosmic_filter;
+    int nx_full;
+    int ny_full;
+    int start_i;
+    int start_j;
+    int bin_i;
+    int bin_j;
+    int n_rows_total;
+    int n_cols;
+} laue_recon_params;
 
 typedef struct {
     int boxsize;
@@ -128,6 +173,23 @@ LAUE_API int laue_geometry_detector_count(const laue_geometry *geometry);
 LAUE_API int laue_geometry_find_detector(const laue_geometry *geometry, const char *detector_id);
 LAUE_API int laue_geometry_detector_info(const laue_geometry *geometry, int detector_index,
                                          laue_detector_info *info, char *err, size_t errlen);
+LAUE_API int laue_geometry_wire_info(const laue_geometry *geometry, laue_wire_info *info,
+                                     char *err, size_t errlen);
+LAUE_API laue_recon *laue_recon_create(const laue_geometry *geometry, int detector_index,
+                                       const laue_recon_params *params,
+                                       char *err, size_t errlen);
+LAUE_API int laue_recon_set_wire_positions(laue_recon *recon, const double *xyz_raw,
+                                           size_t n, int positioner);
+/* n_threads must be at least 1. */
+LAUE_API int laue_recon_stripe(laue_recon *recon, const void *images, int pixel_type,
+                               size_t n_images, size_t row0, size_t nrows,
+                               const double *scale, const double *norm_plane,
+                               const unsigned char *mask, double *out,
+                               int n_threads, double *seconds_elapsed);
+LAUE_API int laue_recon_n_depths(const laue_recon *recon);
+LAUE_API double laue_recon_depth_um(const laue_recon *recon, int index);
+LAUE_API const char *laue_recon_last_error(const laue_recon *recon);
+LAUE_API void laue_recon_free(laue_recon *recon);
 LAUE_API int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
                              const laue_peak_params *params, laue_frame_result *result);
 LAUE_API int laue_pixels_to_q(const laue_geometry *geometry, int detector_index, laue_frame_result *result);

@@ -14,10 +14,10 @@ geometry as ``WireScan.c`` (``pixel_to_point_xyz`` and
 ``pixel_xyz_to_depth``). That is enough for the program to exercise its full
 input, geometry, depth-binning, and HDF5 output paths with a stable answer.
 
-Run this file directly to regenerate ``cpu_reference.npz`` and
-``cpu_reference.json``. Only do that on purpose: the reference is an
-acceptance contract and regenerating it is a scientific decision, not a
-build step.
+Run this file directly to generate the named variant references. The original
+``cpu_reference.npz`` and ``cpu_reference.json`` are intentionally left
+untouched. Only generate references on purpose: each one is an acceptance
+contract and regeneration is a scientific decision, not a build step.
 """
 
 from __future__ import annotations
@@ -38,6 +38,28 @@ HERE = Path(__file__).resolve().parent
 GEOMETRY_FILE = HERE.parent / "geo" / "geoN_2022-03-29_14-15-05.xml"
 REFERENCE_NPZ = HERE / "cpu_reference.npz"
 REFERENCE_JSON = HERE / "cpu_reference.json"
+
+VARIANTS = {
+    "trailing": {"flags": ["-w", "t"], "wire_edge": "trailing"},
+    "both": {"flags": ["-w", "b"], "wire_edge": "both", "output_pixel_type": None},
+    "cosmic": {
+        "flags": ["-C"],
+        "cosmic_filter": True,
+        "write_microdiffraction": True,
+    },
+    "norm_vector": {"flags": ["-n", "mA"], "normalization": "mA", "write_mA": True},
+    "norm_exponent": {
+        "flags": ["-E", "0.5"],
+        "norm_exponent": 0.5,
+        "write_microdiffraction": True,
+    },
+    "out_uint16": {"flags": ["-t", "3"], "output_pixel_type": 3},
+    "out_int16": {
+        "flags": ["-w", "b", "-t", "2"],
+        "wire_edge": "both",
+        "output_pixel_type": 2,
+    },
+}
 
 SEED = 20260828
 DETECTOR = 0
@@ -185,7 +207,9 @@ def synthetic_images() -> tuple[np.ndarray, np.ndarray]:
     return images, wire_raw
 
 
-def write_input_file(path: Path) -> np.ndarray:
+def write_input_file(
+    path: Path, *, write_mA: bool = False, write_microdiffraction: bool = False
+) -> np.ndarray:
     """Write the synthetic wire scan to ``path`` and return the raw wire positions."""
     images, wire_raw = synthetic_images()
     n = images.shape[1]
@@ -201,6 +225,12 @@ def write_input_file(path: Path) -> np.ndarray:
         dset.attrs["signal"] = np.int32(1)
         entry.create_dataset("depth", data=np.array([0.0]))
         entry.create_dataset("scanNum", data=np.array([1], dtype=np.int32))
+        if write_mA:
+            entry.create_dataset(
+                "mA", data=np.linspace(51.0, 153.0, N_SCAN_IMAGES + 1)
+            )
+        if write_microdiffraction:
+            entry.create_group("microDiffraction")
         detector = entry.create_group("detector")
         for name, value in (
             ("Nx", FULL_PIXELS), ("Ny", FULL_PIXELS),
@@ -224,10 +254,17 @@ def write_input_file(path: Path) -> np.ndarray:
     return wire_raw
 
 
-def run_reconstruction(executable: str, input_file: Path, output_base: Path, num_threads: int = NUM_THREADS):
+def run_reconstruction(
+    executable: str,
+    input_file: Path,
+    output_base: Path,
+    num_threads: int = NUM_THREADS,
+    variant: str | None = None,
+):
     """Run the CPU program through the package API with the fixed reference parameters."""
     from lauelab.reconstruct import reconstruct
 
+    options = VARIANTS.get(variant, {})
     return reconstruct(
         str(input_file),
         str(output_base),
@@ -236,12 +273,15 @@ def run_reconstruction(executable: str, input_file: Path, output_base: Path, num
         resolution=DEPTH_RESOLUTION_UM,
         verbose=1,
         percent_brightest=PERCENT_BRIGHTEST,
-        wire_edge="leading",
+        wire_edge=options.get("wire_edge", "leading"),
         memory_limit_mb=256,
         executable=executable,
-        output_pixel_type=OUTPUT_PIXEL_TYPE,
+        normalization=options.get("normalization"),
+        output_pixel_type=options.get("output_pixel_type", OUTPUT_PIXEL_TYPE),
         detector_number=DETECTOR,
         num_threads=num_threads,
+        cosmic_filter=options.get("cosmic_filter", False),
+        norm_exponent=options.get("norm_exponent"),
     )
 
 
@@ -252,7 +292,7 @@ def load_outputs(output_base: Path) -> tuple[np.ndarray, np.ndarray]:
     for index in range(n_depths):
         path = Path(f"{output_base}{index}.h5")
         with h5py.File(path, "r") as f:
-            frames.append(np.asarray(f["entry1/data/data"], dtype=np.float64))
+            frames.append(np.asarray(f["entry1/data/data"]))
             depths.append(float(np.asarray(f["entry1/depth"]).ravel()[0]))
     return np.stack(frames), np.asarray(depths)
 
@@ -280,6 +320,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--executable", default=None, help="reconstructN_cpu to use (default: package binary)")
     parser.add_argument("--workdir", default=None, help="keep intermediate files here instead of a temp dir")
+    parser.add_argument(
+        "--variant",
+        choices=tuple(VARIANTS),
+        action="append",
+        help="variant to generate (repeatable; default: all variants)",
+    )
     args = parser.parse_args(argv)
 
     import tempfile
@@ -288,38 +334,63 @@ def main(argv: list[str] | None = None) -> int:
     executable = args.executable or find_executable()
     workdir = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="recon_ref_"))
     workdir.mkdir(parents=True, exist_ok=True)
-    input_file = workdir / "synthetic_wire_scan.h5"
-    write_input_file(input_file)
-    input_sha = hashlib.sha256(input_file.read_bytes()).hexdigest()
+    git_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=HERE
+    ).stdout.strip()
+    for variant in args.variant or VARIANTS:
+        options = VARIANTS[variant]
+        variant_dir = workdir / variant
+        variant_dir.mkdir(parents=True, exist_ok=True)
+        input_file = variant_dir / "synthetic_wire_scan.h5"
+        write_input_file(
+            input_file,
+            write_mA=options.get("write_mA", False),
+            write_microdiffraction=options.get("write_microdiffraction", False),
+        )
+        input_sha = hashlib.sha256(input_file.read_bytes()).hexdigest()
 
-    output_base = workdir / "out" / "recon_"
-    result = run_reconstruction(executable, input_file, output_base)
-    if not result.success:
-        sys.stderr.write(result.log + "\n" + (result.error or "") + "\n")
-        return 1
-    stack, depths = load_outputs(output_base)
-
-    git_commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=HERE).stdout.strip()
-    provenance = {
-        "generated_at_commit": git_commit,
-        "python": platform.python_version(),
-        "numpy": np.__version__,
-        "h5py": h5py.__version__,
-        "toolchain": executable_provenance(str(executable)),
-        "seed": SEED,
-        "input_sha256": input_sha,
-        "output_sha256": sha256_of(stack),
-        "output_shape": list(stack.shape),
-        "depth_range_um": list(DEPTH_RANGE_UM),
-        "depth_resolution_um": DEPTH_RESOLUTION_UM,
-        "num_threads": NUM_THREADS,
-        "comparison": {"rtol": 1e-12, "atol": 1e-9, "note": "float64 output; expected to match bit-for-bit on the same toolchain"},
-        "note": "Generated from a synthetic input; no measured data. Machine paths are intentionally not recorded.",
-    }
-    np.savez_compressed(REFERENCE_NPZ, depth_um=depths, images=stack)
-    REFERENCE_JSON.write_text(json.dumps(provenance, indent=2) + "\n")
-    print(json.dumps(provenance, indent=2))
-    print(f"wrote {REFERENCE_NPZ} ({REFERENCE_NPZ.stat().st_size / 1e6:.2f} MB); workdir={workdir}")
+        output_base = variant_dir / "out" / "recon_"
+        result = run_reconstruction(executable, input_file, output_base, variant=variant)
+        if not result.success:
+            sys.stderr.write(result.log + "\n" + (result.error or "") + "\n")
+            return 1
+        stack, depths = load_outputs(output_base)
+        integer_output = np.issubdtype(stack.dtype, np.integer)
+        comparison = (
+            {"rtol": 0.0, "atol": 0.0, "note": "integer output; exact comparison"}
+            if integer_output
+            else {
+                "rtol": 1e-12,
+                "atol": 1e-9,
+                "note": "floating-point output; expected to match bit-for-bit on the same toolchain",
+            }
+        )
+        provenance = {
+            "variant": variant,
+            "flags": options["flags"],
+            "generated_at_commit": git_commit,
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "h5py": h5py.__version__,
+            "toolchain": executable_provenance(str(executable)),
+            "seed": SEED,
+            "input_sha256": input_sha,
+            "output_sha256": sha256_of(stack),
+            "output_dtype": str(stack.dtype),
+            "output_shape": list(stack.shape),
+            "depth_range_um": list(DEPTH_RANGE_UM),
+            "depth_resolution_um": DEPTH_RESOLUTION_UM,
+            "num_threads": NUM_THREADS,
+            "comparison": comparison,
+            "note": "Generated from a synthetic input; no measured data. Machine paths are intentionally not recorded.",
+        }
+        reference_npz = HERE / f"cpu_reference_{variant}.npz"
+        reference_json = HERE / f"cpu_reference_{variant}.json"
+        np.savez_compressed(reference_npz, depth_um=depths, images=stack)
+        reference_json.write_text(json.dumps(provenance, indent=2) + "\n")
+        print(json.dumps(provenance, indent=2))
+        print(f"wrote {reference_npz} ({reference_npz.stat().st_size / 1e6:.2f} MB)")
+    print(f"workdir={workdir}")
     return 0
 
 

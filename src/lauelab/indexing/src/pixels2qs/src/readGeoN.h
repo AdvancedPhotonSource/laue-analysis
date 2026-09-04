@@ -62,6 +62,7 @@ struct geoStructure {				/* structure definition */
 
 
 long readGeoFromFile(char *fname, struct geoStructure *geo);
+long readGeoForLibrary(char *fname, struct geoStructure *geo, int *has_wire);
 long readDetectorGeometryFromFile(char *fname, struct geoStructure *geo);
 void printGeometry(FILE *f, struct geoStructure *geo);
 int checkFileTypeOLD(char *lineIn, size_t Nline, char *type);

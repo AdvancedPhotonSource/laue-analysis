@@ -101,7 +101,8 @@ change grows the public surface, say so explicitly and justify it.
 - `src/lauelab/analysis` — orientation math, simulation (vendored JZT
   backend), coloring.
 - `src/lauelab/visualization` — Plotly figures, tables, LaueGo XML loading.
-- `src/lauelab/reconstruct` — wire-scan reconstruction (subprocess wrapper).
+- `src/lauelab/reconstruct` — in-process wire-scan reconstruction, point pools,
+  HDF5 I/O, and supported CPU/GPU subprocess wrappers.
 - `tests/` — suite plus golden data; `tests/native/` has the C memory
   harness.
 - `docs/` — Sphinx/MyST; quickstart and guides are runnable against

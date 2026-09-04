@@ -10,18 +10,25 @@
 
 #include <gsl/gsl_errno.h>
 
-#include "readGeoN.h"
+#include "liblaue_internal.h"
 #include "peaksearch.h"
 #include "Euler.h"
 
 __thread FILE *fout;
 
+/*
+ * GSL is linked statically, and its only abort reference is in gsl_error.
+ * initialize_liblaue installs gsl_set_error_handler_off before any GSL call,
+ * so that path is unreachable. Keep abort out of the library's imports, but
+ * terminate rather than continue if this invariant is ever broken.
+ */
+__attribute__((noreturn)) void __wrap_abort(void)
+{
+    __builtin_trap();
+}
+
 struct laue_crystal {
     struct crystalStructure value;
-};
-
-struct laue_geometry {
-    struct geoStructure value;
 };
 
 static void set_error(char *err, size_t errlen, const char *message)
@@ -83,7 +90,7 @@ laue_geometry *laue_geometry_from_file(const char *path, char *err, size_t errle
         set_error(err, errlen, "unable to allocate geometry");
         return NULL;
     }
-    if (readDetectorGeometryFromFile((char *)path, &geometry->value)) {
+    if (readGeoForLibrary((char *)path, &geometry->value, &geometry->has_wire)) {
         free(geometry);
         set_error(err, errlen, "unable to read detector geometry file");
         return NULL;
@@ -238,6 +245,37 @@ int laue_geometry_detector_info(const laue_geometry *geometry, int detector_inde
     snprintf(info->detector_id, sizeof(info->detector_id), "%s", detector->detectorID);
     set_error(err, errlen, "");
     return 0;
+}
+
+int laue_geometry_wire_info(const laue_geometry *geometry, laue_wire_info *info,
+                            char *err, size_t errlen)
+{
+    const struct wireGeometry *wire;
+
+    if (!geometry || !info) {
+        set_error(err, errlen, "invalid wire geometry output");
+        return LAUE_INVALID_ARGUMENT;
+    }
+    wire = &geometry->value.wire;
+    memset(info, 0, sizeof(*info));
+    info->dia = wire->dia;
+    info->F = wire->F;
+    memcpy(info->origin, wire->origin, sizeof(info->origin));
+    memcpy(info->axis, wire->axis, sizeof(info->axis));
+    memcpy(info->axisR, wire->axisR, sizeof(info->axisR));
+    info->R[0][0] = wire->R00;
+    info->R[0][1] = wire->R01;
+    info->R[0][2] = wire->R02;
+    info->R[1][0] = wire->R10;
+    info->R[1][1] = wire->R11;
+    info->R[1][2] = wire->R12;
+    info->R[2][0] = wire->R20;
+    info->R[2][1] = wire->R21;
+    info->R[2][2] = wire->R22;
+    info->Rmag = wire->Rmag;
+    info->has_wire = geometry->has_wire;
+    set_error(err, errlen, "");
+    return LAUE_OK;
 }
 
 int laue_find_peaks(const unsigned short *pixels, int nx, int ny,

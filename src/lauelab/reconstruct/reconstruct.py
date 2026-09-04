@@ -2,32 +2,25 @@
 # Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Wire scan reconstruction functions for Laue analysis."""
 
-from typing import List, Tuple, Optional, Union, NamedTuple
+from dataclasses import dataclass
+from typing import List, Tuple, Optional, Union
 from pathlib import Path
+import os
+
+import numpy as np
 import subprocess
 import re
 import shutil
 import functools
 from importlib import resources
 
-# Result type for reconstruction operations
-class ReconstructionResult(NamedTuple):
-    """Result from a native reconstruction process.
+@dataclass
+class ReconstructionResult:
+    """Result from subprocess or in-process wire-scan reconstruction.
 
-    Attributes
-    ----------
-    success
-        Whether the process returned exit status zero.
-    output_files
-        Paths that match the requested output-file prefix.
-    log
-        Standard output from the process.
-    error
-        Standard error for a failed process, or ``None`` after success.
-    command
-        Command line passed to the process, joined as one string.
-    return_code
-        Process exit status. A timeout or execution error uses ``-1``.
+    The first six fields preserve the positional interface of the previous
+    named tuple. Native-only arrays and stripe timings default to `None` on the
+    subprocess path.
     """
 
     success: bool
@@ -36,6 +29,18 @@ class ReconstructionResult(NamedTuple):
     error: Optional[str] = None
     command: str = ""
     return_code: int = 0
+    images: np.ndarray | None = None
+    depth_um: np.ndarray | None = None
+    depth_intensity: np.ndarray | None = None
+    timings: list | None = None
+    last_completed_stripe: int | None = None
+    """Last stripe fully written to every output file, the last stripe computed
+    when no files are written, or ``None`` if none completed.
+    """
+
+    def _asdict(self):
+        """Return fields as a dictionary, matching the former named tuple."""
+        return dict(vars(self))
 
 
 # Cache the executable path lookup to avoid repeated filesystem searches.
@@ -161,12 +166,16 @@ def _execute_reconstruction(
             if path.is_file()
         } if output_dir.exists() else {}
 
-        # Execute the subprocess - RPATH handles library loading
+        # The executable links OpenBLAS through GSL but does not call BLAS. Avoid
+        # starting its otherwise spinning worker pool unless the caller opted in.
+        env = os.environ.copy()
+        env.setdefault("OPENBLAS_NUM_THREADS", "1")
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=env,
         )
         
         success = result.returncode == 0

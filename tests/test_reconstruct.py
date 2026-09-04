@@ -111,7 +111,18 @@ class TestReconstruct:
         assert '0.0' in call_args
         assert '-e' in call_args
         assert '10.0' in call_args
-    
+        assert mock_subprocess.call_args.kwargs["env"]["OPENBLAS_NUM_THREADS"] == "1"
+
+    @pytest.mark.parametrize("reconstruct_function", [reconstruct, reconstruct_gpu])
+    def test_reconstruct_preserves_openblas_thread_setting(
+        self, monkeypatch, mock_subprocess, mock_executable, reconstruct_function
+    ):
+        monkeypatch.setenv("OPENBLAS_NUM_THREADS", "4")
+
+        reconstruct_function('input.h5', 'output_', 'geo.xml', (0.0, 10.0))
+
+        assert mock_subprocess.call_args.kwargs["env"]["OPENBLAS_NUM_THREADS"] == "4"
+
     def test_reconstruct_reports_only_new_or_updated_outputs_in_numeric_order(
         self, tmp_path, mock_executable
     ):
@@ -470,18 +481,22 @@ class TestReconstructCPUReference:
     REFERENCE_DIR = Path(__file__).resolve().parent / "data" / "reconstruction"
 
     @pytest.fixture(scope="class")
-    def reference_module(self):
+    @classmethod
+    def reference_module(cls):
         import importlib.util
 
         spec = importlib.util.spec_from_file_location(
-            "cpu_reference_generator", self.REFERENCE_DIR / "generate_reference.py"
+            "cpu_reference_generator", cls.REFERENCE_DIR / "generate_reference.py"
         )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
 
     @pytest.mark.integration
-    def test_cpu_reconstruction_matches_reference(self, reference_module, tmp_path):
+    @pytest.mark.parametrize("variant", [None, "trailing", "both", "cosmic", "norm_vector", "norm_exponent", "out_uint16", "out_int16"])
+    def test_cpu_reconstruction_matches_reference(
+        self, reference_module, tmp_path, variant
+    ):
         try:
             exe_path = find_executable()
         except FileNotFoundError:
@@ -489,18 +504,28 @@ class TestReconstructCPUReference:
 
         import json
 
-        expected = np.load(self.REFERENCE_DIR / "cpu_reference.npz")
-        provenance = json.loads((self.REFERENCE_DIR / "cpu_reference.json").read_text())
+        suffix = f"_{variant}" if variant else ""
+        expected = np.load(self.REFERENCE_DIR / f"cpu_reference{suffix}.npz")
+        provenance = json.loads(
+            (self.REFERENCE_DIR / f"cpu_reference{suffix}.json").read_text()
+        )
 
         input_file = tmp_path / "synthetic_wire_scan.h5"
-        reference_module.write_input_file(input_file)
+        options = reference_module.VARIANTS.get(variant, {})
+        reference_module.write_input_file(
+            input_file,
+            write_mA=options.get("write_mA", False),
+            write_microdiffraction=options.get("write_microdiffraction", False),
+        )
         import hashlib
 
         assert hashlib.sha256(input_file.read_bytes()).hexdigest() == provenance["input_sha256"], (
             "synthetic input changed; the generator or its dependencies no longer reproduce the reference input"
         )
 
-        result = reference_module.run_reconstruction(exe_path, input_file, tmp_path / "out" / "recon_")
+        result = reference_module.run_reconstruction(
+            exe_path, input_file, tmp_path / "out" / "recon_", variant=variant
+        )
         assert result.success, f"{result.command}\n{result.log}\n{result.error}"
 
         images, depths = reference_module.load_outputs(tmp_path / "out" / "recon_")

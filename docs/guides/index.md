@@ -6,6 +6,7 @@ These guides cover the decisions and data conventions needed to build an indexin
 :maxdepth: 1
 
 geometry
+reconstruction
 crystals
 frame-input
 parameters

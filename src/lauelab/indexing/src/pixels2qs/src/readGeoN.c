@@ -91,7 +91,8 @@ This is an example of what the input file looks like (this one only has 2 of the
 static long readGeoFromFileInternal(
 char	*fname,
 struct geoStructure *geo,
-int detectorOnly)
+int detectorOnly,
+int *has_wire)
 {
 	char	*buf=NULL;								/* string with tag values */
 	FILE	*f=NULL;								/* file descriptor */
@@ -149,8 +150,9 @@ int detectorOnly)
 	if (itype==1) n = tagValBuf2GeoN(buf,geo);		/* interpret old file type with "$tag value" pairs */
 	else if(itype==2) n = xmlBuf2GeoN(buf,geo);		/* interpret new xml file type */
 	else n = 0;
-	if (n < 0 || (!detectorOnly && n != (1<<10)-1)) goto exitPoint;
-	if (detectorOnly && (n & ((1<<7)-1)) != (1<<7)-1) goto exitPoint;
+	if (has_wire) *has_wire = n >= 0 && (n & (7<<7)) == (7<<7);
+	if (n < 0 || (!detectorOnly && !has_wire && n != (1<<10)-1)) goto exitPoint;
+	if ((detectorOnly || has_wire) && (n & ((1<<7)-1)) != (1<<7)-1) goto exitPoint;
 
 	if (detectorOnly) {
 		int i, active = 0;
@@ -172,12 +174,17 @@ int detectorOnly)
 
 long readGeoFromFile(char *fname, struct geoStructure *geo)
 {
-	return readGeoFromFileInternal(fname, geo, 0);
+	return readGeoFromFileInternal(fname, geo, 0, NULL);
+}
+
+long readGeoForLibrary(char *fname, struct geoStructure *geo, int *has_wire)
+{
+	return readGeoFromFileInternal(fname, geo, 0, has_wire);
 }
 
 long readDetectorGeometryFromFile(char *fname, struct geoStructure *geo)
 {
-	return readGeoFromFileInternal(fname, geo, 1);
+	return readGeoFromFileInternal(fname, geo, 1, NULL);
 }
 
 
