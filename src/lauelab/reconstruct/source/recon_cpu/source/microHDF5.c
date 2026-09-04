@@ -1410,14 +1410,20 @@ Dvector *vec)
  {
 	hid_t	file_id=0;
 	herr_t	err=0;
+	char	dataName[FILENAME_MAX];
 
-	if ((file_id=H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT))<=0) return file_id;
-	(*vec).N = HDF5ReadDoubleVector(file_id, name, &((*vec).v));
+	if ((file_id=H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT))<=0) {
+		(*vec).N = 0;
+		return 0;
+	}
+	snprintf(dataName,sizeof(dataName),"entry1/%s",name);
+	(*vec).N = HDF5ReadDoubleVector(file_id, dataName, &((*vec).v));
+	if (!(*vec).N) (*vec).N = HDF5ReadDoubleVector(file_id, name, &((*vec).v));
 
 	if (file_id>0) {
-		if ((err = H5Fclose(file_id))) { fprintf(stderr,"ERROR -- readHDF5header(), file close error = %d\n",err); return err; }
+		if ((err = H5Fclose(file_id))) fprintf(stderr,"ERROR -- readHDF5header(), file close error = %d\n",err);
 	}
-	return err;
+	return (int)(*vec).N;
 }
 
 

@@ -422,11 +422,12 @@ char*	buf)
 	t[tlen+2] = '\0';
 
 	t[tlen+1] = ' ';
-	if (strstr(buf,t)) return 1;	/* find start of tag of form '<tag more stuff...>' */
+	if (strstr(buf,t)) { free(t); return 1; }	/* find start of tag of form '<tag more stuff...>' */
 
 	t[tlen+1] = '>';
-	if (strstr(buf,t)) return 1;	/* find start of tag of form '<tag>' */
+	if (strstr(buf,t)) { free(t); return 1; }	/* find start of tag of form '<tag>' */
 
+	free(t);
 	return 0;						/* failed to find the tag */
 }
 

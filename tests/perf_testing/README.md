@@ -12,6 +12,22 @@ $ python tests/perf_testing/run_simulation_perf.py --case ni --warm-runs 5
 
 Use `--output report.json` to retain the machine-readable report. The benchmark has no pass or fail threshold because host load and cold filesystem state affect its measurements.
 
+`run_reconstruct_perf.py` is a hand-run performance measurement, not an
+automated test gate, for the production reconstruction executable and the
+in-process driver. It runs Twin2 point 1 at 1, 8, 16, and 32 threads and reports
+wall time, mean compute and I/O time per stripe, and the native-to-executable
+kernel ratio. The results are observational because host load and filesystem
+state affect the measurements. Point `LAUELAB_TWIN2_FIXTURE` at a directory
+holding `Twin2_wire_1.h5` and `geoN_2023-04-06_03-07-11_cor6.xml`, then run:
+
+```console
+$ python tests/perf_testing/run_reconstruct_perf.py
+```
+
+`--fixture` overrides the environment variable. The script exits successfully
+with a skip message when neither is set or the files are missing. Outputs use
+temporary storage by default; pass `--output-dir` to retain them.
+
 Key features:
 - Requires two inputs: an HDF5 file and a staging directory (to test different filesystems).
 - Pre-copies the input HDF5 into N replicas (one per parallel runner) once before all tests.

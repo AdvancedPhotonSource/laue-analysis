@@ -6,9 +6,11 @@ Phase 3) and by `tests/test_reconstruct.py::TestReconstructCPUReference`.
 
 | File | Purpose |
 | --- | --- |
-| `generate_reference.py` | Builds the deterministic synthetic wire scan, runs the program, and writes the two files below. |
-| `cpu_reference.npz` | `images[51, 128, 128]` (float64) and `depth_um[51]` produced by the reference build. |
-| `cpu_reference.json` | Provenance: commit, toolchain stamp, linked library names, input and output SHA-256, and the comparison tolerance. No machine paths. |
+| `generate_reference.py` | Builds the deterministic synthetic wire scans, runs the program, and writes the named variant files. |
+| `cpu_reference.npz` | Original leading-edge `images[51, 128, 128]` (float64) and `depth_um[51]` reference. |
+| `cpu_reference.json` | Provenance for the original reference. No machine paths. |
+| `cpu_reference_<variant>.npz` | Output for trailing edge, both edges, cosmic filtering, vector normalization, exponent normalization, uint16 output, or int16 output. |
+| `cpu_reference_<variant>.json` | Variant flags, input and output SHA-256, output dtype and shape, toolchain, and comparison tolerance. |
 
 ## What the input is
 
@@ -36,8 +38,11 @@ decision that must be reviewed and recorded. When it is warranted:
 
 ```console
 python tests/data/reconstruction/generate_reference.py
+# Or regenerate one named variant:
+python tests/data/reconstruction/generate_reference.py --variant cosmic
 ```
 
-Run it from an environment where `lauelab` and its CPU executable are
-installed, then commit the updated `.npz` and `.json` together with a note in
-the commit message explaining why the reference changed.
+With no `--variant`, the script regenerates all seven named variants and leaves
+the original `cpu_reference.npz` and `.json` untouched. Run it from an
+environment where `lauelab` and its CPU executable are installed, then commit
+each updated `.npz` and `.json` pair with a note explaining why it changed.

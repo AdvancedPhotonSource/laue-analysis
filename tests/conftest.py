@@ -18,10 +18,10 @@ from importlib import resources
 import pytest
 
 GPU_SKIP_REASON = "GPU reconstruction executable not available"
+TWIN2_SKIP_REASON = "Twin2 wire-scan fixture not available"
 # Valgrind and the C compiler ship in environment.yml, so their absence is a
-# broken environment, not an expected skip: only the GPU executable may skip
-# under --require-native.
-ALLOWED_SKIP_REASONS = (GPU_SKIP_REASON,)
+# broken environment, not an expected skip.
+ALLOWED_SKIP_REASONS = (GPU_SKIP_REASON, TWIN2_SKIP_REASON)
 
 
 def native_file_available(package: str, name: str) -> bool:

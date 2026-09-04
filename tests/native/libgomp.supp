@@ -1,0 +1,14 @@
+{
+   libgomp-runtime-init
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   obj:*/libgomp.so*
+}
+{
+   libgomp-thread-pool
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   fun:GOMP_parallel
+}

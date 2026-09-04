@@ -12,4 +12,6 @@ native indexing failures. Native allocation failures use Python's built-in
 .. autoexception:: InputError
 
 .. autoexception:: IndexingError
+
+.. autoexception:: ReconstructionError
 ```

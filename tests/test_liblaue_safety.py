@@ -48,6 +48,19 @@ assert lib.laue_geometry_find_detector(ffi.NULL, b"detector") == -1
 assert lib.laue_crystal_reciprocal(ffi.NULL, ffi.NULL) == 1
 assert lib.laue_geometry_detector_info(ffi.NULL, 0, info, error, 256) == 1
 assert ffi.string(error) == b"invalid detector index"
+wire = ffi.new("laue_wire_info *")
+assert lib.laue_geometry_wire_info(ffi.NULL, wire, error, 256) == 1
+assert ffi.string(error) == b"invalid wire geometry output"
+assert lib.laue_recon_create(ffi.NULL, 0, ffi.NULL, error, 256) == ffi.NULL
+assert ffi.string(error) == b"invalid reconstruction parameters"
+assert lib.laue_recon_set_wire_positions(ffi.NULL, ffi.NULL, 0, 0) == 1
+assert lib.laue_recon_stripe(ffi.NULL, ffi.NULL, 0, 0, 0, 0, ffi.NULL,
+                             ffi.NULL, ffi.NULL, ffi.NULL, 0, ffi.NULL) == 1
+assert lib.laue_recon_n_depths(ffi.NULL) == 0
+assert lib.laue_recon_depth_um(ffi.NULL, 0) != lib.laue_recon_depth_um(ffi.NULL, 0)
+assert ffi.string(lib.laue_recon_last_error(ffi.NULL)) == b"reconstruction context is NULL"
+lib.laue_recon_free(ffi.NULL)
+
 
 assert lib.laue_find_peaks(ffi.NULL, 1, 1, params, result) == 1
 assert result.status == 1
@@ -111,7 +124,14 @@ indexer.index(np.full((350, 350), 500, np.uint16))
     assert completed.returncode == 0, completed.stderr
 
 
-def test_repeated_peak_search_releases_native_allocations(tmp_path):
+@pytest.mark.parametrize(
+    ("source_name", "arguments"),
+    [
+        ("peaksearch_memory.c", ()),
+        ("recon_memory.c", (ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml",)),
+    ],
+)
+def test_native_calls_release_allocations(tmp_path, source_name, arguments):
     valgrind = shutil.which("valgrind")
     compiler = shutil.which("cc")
     if valgrind is None:
@@ -122,8 +142,8 @@ def test_repeated_peak_search_releases_native_allocations(tmp_path):
     from importlib import resources
 
     library = Path(str(resources.files("lauelab.indexing.bin") / "liblaue.so"))
-    source = ROOT / "tests/native/peaksearch_memory.c"
-    executable = tmp_path / "peaksearch-memory"
+    source = ROOT / "tests/native" / source_name
+    executable = tmp_path / source.stem.replace("_", "-")
     compiled = subprocess.run(
         [
             compiler,
@@ -151,9 +171,11 @@ def test_repeated_peak_search_releases_native_allocations(tmp_path):
             "--leak-check=full",
             "--show-leak-kinds=all",
             "--errors-for-leak-kinds=all",
+            f"--suppressions={ROOT / 'tests/native/libgomp.supp'}",
             "--track-origins=yes",
             "--error-exitcode=99",
             str(executable),
+            *map(str, arguments),
         ],
         cwd=ROOT,
         capture_output=True,

@@ -73,7 +73,6 @@ void delete_images(void);
 void add_pixel_intensity_at_depth(point_ccd pixel, double intensity, double depth);
 //inline void add_pixel_intensity_at_index(point_ccd pixel, double intensity, long index);
 //inline void add_pixel_intensity_at_index(size_t i, size_t j, double intensity, long index);
-void add_pixel_intensity_at_index(size_t i, size_t j, double intensity, long index);
 int calc_intensity_norm(double *intensity_sorted);
 void p_buffer_swap();
 
@@ -84,9 +83,9 @@ double index_to_beam_depth(long index);
 double get_trapezoid_height(double partial_start, double partial_end, double full_start, double full_end, double depth);
 point_xyz pixel_to_point_xyz(point_ccd pixel);
 double pixel_xyz_to_depth(point_xyz point_on_ccd_xyz, point_xyz wire_position, BOOLEAN use_leading_wire_edge);
+double rotated_pixel_xyz_to_depth(point_xyz pixelPos, point_xyz wire_position, BOOLEAN use_leading_wire_edge);
 void depth_resolve(int i_start, int i_stop, int nthreads);
-//inline void depth_resolve_pixel(double pixel_intensity, point_ccd pixel, point_xyz point, point_xyz next_point, point_xyz wire_position_1, point_xyz wire_position_2, BOOLEAN use_leading_wire_edge);
-void depth_resolve_pixel(double pixel_intensity, size_t i, size_t j, point_xyz point, point_xyz next_point, point_xyz wire_position_1, point_xyz wire_position_2, BOOLEAN use_leading_wire_edge);
+void depth_resolve_pixel(double pixel_intensity, size_t i, size_t j, double partial_end, double partial_start, double full_start, double full_end, double *pixel_depths);
 void print_imaging_parameters(ws_imaging_parameters ip);
 long pixel_type2scaling(int itype);
 void print_help_text(void);
@@ -869,6 +868,12 @@ void depth_resolve(
 	double	diff_value;						/* intensity difference between two wire steps for a pixel */
 //	dvector pixel_values;					/* vector to hold one pixel's values at all depths */
 	dvector *pixel_values_thread;			// vector in each thread to hold one pixel's values at depths
+	double *depth_back_thread;
+	double *depth_front_thread;
+	double *pixel_depths_thread;
+	double *totals_thread;
+	size_t n_depths;
+	size_t n_wire_positions;
 	size_t	step;							/* index over the input images */
 	size_t	idep;							/* index into depths */
 	size_t	i,j;							/* loop indicies */
@@ -880,6 +885,13 @@ void depth_resolve(
 	//pixel_values.v = calloc(pixel_values.alloc,sizeof(double));				/* allocate space for array of doubles in the vector */
 	//if (!(pixel_values.v)) { fprintf(stderr,"\ncannot allocate space for pixel_values, %ld points\n",pixel_values.alloc); exit(1); }
 	pixel_values_thread = calloc(nthreads,sizeof(dvector));
+	n_depths = image_set.depth_resolved.size;
+	n_wire_positions = image_set.wire_positions.size;
+	depth_back_thread = malloc((size_t)nthreads * 2 * n_wire_positions * sizeof(double));
+	depth_front_thread = malloc((size_t)nthreads * 2 * n_wire_positions * sizeof(double));
+	pixel_depths_thread = calloc((size_t)nthreads * n_depths, sizeof(double));
+	totals_thread = calloc((size_t)nthreads * n_depths, sizeof(double));
+	if (!(pixel_values_thread) || !(depth_back_thread) || !(depth_front_thread) || !(pixel_depths_thread) || !(totals_thread)) { fprintf(stderr,"\ncannot allocate thread-local reconstruction buffers\n"); exit(1); }
 	for (i=0;i<nthreads;i++)
 	{	pixel_values_thread[i].size = pixel_values_thread[i].alloc = imaging_parameters.NinputImages - 1;
 		pixel_values_thread[i].v = calloc(pixel_values_thread[i].alloc,sizeof(double));		/* allocate space for array of doubles in the vector */
@@ -907,6 +919,10 @@ void depth_resolve(
     #pragma omp for // run this for loop in parallel
 	for (i = i_start; i <= (size_t)i_stop; i++) {							/* loop over selected part of i */
 		int ith = omp_get_thread_num();
+		double *depth_back = depth_back_thread + (size_t)ith * 2 * n_wire_positions;
+		double *depth_front = depth_front_thread + (size_t)ith * 2 * n_wire_positions;
+		double *pixel_depths = pixel_depths_thread + (size_t)ith * n_depths;
+		double *depth_totals = totals_thread + (size_t)ith * n_depths;
 		pixel_edge.i = (double)i;
 		for (j=0; j < (size_t)imaging_parameters.nROI_j; j++) {				/* loop over all of j, wire travels in the j direction for the orange detector */
 			if (j==0) {														/* only need to recompute this for first j */
@@ -923,6 +939,18 @@ void depth_resolve(
 			front_edge = pixel_to_point_xyz(pixel_edge);					/* the front edge of this pixel */
 			if ( gsl_matrix_get(intensity_map, i, j)  < cutoff) continue;	/* not enough intensity, skip this pixel */
 			for (idep=0;idep<pixel_values_thread[ith].alloc;idep++) pixel_values_thread[ith].v[idep]=0.;	/* clear the pixel vector along depth, set all to zero */
+			memset(pixel_depths, 0, n_depths * sizeof(double));
+			point_xyz rotated_back_edge = MatrixMultiply31(calibration.wire.rho,back_edge);
+			point_xyz rotated_front_edge = MatrixMultiply31(calibration.wire.rho,front_edge);
+			for (step=0; step<n_wire_positions; step++) {
+				BOOLEAN edge = user_preferences.wireEdge < 0 ? 1 : user_preferences.wireEdge;
+				depth_back[step] = rotated_pixel_xyz_to_depth(rotated_back_edge, image_set.wire_positions.v[step], edge);
+				depth_front[step] = rotated_pixel_xyz_to_depth(rotated_front_edge, image_set.wire_positions.v[step], edge);
+				if (user_preferences.wireEdge < 0) {
+					depth_back[n_wire_positions + step] = rotated_pixel_xyz_to_depth(rotated_back_edge, image_set.wire_positions.v[step], 0);
+					depth_front[n_wire_positions + step] = rotated_pixel_xyz_to_depth(rotated_front_edge, image_set.wire_positions.v[step], 0);
+				}
+			}
 #ifdef DEBUG_1_PIXEL
 			if (verbosePixel)
 				printf("\nback_edge = {%g, %g, %g},  front_edge = {%g, %g, %g} for pixel[%lu, %lu]",back_edge.x,back_edge.y,back_edge.z,front_edge.x,front_edge.y,front_edge.z,i,j);
@@ -960,16 +988,22 @@ void depth_resolve(
 				#endif
 				if (diff_value==0) continue;								/* only process for non-zero intensity */
 				else if (user_preferences.wireEdge<0) {						/* using both leading and trailing edges of the wire */
-					depth_resolve_pixel(diff_value, i,j, back_edge, front_edge, image_set.wire_positions.v[step], image_set.wire_positions.v[step+1], 1);
-					depth_resolve_pixel(diff_value, i,j, back_edge, front_edge, image_set.wire_positions.v[step], image_set.wire_positions.v[step+1], 0);
+					depth_resolve_pixel(diff_value, i, j, depth_back[step+1], depth_front[step], depth_back[step], depth_front[step+1], pixel_depths);
+					depth_resolve_pixel(-diff_value, i, j, depth_back[n_wire_positions+step+1], depth_front[n_wire_positions+step], depth_back[n_wire_positions+step], depth_front[n_wire_positions+step+1], pixel_depths);
 				}
 /*				else if (user_preferences.wireEdge && diff_value>0 || !(user_preferences.wireEdge) && diff_value<0) {*/
 				else {														/* change, do both positives and negatives, when only a single edge */
-					depth_resolve_pixel(diff_value, i,j, back_edge, front_edge, image_set.wire_positions.v[step], image_set.wire_positions.v[step+1], user_preferences.wireEdge);
+					depth_resolve_pixel(user_preferences.wireEdge ? diff_value : -diff_value, i, j, depth_back[step+1], depth_front[step], depth_back[step], depth_front[step+1], pixel_depths);
 				}
 				#ifdef DEBUG_1_PIXEL
 				if (verbosePixel) printf("\n∆ pixel[%ld] values = %g",step,diff_value);
 				#endif
+			}
+			for (idep=0; idep<n_depths; idep++) {
+				if (pixel_depths[idep] != 0) {
+					* gsl_matrix_ptr(image_set.depth_resolved.v[idep], i - imaging_parameters.current_selection_start, j) += pixel_depths[idep];
+					depth_totals[idep] += pixel_depths[idep];
+				}
 			}
 			#ifdef DEBUG_1_PIXEL
 			if (verbosePixel) { printf("\n  ****** done with story of one pixel[%lu, %lu]\n",i,j); verbosePixel = 0; }
@@ -977,6 +1011,17 @@ void depth_resolve(
 		}
 	} // end of parallel for loop over rows
   } // end of omp parallel
+	for (i=0;i<(size_t)nthreads;i++) {
+		for (idep=0;idep<n_depths;idep++) {
+			image_set.depth_intensity.v[idep] += totals_thread[i * n_depths + idep];
+		}
+		free(pixel_values_thread[i].v);
+	}
+	free(totals_thread);
+	free(pixel_depths_thread);
+	free(depth_front_thread);
+	free(depth_back_thread);
+	free(pixel_values_thread);
 	if(verbose > 1)
 	{	time1 = omp_get_wtime();
 		printf("\t\t depth-resolving done in %g seconds\n",time1-time0);
@@ -995,34 +1040,24 @@ void depth_resolve_pixel(
 double pixel_intensity,				/* difference of the intensity at the two wire positions */
 size_t	i,							/* indicies to the the pixel being processed, relative to the full stored image, range is (xdim,ydim) */
 size_t	j,
-point_xyz back_edge,				/* xyz postition of the trailing edge of the pixel in beam line coords relative to the Si */
-point_xyz front_edge,				/* xyz postition of the leading edge of the pixel in beam line coords relative to the Si */
-point_xyz wire_position_1,			/* first wire position (xyz) in beam line coords relative to the Si */
-point_xyz wire_position_2,			/* second wire position (xyz) in beam line coords relative to the Si */
-BOOLEAN use_leading_wire_edge)		/* true=(use leading endge of wire), false=(use trailing edge of wire) */
+double partial_end,					/* depth from the back pixel edge at the second wire position */
+double partial_start,				/* depth from the front pixel edge at the first wire position */
+double full_start,					/* depth from the back pixel edge at the first wire position */
+double full_end,					/* depth from the front pixel edge at the second wire position */
+double *pixel_depths)				/* thread-local accumulation for this pixel */
 {
-	double	partial_start;					/* trapezoid parameters, depth where partial intensity begins (micron) */
-	double	full_start;						/* depth where full pixel intensity begins (micron) */
-	double	full_end;						/* depth where full pixel intensity ends (micron) */
-	double	partial_end;					/* depth where partial pixel intensity ends (micron) */
 	double	area;							/* area of trapezoid */
 	double	maxDepth;						/* depth of deepest reconstructed image (micron) */
 	double	dDepth;							/* local version of user_preferences.depth_resolution */
 	long	m;								/* index to depth */
 
 	if (pixel_intensity==0) return;											/* do not process pixels without intensity */
-	pixel_intensity = use_leading_wire_edge ? pixel_intensity : -pixel_intensity;	/* invert intensity for trailing edge */
 
 	dDepth = user_preferences.depth_resolution;								/* just a local copy */
 	maxDepth = dDepth*(image_set.depth_resolved.size- 1) + user_preferences.depth_start;	/* max reconstructed depth (mciron) */
 
-	/* get the depths over which the intensity from this pixel could originate.  These points define the trapezoid. */
-	partial_end = pixel_xyz_to_depth(back_edge, wire_position_2, use_leading_wire_edge);
-	partial_start = pixel_xyz_to_depth(front_edge, wire_position_1, use_leading_wire_edge);
 	if (partial_end < user_preferences.depth_start || partial_start > maxDepth) return;		/* trapezoid does not overlap depth-resolved region, do not process */
 
-	full_start = pixel_xyz_to_depth(back_edge, wire_position_1, use_leading_wire_edge);
-	full_end = pixel_xyz_to_depth(front_edge, wire_position_2, use_leading_wire_edge);
 	if (full_end < full_start) {			/* in case mid points are backwards, ensure proper order by swapping */
 		double swap;
 		swap = full_end;
@@ -1075,31 +1110,16 @@ BOOLEAN use_leading_wire_edge)		/* true=(use leading endge of wire), false=(use 
 			area_in_range += ((height_1 + height_2) / 2 * (depth_2 - depth_1));
 		}
 
-		if (area_in_range>0) add_pixel_intensity_at_index(i,j, pixel_intensity * (area_in_range / area), m);		/* do not accumulate zeros */
+		if (area_in_range>0) {
+			double intensity = pixel_intensity * (area_in_range / area);
+			#ifdef DEBUG_1_PIXEL
+			if (verbosePixel && i==pixelTESTi && j==pixelTESTj) printf("\n\t\t adding %g to pixel [%lu, %lu] at depth index %ld",intensity,i,j,m);
+			#endif
+			pixel_depths[m] += intensity;
+		}
 	}
 }
 
-// inline void add_pixel_intensity_at_index(
-void add_pixel_intensity_at_index(
-size_t	i,								/* indicies to pixel, relative to the full stored image, range is (xdim,ydim) */
-size_t	j,
-double intensity,						/* intensity to add */
-long index)								/* depth index */
-{
-	double *d;							/* pointer to value in gsl_matrix */
-
-	#ifdef DEBUG_1_PIXEL
-	if (verbosePixel && i==pixelTESTi && j==pixelTESTj) printf("\n\t\t adding %g to pixel [%lu, %lu] at depth index %ld",intensity,i,j,index);
-	#endif
-
-	if (index < 0 || (unsigned long)index >= image_set.depth_resolved.size) return;	/* ignore if index is outside of valid range */
-	i -= imaging_parameters.current_selection_start;	/* get pixel indicies relative to this stripe */
-
-	/* get a pointer to the existing value of that pixel at that depth */
-	d = gsl_matrix_ptr(image_set.depth_resolved.v[index], i,j);
-	*d += intensity;
-	image_set.depth_intensity.v[index] += intensity;	/* accumulate for the summary file */
-}
 
 
 /* for a trapezoid of max height 1, find the actual height at x=depth, y=0 outside of [partial_start,partial_end] & y=1 in [full_start,full_end] */
@@ -1142,7 +1162,15 @@ point_xyz point_on_ccd_xyz,			/* end point of ray, an xyz location on the detect
 point_xyz wire_position,			/* wire center, used to find the tangent point, has been PM500 corrected, origin subtracted, rotated by rho */
 BOOLEAN use_leading_wire_edge)		/* which edge of wire are using here, TRUE for leading edge */
 {
-	point_xyz	pixelPos;								/* current pixel position */
+	return rotated_pixel_xyz_to_depth(MatrixMultiply31(calibration.wire.rho,point_on_ccd_xyz), wire_position, use_leading_wire_edge);
+}
+
+
+double rotated_pixel_xyz_to_depth(
+point_xyz pixelPos,					/* pixel position already rotated by calibration.wire.rho */
+point_xyz wire_position,			/* wire center, used to find the tangent point, has been PM500 corrected, origin subtracted, rotated by rho */
+BOOLEAN use_leading_wire_edge)		/* which edge of wire are using here, TRUE for leading edge */
+{
 	point_xyz	ki;										/* incident beam direction */
 	point_xyz	S;										/* point where rays intersects incident beam */
 	double		pixel_to_wireCenter_y;					/* vector from pixel to wire center, y,z coordinates */
@@ -1162,7 +1190,6 @@ BOOLEAN use_leading_wire_edge)		/* which edge of wire are using here, TRUE for l
 	ki.x = calibration.wire.ki.x;						/* ki = rho x {0,0,1} */
 	ki.y = calibration.wire.ki.y;
 	ki.z = calibration.wire.ki.z;
-	pixelPos = MatrixMultiply31(calibration.wire.rho,point_on_ccd_xyz);	/* pixelPos = rho x point_on_ccd_xyz, rotate pxiel center to new coordinate system */
 
 	pixel_to_wireCenter_y = wire_position.y - pixelPos.y; /* vector from point on detector to wire centre. */
 	pixel_to_wireCenter_z = wire_position.z - pixelPos.z;
@@ -1699,7 +1726,7 @@ Dvector *normalVector)				/* normalization vector made using 'normalization' */
 
 	if (normalVector->N >= (size_t)Nimages) {
 		if (verbose > 2) printf("\n\tnormalize input images by ion chamber or beam current");
-		for (f=0; f<Nimages; f++) gsl_matrix_scale(image_set.wire_scanned.v[f],normalVector->v[f]);
+		for (f=0; f<Nimages; f++) gsl_matrix_scale(p_read_buffer[p_ibuff].v[f],normalVector->v[f]);
 		/* gsl_matrix_scale(a, x):  a(i,j) <--  x * a(i,j) is stored in a. */
 	}
 

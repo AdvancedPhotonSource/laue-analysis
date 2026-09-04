@@ -220,7 +220,7 @@ struct geoStructure *geo)
 			CHECK_FREE(keyVals)
 			
 			detector = XMLtagContents("Detector",Detectors,(int)i);
-			if (id>=0 && id <=3) {
+			if (id>=0 && id < MAX_Ndetectors) {
 				/* detector id description */
 				geo->d[id].used = 1;
 				if ((str=XMLtagContents("Npixels",detector,0))) {

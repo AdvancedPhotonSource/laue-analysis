@@ -12,7 +12,7 @@ $ python -m pip install -e '.[test,docs]'
 
 The editable install builds the native files once with CMake and places them in `site-packages`. Python changes under `src/` take effect immediately. After a change to C source or `CMakeLists.txt`, run the install command again.
 
-`CMakeLists.txt` at the repository root is the only native build definition. It has these options, set with `--config-settings=cmake.define.<OPTION>=<value>` on the pip command line:
+`CMakeLists.txt` at the repository root is the only native build definition. `liblaue.so` embeds the GPL-licensed GSL using static `libgsl.a` and `libgslcblas.a` from the build environment, with their symbols hidden by `--exclude-libs`; importing the wheel therefore does not load the environment's `libgsl.so` or OpenBLAS. It has these options, set with `--config-settings=cmake.define.<OPTION>=<value>` on the pip command line:
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -59,7 +59,21 @@ The `integration` marker identifies tests that run compiled command-line program
 
 ### CPU reconstruction reference
 
-`tests/data/reconstruction/` holds a synthetic numerical reference for `reconstructN_cpu` and the script that generated it. `tests/test_reconstruct.py` compares the current build against it. Do not regenerate the reference to make a build change pass.
+`tests/data/reconstruction/` holds synthetic numerical references for `reconstructN_cpu`. `tests/test_reconstruct.py` checks the executable, and `tests/test_reconstructor.py` cross-checks the in-process driver against the same files. Do not regenerate a reference to make a build change pass.
+
+The full-size Twin2 fixture is not in the repository. Set `LAUELAB_TWIN2_FIXTURE` to a directory holding `Twin2_wire_1.h5` through `Twin2_wire_3.h5`, `geoN_2023-04-06_03-07-11_cor6.xml`, and the `reference_rec8_point1/` output directory. The real-data tests and the performance script skip with `Twin2 wire-scan fixture not available` when the variable is unset or a file is missing. Run the real-data checks explicitly with:
+
+```console
+$ LAUELAB_TWIN2_FIXTURE=/path/to/twin2_wire python -m pytest -m "integration and slow" tests/test_reconstruct_realdata.py
+```
+
+Compare executable and in-process performance on Twin2 point 1 with:
+
+```console
+$ python tests/perf_testing/run_reconstruct_perf.py
+```
+
+The script runs both implementations at 1, 8, 16, and 32 threads and reports wall, compute, and I/O times. It has no pass or fail threshold because host load and filesystem state affect the measurements.
 
 ## Build the documentation
 

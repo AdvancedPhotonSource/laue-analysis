@@ -22,7 +22,7 @@ def _table_after(path: Path, marker: str, delimiter=None) -> np.ndarray:
     return np.loadtxt(lines[start:], delimiter=delimiter, ndmin=2)
 
 
-def test_shared_library_does_not_import_process_termination():
+def test_shared_library_imports_only_safe_native_dependencies():
     symbols = subprocess.run(
         ["nm", "-D", str(LIBRARY)], capture_output=True, text=True, check=True
     ).stdout.splitlines()
@@ -30,6 +30,8 @@ def test_shared_library_does_not_import_process_termination():
 
     assert "exit" not in imports
     assert "abort" not in imports
+    assert "GOMP_parallel" in imports
+    assert not {symbol for symbol in imports if symbol.startswith(("H5", "gsl_"))}
 
 
 @pytest.mark.parametrize(
@@ -74,6 +76,21 @@ def test_pixels_to_q_accepts_empty_input():
     geometry = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml")
     result = geometry.pixels_to_q(np.empty((0, 2)))
     assert result.shape == (0, 3)
+
+
+def test_geometry_exposes_wire_metadata():
+    from lauelab.indexing import Geometry, WireGeometry
+
+    wire = Geometry(ROOT / "tests/data/geo/geoN_2022-03-29_14-15-05.xml").wire
+
+    assert isinstance(wire, WireGeometry)
+    assert wire.diameter_um == pytest.approx(101.5)
+    assert wire.F_um == pytest.approx(0.0)
+    np.testing.assert_allclose(wire.origin_um, [0, 0, 0])
+    np.testing.assert_allclose(wire.axis, [0.99999608, 0, 0.0028000002])
+    np.testing.assert_allclose(wire.rotation @ wire.rotation.T, np.eye(3), atol=1e-12)
+    assert wire.rotation_magnitude_deg == pytest.approx(0.4691147329582128)
+    assert not wire.axis_rotated.flags.writeable
 
 
 def test_geometry_exposes_detector_metadata():
@@ -248,6 +265,7 @@ def test_geometry_accepts_old_style_tag_value_format(tmp_path):
 
     geometry = Geometry(path)
     assert geometry.detector_count == 1
+    assert geometry.wire is None
 
 
 def test_detector_geometry_ignores_unrelated_invalid_sample_and_wire(tmp_path):

@@ -139,7 +139,8 @@ double Y2)				/* input the PM500 Y2 reading */
 	dY2 = dY2 < 0 ? dY2+20 : dY2;	/* dY2 now in range [0,20) */
 
 	/* find interpolated value of Y2correction(dY2), we know that dY2 is in range [0,20) */
-	i = (long)dY2;					/* low end of range, remember dY2 < 20 */
+	i = (long)dY2;
+	if (i > 19) i = 19;				/* negative values can round to the period */
 	delta = fmod(dY2,1.);			/* fractional part from i to dY2 */
 
 	Y2 += fmod(dY2,1.) * (Y2correction[i+1]-Y2correction[i]) + Y2correction[i];	/* add correction to original value */
@@ -162,7 +163,8 @@ double Z2)				/* input the PM500 Z2 reading */
 	dZ2 = dZ2 < 0 ? dZ2+40 : dZ2;	/* dZ2 now in range [0,40) */
 
 	/* find interpolated value of Z2correction(dZ2), we know that dZ2 is in range [0,40) */
-	i = (long)dZ2;					/* low end of range, remember dZ2 < 40 */
+	i = (long)dZ2;
+	if (i > 39) i = 39;				/* negative values can round to the period */
 	delta = fmod(dZ2,1.);			/* fractional part from i to dZ2 */
 
 	Z2 += fmod(dZ2,1.) * (Z2correction[i+1]-Z2correction[i]) + Z2correction[i];	/* add correction to original value */

@@ -2,32 +2,67 @@
 # Full license accessible at https://github.com/AdvancedPhotonSource/lauelab/blob/main/LICENSE
 """Wire scan reconstruction functions for Laue analysis."""
 
-from typing import List, Tuple, Optional, Union, NamedTuple
+from dataclasses import dataclass
+from typing import List, Tuple, Optional, Union
 from pathlib import Path
+import os
+
+import numpy as np
 import subprocess
 import re
 import shutil
 import functools
 from importlib import resources
 
-# Result type for reconstruction operations
-class ReconstructionResult(NamedTuple):
-    """Result from a native reconstruction process.
+@dataclass
+class ReconstructionResult:
+    """Result from subprocess or in-process wire-scan reconstruction.
+
+    The first six fields preserve the positional constructor interface of the
+    former named tuple. Native-only arrays and stripe timings are ``None`` on
+    the subprocess path.
 
     Attributes
     ----------
-    success
-        Whether the process returned exit status zero.
-    output_files
-        Paths that match the requested output-file prefix.
-    log
-        Standard output from the process.
-    error
-        Standard error for a failed process, or ``None`` after success.
-    command
-        Command line passed to the process, joined as one string.
-    return_code
-        Process exit status. A timeout or execution error uses ``-1``.
+    success : bool
+        ``True`` when reconstruction completed. Invalid arguments and setup
+        failures raise instead of returning a result. Failures after native
+        stripe processing starts set this field to ``False`` and preserve
+        available partial progress.
+    output_files : list of str
+        Paths written by this call. For in-process file reconstruction these
+        are the per-depth HDF5 files followed by the summary file. The list can
+        contain partial output after a runtime failure.
+    log : str
+        Standard output captured from a subprocess. The in-process path returns
+        an empty string.
+    error : str or None
+        Standard error from an unsuccessful subprocess or the in-process
+        runtime error message. ``None`` indicates no reported error.
+    command : str
+        Executed subprocess command. The in-process path returns ``"liblaue"``.
+    return_code : int
+        Subprocess exit status. The in-process path returns 0 on success and -1
+        for a runtime failure represented by this result.
+    images : numpy.ndarray or None
+        Retained reconstructed images with shape ``(n_depths, rows, columns)``
+        and dtype ``numpy.float64``. These values are not multiplied by the
+        integer-output normalization rescale. They are present only when the
+        in-process path retains images.
+    depth_um : numpy.ndarray or None
+        Sample depths with shape ``(n_depths,)`` and dtype ``numpy.float64``, in
+        µm along the incident beam relative to the Si origin in the geometry
+        file. This field is native-only.
+    depth_intensity : numpy.ndarray or None
+        Sum of each unscaled reconstructed image, with shape ``(n_depths,)`` and
+        dtype ``numpy.float64``. This field is native-only.
+    timings : list of StripeTiming or None
+        Per-stripe read, native compute, and write timings in seconds. This
+        field is native-only.
+    last_completed_stripe : int or None
+        Zero-based index of the last stripe fully written to every output file,
+        or the last stripe computed when no files are written. ``None`` means no
+        stripe completed. This field is native-only.
     """
 
     success: bool
@@ -36,6 +71,15 @@ class ReconstructionResult(NamedTuple):
     error: Optional[str] = None
     command: str = ""
     return_code: int = 0
+    images: np.ndarray | None = None
+    depth_um: np.ndarray | None = None
+    depth_intensity: np.ndarray | None = None
+    timings: list | None = None
+    last_completed_stripe: int | None = None
+
+    def _asdict(self):
+        """Return fields as a dictionary, matching the former named tuple."""
+        return dict(vars(self))
 
 
 # Cache the executable path lookup to avoid repeated filesystem searches.
@@ -161,12 +205,16 @@ def _execute_reconstruction(
             if path.is_file()
         } if output_dir.exists() else {}
 
-        # Execute the subprocess - RPATH handles library loading
+        # The executable links OpenBLAS through GSL but does not call BLAS. Avoid
+        # starting its otherwise spinning worker pool unless the caller opted in.
+        env = os.environ.copy()
+        env.setdefault("OPENBLAS_NUM_THREADS", "1")
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=env,
         )
         
         success = result.returncode == 0
