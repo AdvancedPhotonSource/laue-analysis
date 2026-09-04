@@ -1,6 +1,6 @@
-# Indexing algorithms
+# Algorithms
 
-These pages describe the three native stages used by the in-process indexing API. They focus on behavior that is visible through the public result model.
+These pages describe the native stages used by the in-process APIs. They focus on behavior that is visible through the public result models.
 
 ```{toctree}
 :maxdepth: 1
@@ -8,6 +8,7 @@ These pages describe the three native stages used by the in-process indexing API
 peak-search
 pixel-to-q
 crystal-indexing
+depth-reconstruction
 ```
 
-Use these pages to interpret output and understand parameter effects. They are not a complete derivation of the 34-ID-E analysis methods. Physical coordinate labels, orientation conventions, and scientific tuning guidance require separate domain review.
+The first three pages cover the indexing stages. [Depth reconstruction](depth-reconstruction.md) covers wire-scan reconstruction. Use them to interpret output and understand parameter effects. They are not a complete derivation of the 34-ID-E analysis methods. Physical coordinate labels, orientation conventions, the depth sign convention, and scientific tuning guidance require separate domain review.

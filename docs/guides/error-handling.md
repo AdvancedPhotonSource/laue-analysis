@@ -8,6 +8,7 @@ The in-process API separates invalid input from native processing failures. Catc
 
 - {class}`~lauelab.indexing.InputError` inherits from both `LaueError` and `ValueError`.
 - {class}`~lauelab.indexing.IndexingError` inherits from both `LaueError` and `RuntimeError`.
+- {class}`~lauelab.indexing.ReconstructionError` inherits from both `LaueError` and `RuntimeError`.
 - Native allocation failures use Python's built-in {class}`MemoryError`.
 
 `ValueError`, XML parse errors, `OSError`, and `KeyError` can also occur while loading geometry, crystal, or HDF5 input. See the relevant API reference for each loader.
@@ -52,6 +53,12 @@ Do not assume that immediate retry will succeed. Release unneeded arrays and res
 Preserve the complete message. It can distinguish a geometry conversion problem from an orientation-indexing problem without exposing native status values as a public API.
 
 No peaks or no patterns is not a failure and does not raise an exception. Apply a separate scientific acceptance policy to those results.
+
+## Reconstruction failure
+
+{class}`~lauelab.reconstruct.Reconstructor` raises `InputError` and `MemoryError` for failures before the first stripe is processed. A failure after that point does not raise. It returns a {class}`~lauelab.reconstruct.ReconstructionResult` with `success=False`, the message in `error`, and the progress made so far in `last_completed_stripe`. `ReconstructionError` names a native failure in that message; an I/O failure carries the underlying `OSError` text.
+
+Check `success` on every result. {func}`~lauelab.reconstruct.reconstruct_points` applies the same rule to each point and continues the batch after a failed point. See [Reconstruct a wire scan](reconstruction.md).
 
 ## Batch strategy
 

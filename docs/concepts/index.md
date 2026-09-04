@@ -1,12 +1,13 @@
 # Concepts
 
-The indexing pipeline connects detector pixels to candidate crystal orientations. Start with the pipeline overview. Use the algorithm pages when you need the equations, assumptions, or output definitions behind a stage.
+These pages explain the models behind the two processing workflows. Indexing connects detector pixels to candidate crystal orientations. Wire-scan reconstruction connects a stack of frames to sample depths. Start with the overview for the workflow you are using, then read the algorithm pages when you need the equations, assumptions, or output definitions behind a stage.
 
 ```{toctree}
 :maxdepth: 2
 
 indexing-pipeline
+wire-scan-reconstruction
 algorithms/index
 ```
 
-The current concept documentation covers indexing. The package can also predict reflections from an indexed orientation and prepare results for maps, pole figures, detector views, and tables. These task-oriented APIs are covered in [Simulation](../guides/simulation.md) and [Visualization data](../guides/visualization.md).
+Reflection simulation and the preparation of maps, pole figures, detector views, and tables are task-oriented APIs. They are covered in [Simulation](../guides/simulation.md) and [Visualization data](../guides/visualization.md).

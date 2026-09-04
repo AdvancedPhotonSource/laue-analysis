@@ -138,6 +138,7 @@ Do not retry unchanged invalid input. See [Error handling](guides/error-handling
 - [Configure processing parameters](guides/parameters.md)
 - [Interpret results](guides/results.md)
 - [Process batches](guides/batch-indexing.md)
+- [Reconstruct a wire scan](guides/reconstruction.md)
 - [Visualize indexing results](guides/visualization.md)
 - [Simulate detector reflections](guides/simulation.md)
 - [Read the API reference](reference/index.md)

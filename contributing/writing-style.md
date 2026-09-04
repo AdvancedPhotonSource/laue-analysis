@@ -178,6 +178,7 @@ Place deeper material under Concepts in dedicated algorithm pages:
 - Peak search
 - Pixel-to-q conversion
 - Crystal indexing
+- Depth reconstruction
 
 An algorithm page can include coordinate transforms, scattering-vector definitions, fitting and matching concepts, numerical assumptions, limitations, and primary references.
 
