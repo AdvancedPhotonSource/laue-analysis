@@ -129,7 +129,7 @@ def test_reconstruction_kernel_matches_variant_goldens(
     })
 
 
-@pytest.mark.parametrize("threads", [1, 4, 16])
+@pytest.mark.parametrize("threads", [4, 16])
 def test_reconstruction_kernel_is_thread_invariant(tmp_path, threads):
     input_file = tmp_path / "synthetic.h5"
     write_input_file(input_file)

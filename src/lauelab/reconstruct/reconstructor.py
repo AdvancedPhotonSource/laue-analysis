@@ -32,7 +32,21 @@ _POSITIONER = {"none": 0, "pm500": 1, "alio": 2}
 
 @dataclass(frozen=True)
 class StripeTiming:
-    """Elapsed I/O and native compute time for one row stripe, in seconds."""
+    """Elapsed I/O and native compute time for one row stripe.
+
+    Attributes
+    ----------
+    row_start : int
+        Zero-based first image row in the stripe.
+    row_stop : int
+        Exclusive image-row stop index.
+    read_seconds : float
+        Input read time in seconds.
+    compute_seconds : float
+        Native reconstruction time in seconds.
+    write_seconds : float
+        Output write time in seconds, or 0 when no files are written.
+    """
 
     row_start: int
     row_stop: int
@@ -54,11 +68,11 @@ def physical_core_count() -> int:
     return logical
 
 
-def _raise_native(status: int, stage: str, message: str) -> None:
+def _raise_native(library, status: int, stage: str, message: str) -> None:
     detail = f"{stage} failed: {message}"
-    if status == 1:
+    if status == library.LAUE_INVALID_ARGUMENT:
         raise InputError(detail)
-    if status == 2:
+    if status == library.LAUE_OUT_OF_MEMORY:
         raise MemoryError(detail)
     raise ReconstructionError(detail)
 
@@ -66,9 +80,73 @@ def _raise_native(status: int, stage: str, message: str) -> None:
 class Reconstructor:
     """Reusable in-process wire-scan reconstructor.
 
-    Parameters use micrometres for depth and resolution. ``num_threads=None``
-    estimates physical cores from Linux SMT topology and otherwise uses the
-    logical CPU count.
+    Parameters
+    ----------
+    geometry : Geometry or pathlib.Path
+        Parsed geometry or path to a geometry XML file. The geometry must
+        contain a complete wire section.
+    detector : int
+        Active detector slot in ``geometry``. This is a physical geometry slot,
+        not an ordinal position among active detectors.
+    depth_range : tuple of float
+        Inclusive ``(start, end)`` sample depths in µm along the incident beam,
+        relative to the Si origin in ``geometry``. Values must be finite and
+        nondecreasing. Equal endpoints request one depth.
+    resolution : float
+        Distance between reconstructed depths in µm. The default is ``1.0``.
+        The value must be positive and finite.
+    wire_edge : str
+        Wire edge or edges used for reconstruction: ``"leading"``,
+        ``"trailing"``, or ``"both"``. The default is ``"leading"``.
+        ``"both"`` defaults file output to pixel-type code 1 when
+        ``output_pixel_type`` is omitted.
+    percent_brightest : float
+        Percentage of the brightest intensity-map pixels retained by the
+        reconstruction mask. The default is ``100.0``. The value must be
+        greater than 0 and at most 100.
+    normalization : str or None
+        HDF5 vector below ``entry1`` used to scale file-input frames. The default
+        is ``None``. ``"mA"``
+        values are divided by 102 and ``"cnt3"`` values by 88100; other tags
+        have no fixed divisor. A missing or short vector raises
+        :class:`~lauelab.indexing.InputError`. This parameter does not apply to
+        :meth:`reconstruct_array`; pass its ``scale`` argument instead.
+    norm_exponent : float or None
+        Exponent normalization applied from the intensity map. The default is
+        ``None``. Values must be greater than 0 and at most 5. This normalization
+        applies to file and array input.
+    norm_threshold : float or None
+        Positive intensity threshold for exponent normalization. The default is
+        ``None``; in that case, the threshold is the mean plus five standard
+        deviations of the lowest half of the intensity-map pixels.
+    cosmic_filter : bool
+        Apply the executable-compatible cosmic-ray filter before reconstruction.
+        The default is ``False``.
+    output_pixel_type : int or None
+        Output-file pixel type. The default is ``None``. Code 0 is
+        ``numpy.float32``, 1 is ``numpy.int32``, 2
+        is ``numpy.int16``, 3 is ``numpy.uint16``, 5 is ``numpy.float64``, 6 is
+        ``numpy.int8``, and 7 is ``numpy.uint8``. File input defaults to the
+        input type when it has a corresponding code, otherwise to code 5;
+        ``wire_edge="both"`` defaults to code 1. This parameter does not alter
+        arrays returned by :meth:`reconstruct_array`.
+    num_threads : int or None
+        Positive OpenMP thread count for each reconstruction call. The default
+        is ``None``, which estimates physical cores from Linux SMT topology and
+        otherwise uses the logical CPU count.
+    rows_per_stripe : int or None
+        Positive number of image rows processed per stripe. The default is
+        ``None``, which uses at most 256 rows and may use fewer to satisfy
+        ``memory_limit_mb``.
+    memory_limit_mb : int
+        Positive stripe-buffer limit in MiB. The default is ``8192``. It does
+        not include retained result images or HDF5 library buffers.
+
+    Notes
+    -----
+    Invalid arguments and failures before stripe processing raise an exception.
+    After processing starts, an expected reconstruction or I/O failure returns
+    a :class:`ReconstructionResult` with ``success=False`` and partial progress.
     """
 
     def __init__(
@@ -87,7 +165,7 @@ class Reconstructor:
         output_pixel_type: int | None = None,
         num_threads: int | None = None,
         rows_per_stripe: int | None = None,
-        memory_limit: int = 8 * 2**30,
+        memory_limit_mb: int = 8192,
     ) -> None:
         self.geometry = geometry if isinstance(geometry, Geometry) else Geometry(geometry)
         self.geometry_path = self.geometry.path
@@ -97,8 +175,8 @@ class Reconstructor:
             self.detector_geometry = self.geometry.detector(detector)
         except (TypeError, ValueError, OverflowError) as error:
             raise InputError(f"detector {detector!r} is not an active detector slot") from error
-        if len(depth_range) != 2 or not np.isfinite(depth_range).all() or depth_range[0] >= depth_range[1]:
-            raise InputError("depth_range must contain finite increasing values")
+        if len(depth_range) != 2 or not np.isfinite(depth_range).all() or depth_range[0] > depth_range[1]:
+            raise InputError("depth_range must contain finite nondecreasing values")
         if not np.isfinite(resolution) or resolution <= 0:
             raise InputError("resolution must be positive and finite")
         if wire_edge not in _EDGE:
@@ -111,8 +189,8 @@ class Reconstructor:
             raise InputError("num_threads must be positive")
         if rows_per_stripe is not None and rows_per_stripe < 1:
             raise InputError("rows_per_stripe must be positive")
-        if memory_limit < 1:
-            raise InputError("memory_limit must be positive")
+        if memory_limit_mb < 1:
+            raise InputError("memory_limit_mb must be positive")
         self.detector = detector
         self.depth_range = tuple(float(value) for value in depth_range)
         self.resolution = float(resolution)
@@ -125,7 +203,7 @@ class Reconstructor:
         self.output_pixel_type = output_pixel_type
         self.num_threads = physical_core_count() if num_threads is None else num_threads
         self.rows_per_stripe = rows_per_stripe
-        self.memory_limit = memory_limit
+        self.memory_limit_mb = memory_limit_mb
 
     def _create_handle(self, image_geometry: ImageGeometry):
         rows, cols = image_geometry.shape
@@ -151,18 +229,49 @@ class Reconstructor:
         if self.rows_per_stripe is not None:
             return min(rows, self.rows_per_stripe)
         bytes_per_row = 2 * n_images * cols * input_itemsize + 2 * n_depths * cols * 8
-        return min(rows, max(1, self.memory_limit // bytes_per_row))
+        limit_bytes = self.memory_limit_mb * 2**20
+        return min(rows, 256, max(1, limit_bytes // bytes_per_row))
 
     def reconstruct(self, path, output_base=None, *, return_images=False) -> ReconstructionResult:
-        """Reconstruct one HDF5 point, optionally writing per-depth files."""
+        """Reconstruct one HDF5 point, optionally writing per-depth files.
+
+        Parameters
+        ----------
+        path : pathlib.Path or str
+            Input 34-ID-E multi-image HDF5 file.
+        output_base : pathlib.Path, str, or None
+            Output filename prefix. The default is ``None``. When supplied, one
+            HDF5 file is written per depth plus ``<output_base>summary.txt``.
+            Existing output files are replaced.
+        return_images : bool
+            Retain the unscaled reconstructed images in memory. The default is
+            ``False``. This is independent of writing output files.
+
+        Returns
+        -------
+        ReconstructionResult
+            Reconstruction status, output paths, depth coordinates, intensity
+            totals, timings, and optional images.
+
+        Raises
+        ------
+        InputError
+            If the input path, file metadata, geometry, or options are invalid,
+            or setup fails before stripe processing begins.
+        MemoryError
+            If allocation fails before stripe processing begins.
+        """
         path = Path(path)
         if not path.is_file():
             raise InputError(f"input file does not exist: {path}")
         with h5py.File(path, "r") as source:
             info = read_scan_info(source, self.normalization)
             data = source["entry1/data/data"]
+            stripe_data = data if info.dtype == np.dtype(np.uint16) else data.astype("f8")
             return self._run(
-                lambda row0, row1: np.ascontiguousarray(data[1:-1, row0:row1, :]),
+                lambda row0, row1: np.ascontiguousarray(
+                    stripe_data[1:-1, row0:row1, :]
+                ),
                 info.shape, info.dtype, info.wire_xyz,
                 intensity_map=info.intensity_map,
                 positioner=info.positioner,
@@ -177,18 +286,64 @@ class Reconstructor:
             )
 
     def reconstruct_array(self, images, wire_xyz, *, intensity_map=None,
-                          positioner="none", file_time=None,
-                          image_geometry: ImageGeometry | None = None,
+                          positioner="none", image_geometry: ImageGeometry | None = None,
                           scale=None) -> ReconstructionResult:
         """Reconstruct aligned in-memory images and raw wire positions.
 
-        ``images`` has shape ``(N, rows, columns)`` and ``wire_xyz`` has shape
-        ``(N + 1, 3)``. Unlike file input, no wire-vector offset is applied.
+        Parameters
+        ----------
+        images : numpy.ndarray
+            Numeric array with shape ``(N, rows, columns)``. ``numpy.uint16``
+            input remains ``uint16``; every other numeric dtype is converted to
+            contiguous ``numpy.float64`` storage.
+        wire_xyz : numpy.ndarray
+            Raw wire positions with shape ``(N + 1, 3)`` in the acquisition
+            coordinate system. No file-format bookkeeping offset is applied.
+        intensity_map : numpy.ndarray or None
+            Intensity map with shape ``(rows, columns)`` used for the bright-pixel
+            mask and exponent normalization. The default is ``None``, which uses
+            the first image.
+        positioner : str
+            Historical correction applied to ``wire_xyz``: ``"none"``,
+            ``"pm500"``, or ``"alio"``. The default is ``"none"``.
+        image_geometry : ImageGeometry or None
+            Full-detector dimensions and ROI mapping. The default is ``None``,
+            which describes an
+            unbinned, zero-based full frame whose detector size is exactly
+            ``(columns, rows)``. Binned images and detector ROIs require an
+            explicit geometry; ``start`` and ``group`` use unbinned pixels.
+        scale : numpy.ndarray or None
+            Per-image dimensionless scale factors with shape ``(N,)``. The
+            default is ``None``. This is the array-path equivalent of the
+            constructor's HDF5 ``normalization`` vector.
+
+        Returns
+        -------
+        ReconstructionResult
+            A result whose ``images`` field is an unscaled ``numpy.float64``
+            array. Array reconstruction does not write files.
+
+        Notes
+        -----
+        The constructor's ``normalization`` and ``output_pixel_type`` parameters
+        do not apply on this path. ``norm_exponent`` still applies through
+        ``intensity_map``.
+
+        Raises
+        ------
+        InputError
+            If an array shape, dtype, positioner, geometry, or scale is invalid,
+            or setup fails before stripe processing begins.
+        MemoryError
+            If allocation fails before stripe processing begins.
         """
         array = np.asarray(images)
-        if array.ndim != 3 or array.dtype not in (np.dtype(np.uint16), np.dtype(np.float64)):
-            raise InputError("images must be a 3D uint16 or float64 array")
-        array = np.ascontiguousarray(array)
+        if array.ndim != 3 or not np.issubdtype(array.dtype, np.number):
+            raise InputError("images must be a 3D numeric array")
+        input_dtype = array.dtype
+        array = np.ascontiguousarray(
+            array, dtype=np.uint16 if input_dtype == np.dtype(np.uint16) else np.float64
+        )
         rows, cols = array.shape[1:]
         if image_geometry is None:
             image_geometry = ImageGeometry(cols, rows, n_rows=rows, n_cols=cols)
@@ -210,7 +365,7 @@ class Reconstructor:
                 raise InputError("scale must have shape (N,)")
         return self._run(
             lambda row0, row1: np.ascontiguousarray(array[:, row0:row1, :]),
-            array.shape, array.dtype, wires, intensity_map=intensity_map,
+            array.shape, input_dtype, wires, intensity_map=intensity_map,
             positioner=positioner, image_geometry=image_geometry, scale=scale,
             output_base=None, source=None, return_images=True, scan_number=None,
             sample_position=None, energy_kev=None,
@@ -225,16 +380,26 @@ class Reconstructor:
             handle, ffi.from_buffer("double[]", wire_xyz), len(wire_xyz), _POSITIONER[positioner]
         )
         if status:
-            _raise_native(status, "wire-position setup", ffi.string(library.laue_recon_last_error(handle)).decode())
+            _raise_native(
+                library, status, "wire-position setup",
+                ffi.string(library.laue_recon_last_error(handle)).decode(),
+            )
         n_images, rows, cols = shape
         n_depths = library.laue_recon_n_depths(handle)
         depth_um = np.asarray([library.laue_recon_depth_um(handle, i) for i in range(n_depths)])
-        stripe_rows = self._stripe_rows(n_images, n_depths, rows, cols, np.dtype(dtype).itemsize)
+        input_itemsize = 2 if np.dtype(dtype) == np.dtype(np.uint16) else 8
+        stripe_rows = self._stripe_rows(n_images, n_depths, rows, cols, input_itemsize)
         mask = cutoff_mask(intensity_map, self.percent_brightest)
         plane, threshold = normalization_plane(intensity_map, self.norm_exponent, self.norm_threshold)
         output_type = self.output_pixel_type
         if output_type is None:
-            output_type = 1 if self.wire_edge == "both" else pixel_type(dtype)
+            if self.wire_edge == "both":
+                output_type = 1
+            else:
+                try:
+                    output_type = pixel_type(dtype)
+                except ValueError:
+                    output_type = 5
         rescale = normalization_rescale(output_type) if self.norm_exponent is not None else 1.0
         all_images = np.zeros((n_depths, rows, cols)) if return_images else None
         totals = np.zeros(n_depths)
@@ -315,7 +480,10 @@ class Reconstructor:
                         write_seconds,
                     )
                 if status:
-                    _raise_native(status, "reconstruction", ffi.string(library.laue_recon_last_error(handle)).decode())
+                    _raise_native(
+                        library, status, "reconstruction",
+                        ffi.string(library.laue_recon_last_error(handle)).decode(),
+                    )
                 totals += out.sum(axis=(1, 2))
                 if all_images is not None:
                     all_images[:, row0:row1] = out
@@ -344,7 +512,8 @@ class Reconstructor:
                     output_base=str(output_base), geometry_path=str(self.geometry_path),
                     detector=self.detector, depth_um=depth_um, resolution=self.resolution,
                     wire_edge=_EDGE[self.wire_edge], output_type=output_type,
-                    percent_brightest=self.percent_brightest, memory_limit=self.memory_limit,
+                    percent_brightest=self.percent_brightest,
+                    memory_limit_mb=self.memory_limit_mb,
                     cosmic_filter=self.cosmic_filter, normalization=self.normalization,
                     norm_exponent=self.norm_exponent, norm_threshold=threshold,
                     norm_rescale=rescale, scan_number=scan_number,

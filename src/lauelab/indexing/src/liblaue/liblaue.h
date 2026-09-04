@@ -175,20 +175,36 @@ LAUE_API int laue_geometry_detector_info(const laue_geometry *geometry, int dete
                                          laue_detector_info *info, char *err, size_t errlen);
 LAUE_API int laue_geometry_wire_info(const laue_geometry *geometry, laue_wire_info *info,
                                      char *err, size_t errlen);
+/* Create a reconstruction handle from borrowed geometry and params. detector_index
+   is zero-based. err points to errlen writable bytes and receives setup errors.
+   The returned handle owns its working memory; calls using one handle must not overlap. */
 LAUE_API laue_recon *laue_recon_create(const laue_geometry *geometry, int detector_index,
                                        const laue_recon_params *params,
                                        char *err, size_t errlen);
+/* Set n raw wire positions, laid out row-major as n x 3 doubles. Reconstruction
+   requires n = n_images + 1. positioner selects correction of the borrowed input. */
 LAUE_API int laue_recon_set_wire_positions(laue_recon *recon, const double *xyz_raw,
                                            size_t n, int positioner);
-/* n_threads must be at least 1. */
+/* Reconstruct one detector stripe. images is borrowed row-major storage with shape
+   n_images x nrows x params->n_cols and elements selected by pixel_type. row0 is
+   the stripe's zero-based row in the full reconstruction. scale is NULL or
+   n_images doubles; norm_plane is NULL or nrows x params->n_cols doubles. mask
+   is nrows x params->n_cols bytes, where 1 processes a pixel and 0 skips it. out
+   is depth-major n_depths x nrows x params->n_cols double storage and must be
+   zero-filled by the caller. n_threads must be at least 1. seconds_elapsed may
+   be NULL or point to one writable double. Calls on the same recon must not overlap. */
 LAUE_API int laue_recon_stripe(laue_recon *recon, const void *images, int pixel_type,
                                size_t n_images, size_t row0, size_t nrows,
                                const double *scale, const double *norm_plane,
                                const unsigned char *mask, double *out,
                                int n_threads, double *seconds_elapsed);
+/* Return the number of output depths for recon, or 0 for NULL. */
 LAUE_API int laue_recon_n_depths(const laue_recon *recon);
+/* Return output depth index in micrometres, or NaN for invalid input. */
 LAUE_API double laue_recon_depth_um(const laue_recon *recon, int index);
+/* Return the last error owned by recon; the pointer remains valid until its next call. */
 LAUE_API const char *laue_recon_last_error(const laue_recon *recon);
+/* Free recon and its owned memory. NULL is accepted. */
 LAUE_API void laue_recon_free(laue_recon *recon);
 LAUE_API int laue_find_peaks(const unsigned short *pixels, int nx, int ny,
                              const laue_peak_params *params, laue_frame_result *result);

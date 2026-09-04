@@ -179,8 +179,11 @@ target_compile_definitions(laue PRIVATE LIBLAUE_BUILD)
 target_compile_options(laue PRIVATE -ffunction-sections -fdata-sections)
 # __wrap_abort in liblaue.c enforces the static GSL error-handler invariant.
 target_link_options(laue PRIVATE -Wl,--gc-sections -Wl,--exclude-libs,ALL -Wl,--wrap=abort)
-target_include_directories(laue PRIVATE ${LIBLAUE_SRC} ${PIXELS2QS_SRC} ${PEAKSEARCH_SRC} ${EULER_SRC} ${RECON_CPU_SRC})
+target_include_directories(laue PRIVATE ${LIBLAUE_SRC} ${PIXELS2QS_SRC} ${PEAKSEARCH_SRC} ${EULER_SRC})
 get_filename_component(LAUE_GSL_LIBRARY_DIR "${GSL_LIBRARY}" DIRECTORY)
+if(NOT EXISTS "${LAUE_GSL_LIBRARY_DIR}/libgsl.a")
+  message(FATAL_ERROR "static GSL required; see docs/development")
+endif()
 target_link_libraries(laue PRIVATE laue_common_flags OpenMP::OpenMP_C
   "${LAUE_GSL_LIBRARY_DIR}/libgsl.a" "${LAUE_GSL_LIBRARY_DIR}/libgslcblas.a" m)
 if(LAUE_IPO_SUPPORTED)

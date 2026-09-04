@@ -15,20 +15,18 @@ Use `--output report.json` to retain the machine-readable report. The benchmark 
 `run_reconstruct_perf.py` is a hand-run performance measurement, not an
 automated test gate, for the production reconstruction executable and the
 in-process driver. It runs Twin2 point 1 at 1, 8, 16, and 32 threads and reports
-wall time and mean compute and I/O time per stripe. The 16-thread native kernel
-ratio must be at most 0.5 of the recorded Phase 0 executable result. That 2.1 s
-per-stripe constant was measured on one node with two Xeon Gold 6348 processors
-at commit `ba9c946`, before the Phase 1a kernel changes. The executable columns
-measure the current executable; those comparisons and wall time are
-observational. With the local fixture in its standard location, run:
+wall time, mean compute and I/O time per stripe, and the native-to-executable
+kernel ratio. The results are observational because host load and filesystem
+state affect the measurements. Point `LAUELAB_TWIN2_FIXTURE` at a directory
+holding `Twin2_wire_1.h5` and `geoN_2023-04-06_03-07-11_cor6.xml`, then run:
 
 ```console
 $ python tests/perf_testing/run_reconstruct_perf.py
 ```
 
-Use `--fixture` if the Twin2 fixture is elsewhere. The script exits successfully
-with a skip message when the fixture is unavailable. Outputs use temporary
-storage by default; pass `--output-dir` to retain them.
+`--fixture` overrides the environment variable. The script exits successfully
+with a skip message when neither is set or the files are missing. Outputs use
+temporary storage by default; pass `--output-dir` to retain them.
 
 Key features:
 - Requires two inputs: an HDF5 file and a staging directory (to test different filesystems).

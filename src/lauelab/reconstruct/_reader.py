@@ -16,7 +16,26 @@ from lauelab.indexing.errors import InputError
 
 @dataclass(frozen=True)
 class ImageGeometry:
-    """Detector ROI geometry in unbinned-pixel coordinates."""
+    """Detector ROI geometry in unbinned-pixel coordinates.
+
+    Parameters
+    ----------
+    nx_full : int
+        Full detector width in unbinned pixels.
+    ny_full : int
+        Full detector height in unbinned pixels.
+    start : tuple of int
+        Zero-based ``(x, y)`` coordinate of the ROI origin in unbinned pixels.
+        The default is ``(0, 0)``.
+    group : tuple of int
+        ``(x, y)`` detector binning factors. The default is ``(1, 1)``.
+    n_rows : int or None
+        Binned image height. The default is ``None``, which uses
+        ``ny_full // group[1]``.
+    n_cols : int or None
+        Binned image width. The default is ``None``, which uses
+        ``nx_full // group[0]``.
+    """
 
     nx_full: int
     ny_full: int
@@ -45,7 +64,7 @@ class ScanInfo:
     file_time: str | None
     scale: np.ndarray | None
     scan_number: int | None
-    sample_position: tuple[float, float, float] | None
+    sample_position: tuple[float, float, float]
     energy_kev: float | None
 
 
@@ -93,8 +112,8 @@ def read_scan_info(source: h5py.File, normalization: str | None = None) -> ScanI
             "entry1/data/data needs at least 5 stored slices "
             "(1 skipped, 3 differenced, 1 unused)"
         )
-    if data.dtype not in (np.dtype(np.uint16), np.dtype(np.float64)):
-        raise InputError(f"input images must be uint16 or float64, not {data.dtype}")
+    if not np.issubdtype(data.dtype, np.number):
+        raise InputError(f"input images must have a numeric dtype, not {data.dtype}")
 
     rows, cols = data.shape[1:]
     nx = int(_scalar(source, "entry1/detector/Nx", cols))
@@ -134,8 +153,7 @@ def read_scan_info(source: h5py.File, normalization: str | None = None) -> ScanI
         scale = np.ascontiguousarray(values / divisor)
 
     sample = tuple(float(_scalar(source, f"entry1/sample/sample{name}", np.nan)) for name in "XYZ")
-    if not np.isfinite(sample).all():
-        sample = None
+    scan_number = _scalar(source, "entry1/scanNum")
     file_time = _text(source.attrs.get("file_time"))
     return ScanInfo(
         image_geometry=ImageGeometry(nx, ny, start, group, rows, cols),
@@ -146,7 +164,7 @@ def read_scan_info(source: h5py.File, normalization: str | None = None) -> ScanI
         positioner=positioner_from_file_time(file_time),
         file_time=file_time,
         scale=scale,
-        scan_number=(None if _scalar(source, "entry1/scanNum") is None else int(_scalar(source, "entry1/scanNum"))),
+        scan_number=None if scan_number is None else int(scan_number),
         sample_position=sample,
         energy_kev=_scalar(source, "entry1/sample/incident_energy"),
     )
@@ -157,7 +175,10 @@ def cutoff_mask(intensity_map: np.ndarray, percent_brightest: float) -> np.ndarr
     if not 0 < percent_brightest <= 100:
         raise InputError("percent_brightest must be greater than 0 and at most 100")
     ordered = np.sort(np.asarray(intensity_map, dtype=np.float64).ravel())
-    index = int(np.floor(len(ordered) * min((100.0 - percent_brightest) / 100.0, 1.0)))
+    index = min(
+        len(ordered) - 1,
+        int(np.floor(len(ordered) * min((100.0 - percent_brightest) / 100.0, 1.0))),
+    )
     cutoff = max(1, int(ordered[index]))
     return np.ascontiguousarray(np.asarray(intensity_map) >= cutoff, dtype=np.uint8)
 

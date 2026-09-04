@@ -224,9 +224,13 @@ void geo2calibration(struct geoStructure *geo, int detector)/* take values from 
 	/* #warning "moved computation of rho to here, do not need to do this every time, and pre-calculate ki rotated by rho" */
 	Rvec.x=0; Rvec.y=calibration.wire.axisR.z, Rvec.z=-calibration.wire.axisR.y;		/* just cross product, axisR x {1,0,0} */
 	theta_convert = NORM(Rvec);								/* current length of Rvec which is sin(theta) */
-	theta_convert = asin(theta_convert) / theta_convert;
-	VEC3_MULTIPLY(Rvec,theta_convert)						/* makes length of |Rvec|=theta */
-	rotationMatFromAxis(Rvec,NAN,calibration.wire.rho);		/* compute rotation matrix that puts wire axis along {1,0,0} */
+	if (theta_convert == 0) {
+		rotationMatFromAxis(Rvec,0,calibration.wire.rho);		/* zero rotation is the identity */
+	} else {
+		theta_convert = asin(theta_convert) / theta_convert;
+		VEC3_MULTIPLY(Rvec,theta_convert)					/* makes length of |Rvec|=theta */
+		rotationMatFromAxis(Rvec,NAN,calibration.wire.rho);	/* compute rotation matrix that puts wire axis along {1,0,0} */
+	}
 	calibration.wire.ki.x = calibration.wire.ki.y = 0;		/* set ki = {0,0,1} */
 	calibration.wire.ki.z = 1;
 	calibration.wire.ki = MatrixMultiply31(calibration.wire.rho,calibration.wire.ki);	/* ki = rho x ki, ki in rotated frame */

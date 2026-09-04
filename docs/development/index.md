@@ -61,10 +61,10 @@ The `integration` marker identifies tests that run compiled command-line program
 
 `tests/data/reconstruction/` holds synthetic numerical references for `reconstructN_cpu`. `tests/test_reconstruct.py` checks the executable, and `tests/test_reconstructor.py` cross-checks the in-process driver against the same files. Do not regenerate a reference to make a build change pass.
 
-The local full-size fixture is under `sandbox/data/twin2_wire/`. Tests skip with `Twin2 wire-scan fixture not available` when it is absent. Run the real-data checks explicitly with:
+The full-size Twin2 fixture is not in the repository. Set `LAUELAB_TWIN2_FIXTURE` to a directory holding `Twin2_wire_1.h5` through `Twin2_wire_3.h5`, `geoN_2023-04-06_03-07-11_cor6.xml`, and the `reference_rec8_point1/` output directory. The real-data tests and the performance script skip with `Twin2 wire-scan fixture not available` when the variable is unset or a file is missing. Run the real-data checks explicitly with:
 
 ```console
-$ python -m pytest -m "integration and slow" tests/test_reconstruct_realdata.py
+$ LAUELAB_TWIN2_FIXTURE=/path/to/twin2_wire python -m pytest -m "integration and slow" tests/test_reconstruct_realdata.py
 ```
 
 Compare executable and in-process performance on Twin2 point 1 with:
@@ -73,7 +73,7 @@ Compare executable and in-process performance on Twin2 point 1 with:
 $ python tests/perf_testing/run_reconstruct_perf.py
 ```
 
-The script runs both implementations at 1, 8, 16, and 32 threads. It fails if the 16-thread native kernel time exceeds half of the Phase 0 executable kernel time. Wall time is reported but is not gated.
+The script runs both implementations at 1, 8, 16, and 32 threads and reports wall, compute, and I/O times. It has no pass or fail threshold because host load and filesystem state affect the measurements.
 
 ## Build the documentation
 

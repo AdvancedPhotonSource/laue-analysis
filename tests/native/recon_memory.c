@@ -51,13 +51,17 @@ int main(int argc, char **argv)
     params.resolution_um = 0;
     REQUIRE(laue_recon_create(geometry, 0, &params, error, sizeof(error)) == NULL);
     params.resolution_um = 1;
+    params.nx_full /= 2;
+    REQUIRE(laue_recon_create(geometry, 0, &params, error, sizeof(error)) == NULL);
+    REQUIRE(strcmp(error, "image dimensions do not match the detector") == 0);
+    params.nx_full *= 2;
     params.start_i = params.nx_full;
     REQUIRE(laue_recon_create(geometry, 0, &params, error, sizeof(error)) == NULL);
-    REQUIRE(strcmp(error, "image geometry is outside detector bounds") == 0);
+    REQUIRE(strcmp(error, "image ROI is outside the detector") == 0);
     params.start_i = 0;
     params.start_j = params.ny_full;
     REQUIRE(laue_recon_create(geometry, 0, &params, error, sizeof(error)) == NULL);
-    REQUIRE(strcmp(error, "image geometry is outside detector bounds") == 0);
+    REQUIRE(strcmp(error, "image ROI is outside the detector") == 0);
     params.start_j = 0;
     recon = laue_recon_create(geometry, 0, &params, error, sizeof(error));
     REQUIRE(recon != NULL);
@@ -78,6 +82,10 @@ int main(int argc, char **argv)
     REQUIRE(laue_recon_set_wire_positions(recon, NULL, IMAGES + 1, LAUE_POSITIONER_NONE) != LAUE_OK);
     REQUIRE(laue_recon_set_wire_positions(recon, wire_positions, 1, LAUE_POSITIONER_NONE) != LAUE_OK);
     REQUIRE(laue_recon_set_wire_positions(recon, wire_positions, IMAGES + 1, 99) != LAUE_OK);
+    wire_positions[1] = wire_positions[2] = -1e-20;
+    REQUIRE(laue_recon_set_wire_positions(recon, wire_positions, IMAGES + 1, LAUE_POSITIONER_PM500) == LAUE_OK);
+    wire_positions[1] = 1000;
+    wire_positions[2] = -6;
     REQUIRE(laue_recon_set_wire_positions(recon, wire_positions, IMAGES + 1, LAUE_POSITIONER_NONE) == LAUE_OK);
 
     n_depths = laue_recon_n_depths(recon);

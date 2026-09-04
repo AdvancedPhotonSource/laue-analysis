@@ -10,7 +10,7 @@
 
 #include <omp.h>
 
-#include "cosmicFilter.h"
+#include "../../../reconstruct/source/recon_cpu/source/cosmicFilter.h"
 
 #ifndef MAX
 #define MAX(X,Y) (((X)<(Y)) ? (Y) : (X))
@@ -61,19 +61,19 @@ static int make_wire_rho(const struct wireGeometry *wire, double rho[3][3], poin
 {
     point_xyz vector = {0, wire->axisR[2], -wire->axisR[1]};
     double theta = sqrt(vector.x*vector.x + vector.y*vector.y + vector.z*vector.z);
-    double scale = asin(theta) / theta;
     double length, angle;
     double nx, ny, nz, sine, cosine, one_minus_cosine;
 
-    vector.x *= scale;
-    vector.y *= scale;
-    vector.z *= scale;
-    length = sqrt(vector.x*vector.x + vector.y*vector.y + vector.z*vector.z);
-    angle = length;
-    if (angle == 0.0) {
+    if (theta == 0.0) {
         memset(rho, 0, 9 * sizeof(double));
         rho[0][0] = rho[1][1] = rho[2][2] = 1.0;
     } else {
+        double scale = asin(theta) / theta;
+        vector.x *= scale;
+        vector.y *= scale;
+        vector.z *= scale;
+        length = sqrt(vector.x*vector.x + vector.y*vector.y + vector.z*vector.z);
+        angle = length;
         nx = vector.x / length;
         ny = vector.y / length;
         nz = vector.z / length;
@@ -104,7 +104,7 @@ static double correct_pm500_y(double value)
     double relative = fmod(value, 20.0);
     long index;
     if (relative < 0) relative += 20.0;
-    index = (long)relative;
+    index = MIN((long)relative, 19);
     return value + (fmod(relative, 1.0) * (correction[index+1] - correction[index]) + correction[index]);
 }
 
@@ -121,7 +121,7 @@ static double correct_pm500_z(double value)
     double relative = fmod(value, 40.0);
     long index;
     if (relative < 0) relative += 40.0;
-    index = (long)relative;
+    index = MIN((long)relative, 39);
     return value + (fmod(relative, 1.0) * (correction[index+1] - correction[index]) + correction[index]);
 }
 
@@ -265,11 +265,14 @@ laue_recon *laue_recon_create(const laue_geometry *geometry, int detector_index,
         return NULL;
     }
     detector = &geometry->value.d[detector_index];
-    if (params->nx_full != detector->Nx || params->ny_full != detector->Ny
-        || params->start_i >= detector->Nx || params->start_j >= detector->Ny
+    if (params->nx_full != detector->Nx || params->ny_full != detector->Ny) {
+        if (err && errlen) snprintf(err, errlen, "%s", "image dimensions do not match the detector");
+        return NULL;
+    }
+    if (params->start_i >= detector->Nx || params->start_j >= detector->Ny
         || (size_t)params->n_rows_total > ((size_t)params->ny_full - params->start_j) / params->bin_j
         || (size_t)params->n_cols > ((size_t)params->nx_full - params->start_i) / params->bin_i) {
-        if (err && errlen) snprintf(err, errlen, "%s", "image geometry is outside detector bounds");
+        if (err && errlen) snprintf(err, errlen, "%s", "image ROI is outside the detector");
         return NULL;
     }
     recon = calloc(1, sizeof(*recon));
